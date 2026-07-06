@@ -11,14 +11,17 @@ const FILTERS = [
 
 export default function PortfolioTable({ rows, spotlight, onSelect }) {
   const [filter, setFilter] = useState('red')
+  const [sector, setSector] = useState('all')
   const [q, setQ] = useState('')
   const [sortKey, setSortKey] = useState('pd')
   const [asc, setAsc] = useState(false)
   const spot = new Set(spotlight)
+  const sectors = useMemo(() => Array.from(new Set(rows.map((r) => r.sector))).sort(), [rows])
 
   const view = useMemo(() => {
     let r = rows
     if (filter !== 'all') r = r.filter((x) => x.bucket === filter)
+    if (sector !== 'all') r = r.filter((x) => x.sector === sector)
     if (q) r = r.filter((x) => x.account_id.toLowerCase().includes(q.toLowerCase()) ||
                                 x.sector.toLowerCase().includes(q.toLowerCase()))
     return [...r].sort((a, b) => {
@@ -26,7 +29,7 @@ export default function PortfolioTable({ rows, spotlight, onSelect }) {
       const c = typeof va === 'string' ? va.localeCompare(vb) : va - vb
       return asc ? c : -c
     })
-  }, [rows, filter, q, sortKey, asc])
+  }, [rows, filter, sector, q, sortKey, asc])
 
   const setSort = (k) => { if (k === sortKey) setAsc(!asc); else { setSortKey(k); setAsc(false) } }
   const Th = ({ k, children, right }) => (
@@ -47,6 +50,11 @@ export default function PortfolioTable({ rows, spotlight, onSelect }) {
             </button>
           ))}
         </div>
+        <select value={sector} onChange={(e) => setSector(e.target.value)}
+          className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-600 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-idbi-green/30">
+          <option value="all">All sectors</option>
+          {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
         <div className="text-xs text-slate-400">{view.length} accounts</div>
         <div className="ml-auto relative">
           <Search size={15} className="absolute left-2.5 top-2.5 text-slate-400" />

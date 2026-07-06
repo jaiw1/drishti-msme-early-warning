@@ -10,9 +10,9 @@ import { Radar, LayoutGrid, LineChart, PieChart, BadgeCheck, ShieldCheck, Info, 
 
 const NAV = [
   { key: 'portfolio', label: 'Watch-list', icon: LayoutGrid },
+  { key: 'real', label: 'Real-data model', icon: BadgeCheck, badge: 'REAL' },
   { key: 'risk', label: 'Portfolio risk', icon: PieChart },
   { key: 'analytics', label: 'Model & Metrics', icon: LineChart },
-  { key: 'real', label: 'Real-data model', icon: BadgeCheck },
 ]
 const TITLES = {
   portfolio: ['MSME Loan Watch-list', 'Predicting default 12 months ahead'],
@@ -60,7 +60,8 @@ export default function App() {
           {NAV.map((n) => (
             <button key={n.key} onClick={() => setView(n.key)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${view === n.key ? 'bg-white/15' : 'text-white/70 hover:bg-white/10'}`}>
-              <n.icon size={18} /> {n.label}
+              <n.icon size={18} /> <span className="flex-1 text-left">{n.label}</span>
+              {n.badge && <span className="text-[9px] font-extrabold bg-idbi-orange text-white px-1.5 py-0.5 rounded tracking-wide">{n.badge}</span>}
             </button>
           ))}
         </nav>
@@ -93,6 +94,15 @@ export default function App() {
         <div className="p-6 space-y-5">
           {view === 'portfolio' && (
             <>
+              <button onClick={() => setView('real')}
+                className="w-full flex items-center gap-3 bg-gradient-to-r from-idbi-green/10 to-idbi-green/5 border border-idbi-green/30 rounded-xl px-4 py-3 hover:from-idbi-green/15 hover:to-idbi-green/10 transition text-left">
+                <BadgeCheck className="text-idbi-green shrink-0" size={22} />
+                <div className="flex-1 text-sm leading-snug">
+                  <span className="font-bold text-idbi-green">Validated on {realData ? realData.meta.n_companies.toLocaleString('en-IN') : '3,200'} real Indian MSMEs</span>
+                  <span className="text-slate-600"> — the same method scores an honest <b>{realData ? realData.metrics.auc : '0.81'} AUC</b> on real credit-rating defaults, not just synthetic data.</span>
+                </div>
+                <span className="text-idbi-green text-sm font-bold whitespace-nowrap">See the proof →</span>
+              </button>
               <Kpis summary={data.portfolio_summary} metrics={data.metrics} />
               <PortfolioTable rows={data.portfolio} spotlight={data.spotlight} onSelect={setSelected} />
             </>
