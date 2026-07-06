@@ -1,0 +1,20 @@
+# dependencies & build output
+node_modules/
+app/dist/
+.DS_Store
+
+# large, regenerable synthetic data (rebuild with: python3 src/generate_data.py + export_demo.py)
+data/msme_loan_panel.csv
+data/accounts_static.csv
+data/demo_data.json
+
+# NEVER commit the licensed raw financial data (it lives outside this repo, but guard anyway)
+**/msme_fin_data.csv
+**/msme_ratings_movement.csv
+**/msme_identifiers.csv
+**/msme_list.csv
+**/70_*.txt
+**/75_*.txt
+
+# stale (app loads data from public/ at runtime now)
+app/src/data/

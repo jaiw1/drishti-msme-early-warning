@@ -1,0 +1,197 @@
+{
+ "meta": {
+  "source": "Real Indian MSME annual financials (FY2018-FY2026) + credit-rating history",
+  "n_companies": 3171,
+  "n_company_years": 17031,
+  "n_defaults": 1284,
+  "default_rate": 0.075,
+  "horizon_years": 2,
+  "obs_year_range": "2018-2025"
+ },
+ "metrics": {
+  "auc": 0.811,
+  "ks": 0.464,
+  "pr_auc": 0.323,
+  "logistic_auc": 0.699,
+  "brier": 0.0621
+ },
+ "top_features": [
+  {
+   "feature": "Company size (income)",
+   "importance": 1703
+  },
+  {
+   "feature": "Borrowings \u00f7 income",
+   "importance": 1409
+  },
+  {
+   "feature": "Interest cover",
+   "importance": 1353
+  },
+  {
+   "feature": "Company age",
+   "importance": 1333
+  },
+  {
+   "feature": "Income trend",
+   "importance": 1104
+  },
+  {
+   "feature": "Operating margin",
+   "importance": 1048
+  },
+  {
+   "feature": "Borrowings trend",
+   "importance": 1033
+  },
+  {
+   "feature": "Profit trend",
+   "importance": 1006
+  },
+  {
+   "feature": "Leverage (D/E)",
+   "importance": 1001
+  }
+ ],
+ "reliability": [
+  {
+   "pred": 0.001,
+   "obs": 0.002
+  },
+  {
+   "pred": 0.002,
+   "obs": 0.012
+  },
+  {
+   "pred": 0.004,
+   "obs": 0.021
+  },
+  {
+   "pred": 0.008,
+   "obs": 0.023
+  },
+  {
+   "pred": 0.012,
+   "obs": 0.031
+  },
+  {
+   "pred": 0.019,
+   "obs": 0.055
+  },
+  {
+   "pred": 0.031,
+   "obs": 0.07
+  },
+  {
+   "pred": 0.054,
+   "obs": 0.072
+  },
+  {
+   "pred": 0.111,
+   "obs": 0.157
+  },
+  {
+   "pred": 0.357,
+   "obs": 0.328
+  }
+ ],
+ "examples": [
+  {
+   "id": "IN-MSME-001",
+   "industry": "Pharmaceuticals",
+   "obs_year": 2018,
+   "pd": 0.927,
+   "outcome": "Defaulted within 2 yrs",
+   "interest_cover": -8.9,
+   "debt_to_equity": -25.9,
+   "pat_margin": -136.0,
+   "reasons": [
+    "Borrowings 2.9\u00d7 annual income",
+    "Weak profit margin (-136%)",
+    "Interest cover only -8.9\u00d7 \u2014 profits barely cover interest"
+   ]
+  },
+  {
+   "id": "IN-MSME-002",
+   "industry": "Finance",
+   "obs_year": 2018,
+   "pd": 0.921,
+   "outcome": "Defaulted within 2 yrs",
+   "interest_cover": -0.1,
+   "debt_to_equity": 2.2,
+   "pat_margin": -241.7,
+   "reasons": [
+    "Borrowings 16.7\u00d7 annual income",
+    "Interest cover only -0.1\u00d7 \u2014 profits barely cover interest",
+    "Weak profit margin (-242%)"
+   ]
+  },
+  {
+   "id": "IN-MSME-003",
+   "industry": "Warehousing",
+   "obs_year": 2018,
+   "pd": 0.913,
+   "outcome": "Defaulted within 2 yrs",
+   "interest_cover": -1138.5,
+   "debt_to_equity": 4.2,
+   "pat_margin": -143.6,
+   "reasons": [
+    "Borrowings 162.8\u00d7 annual income",
+    "Interest cover only -1138.5\u00d7 \u2014 profits barely cover interest",
+    "Weak profit margin (-144%)"
+   ]
+  },
+  {
+   "id": "IN-MSME-004",
+   "industry": "Civil engineering",
+   "obs_year": 2018,
+   "pd": 0.91,
+   "outcome": "Defaulted within 2 yrs",
+   "interest_cover": 0.2,
+   "debt_to_equity": -11.0,
+   "pat_margin": -55.8,
+   "reasons": [
+    "Borrowings 1.8\u00d7 annual income",
+    "Interest cover only 0.2\u00d7 \u2014 profits barely cover interest",
+    "Weak profit margin (-56%)"
+   ]
+  },
+  {
+   "id": "IN-MSME-005",
+   "industry": "Civil engineering",
+   "obs_year": 2018,
+   "pd": 0.89,
+   "outcome": "Defaulted within 2 yrs",
+   "interest_cover": -2.2,
+   "debt_to_equity": -3.6,
+   "pat_margin": -290.9,
+   "reasons": [
+    "Borrowings 8.8\u00d7 annual income",
+    "Weak profit margin (-291%)",
+    "Interest cover only -2.2\u00d7 \u2014 profits barely cover interest"
+   ]
+  },
+  {
+   "id": "IN-MSME-006",
+   "industry": "Auto & parts",
+   "obs_year": 2022,
+   "pd": 0.0,
+   "outcome": "No default",
+   "interest_cover": 50.0,
+   "debt_to_equity": 0.1,
+   "pat_margin": 17.0,
+   "reasons": []
+  },
+  {
+   "id": "IN-MSME-007",
+   "industry": "Auto trade",
+   "obs_year": 2024,
+   "pd": 0.0,
+   "outcome": "No default",
+   "interest_cover": 92.6,
+   "debt_to_equity": 0.0,
+   "pat_margin": 4.8,
+   "reasons": []
+  }
+ ]
+}
