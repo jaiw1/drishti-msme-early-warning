@@ -5,7 +5,8 @@ import AccountDetail from './components/AccountDetail'
 import Analytics from './components/Analytics'
 import PortfolioRisk from './components/PortfolioRisk'
 import RealModel from './components/RealModel'
-import { Radar, LayoutGrid, LineChart, PieChart, BadgeCheck, ShieldCheck, Info } from 'lucide-react'
+import Guide from './components/Guide'
+import { Radar, LayoutGrid, LineChart, PieChart, BadgeCheck, ShieldCheck, Info, Compass } from 'lucide-react'
 
 const NAV = [
   { key: 'portfolio', label: 'Watch-list', icon: LayoutGrid },
@@ -27,12 +28,16 @@ export default function App() {
   const [selected, setSelected] = useState(params.get('account') || null)
   const [data, setData] = useState(null)
   const [realData, setRealData] = useState(null)
+  const [guide, setGuide] = useState(false)
 
   useEffect(() => {
     const b = import.meta.env.BASE_URL
     fetch(`${b}demo_data.json`).then((r) => r.json()).then(setData).catch(() => {})
     fetch(`${b}real_model.json`).then((r) => r.json()).then(setRealData).catch(() => {})
+    if (!localStorage.getItem('drishti_seen_guide')) setGuide(true)   // auto-show on first visit
   }, [])
+
+  const closeGuide = () => { setGuide(false); localStorage.setItem('drishti_seen_guide', '1') }
 
   if (!data) return (
     <div className="min-h-screen grid place-items-center text-slate-400">
@@ -74,8 +79,14 @@ export default function App() {
               {TITLES[view][1]} · book as of {data.meta.reference_month} · {data.meta.n_accounts_scored.toLocaleString('en-IN')} live accounts
             </p>
           </div>
-          <div className="ml-auto flex items-center gap-2 text-xs text-slate-500 bg-slate-100 rounded-lg px-3 py-1.5">
-            <Info size={13} /> Synthetic demo data — sandbox APIs post-shortlisting
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={() => setGuide(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-idbi-green bg-idbi-green/10 hover:bg-idbi-green/20 rounded-lg px-3 py-1.5 transition">
+              <Compass size={14} /> Tour
+            </button>
+            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 bg-slate-100 rounded-lg px-3 py-1.5">
+              <Info size={13} /> Synthetic demo data — sandbox APIs post-shortlisting
+            </div>
           </div>
         </header>
 
@@ -93,6 +104,7 @@ export default function App() {
       </main>
 
       {selected && <AccountDetail data={data} accountId={selected} onClose={() => setSelected(null)} />}
+      {guide && <Guide setView={setView} setSelected={setSelected} onClose={closeGuide} />}
     </div>
   )
 }
