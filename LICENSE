@@ -13,8 +13,8 @@ The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
 
 Note: the raw licensed financial data used to build the real-data validation is
-licensed and is NOT part of this repository — only derived aggregate metrics
-and anonymised examples (data/real_model.json) are included.
+NOT part of this repository — only derived aggregate metrics and anonymised
+examples (data/real_model.json) are included.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
