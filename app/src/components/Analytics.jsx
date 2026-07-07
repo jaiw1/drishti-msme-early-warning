@@ -146,6 +146,10 @@ export default function Analytics({ data }) {
   const m = data.metrics
   const lead = m.recall_by_lead_time.map((d) => ({ ...d, recallPct: Math.round(d.recall * 100) }))
   const budget = m.recall_at_budget.map((d) => ({ name: `Top ${Math.round(d.budget * 100)}%`, recallPct: Math.round(d.recall * 100) }))
+  // base rate = share of the current book that actually goes NPA within 12 months (drives the accuracy paradox below)
+  const port = data.portfolio
+  const baseRate = Math.round(100 * port.filter((r) => r.ground_truth_default === 1 && r.snap_months_to_npa >= 1 && r.snap_months_to_npa <= 12).length / port.length)
+  const naiveAcc = 100 - baseRate
 
   return (
     <div className="space-y-5">
@@ -204,7 +208,8 @@ export default function Analytics({ data }) {
       <section className="bg-idbi-green/5 border border-idbi-green/20 rounded-xl p-5">
         <h3 className="font-bold text-idbi-green">Why we don't quote "90% accuracy"</h3>
         <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-          On an imbalanced book (~8% default), a model that flags <i>nothing</i> is already ~92% "accurate" — so raw
+          On an imbalanced book (only ~{baseRate}% of accounts default within a year), a model that flags <i>nothing</i> is
+          already ~{naiveAcc}% "accurate" — so raw
           accuracy is meaningless and misleading. We report <b>ROC-AUC / KS</b> (ranking quality), <b>recall at a
           realistic review budget</b> (what officers actually work), and <b>lead time</b> (how early we catch it).
           The model is trained and validated <b>out-of-sample</b> (no account appears in both training and test),

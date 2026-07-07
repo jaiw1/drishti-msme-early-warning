@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { inr, pct, RAG } from '../lib/format'
-import { Search, ArrowUpDown, Sparkles } from 'lucide-react'
+import { Search, ArrowUpDown } from 'lucide-react'
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -9,13 +9,12 @@ const FILTERS = [
   { key: 'green', label: 'Green' },
 ]
 
-export default function PortfolioTable({ rows, spotlight, onSelect }) {
+export default function PortfolioTable({ rows, onSelect }) {
   const [filter, setFilter] = useState('red')
   const [sector, setSector] = useState('all')
   const [q, setQ] = useState('')
   const [sortKey, setSortKey] = useState('pd')
   const [asc, setAsc] = useState(false)
-  const spot = new Set(spotlight)
   const sectors = useMemo(() => Array.from(new Set(rows.map((r) => r.sector))).sort(), [rows])
 
   const view = useMemo(() => {
@@ -85,7 +84,6 @@ export default function PortfolioTable({ rows, spotlight, onSelect }) {
                     <div className="flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${rag.dot}`} />
                       <span className="font-semibold text-slate-800">{r.account_id}</span>
-                      {spot.has(r.account_id) && <Sparkles size={13} className="text-idbi-orange" title="Demo spotlight" />}
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-slate-500">{r.sector}</td>

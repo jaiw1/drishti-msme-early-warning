@@ -42,7 +42,7 @@ export default function RealModel({ data, syntheticAuc }) {
         <Stat value={m.auc} label="Real-data ROC-AUC"
               hint={m.auc_ci ? `95% CI ${m.auc_ci[0]}–${m.auc_ci[1]} · honest band ~0.75–0.85` : 'honest band ~0.75–0.85 — no synthetic inflation'} />
         <Stat value={`${m.auc} vs ${m.logistic_auc}`} label="LightGBM vs logistic" hint="on real data, the model earns its keep" />
-        <Stat value={meta.n_companies.toLocaleString('en-IN')} label="Real companies" hint={`${meta.n_defaults.toLocaleString('en-IN')} real defaults (${Math.round(meta.default_rate * 100)}%)`} />
+        <Stat value={meta.n_companies.toLocaleString('en-IN')} label="Real companies" hint={`${meta.n_defaults.toLocaleString('en-IN')} real defaults · ${(meta.default_rate * 100).toFixed(1)}% of ${meta.n_company_years.toLocaleString('en-IN')} company-years`} />
         <Stat value={m.brier} label="Brier score" hint="well-calibrated probabilities" tint="text-slate-900" />
       </div>
 

@@ -105,7 +105,7 @@ export default function App() {
           <div>
             <h1 className="text-lg font-extrabold text-slate-900">{TITLES[view][0]}</h1>
             <p className="text-xs text-slate-400">
-              {TITLES[view][1]} · book as of {data.meta.reference_month} · {data.meta.n_accounts_scored.toLocaleString('en-IN')} live accounts
+              {TITLES[view][1]} · book as of <span className="font-bold text-idbi-green">{data.meta.reference_month}</span> <span className="text-slate-400">(“today”)</span> · {data.meta.n_accounts_scored.toLocaleString('en-IN')} live accounts
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
@@ -132,7 +132,7 @@ export default function App() {
                 <span className="text-idbi-green text-sm font-bold whitespace-nowrap">See the proof →</span>
               </button>
               <Kpis summary={data.portfolio_summary} metrics={data.metrics} />
-              <PortfolioTable rows={data.portfolio} spotlight={data.spotlight} onSelect={setSelected} />
+              <PortfolioTable rows={data.portfolio} onSelect={setSelected} />
             </>
           )}
           {view === 'risk' && <PortfolioRisk data={data} onSelect={setSelected} />}

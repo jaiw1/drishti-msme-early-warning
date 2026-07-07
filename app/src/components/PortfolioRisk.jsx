@@ -5,7 +5,10 @@ import {
 import { inr, pct, RAG } from '../lib/format'
 import { TriangleAlert, Layers, IndianRupee, ShieldCheck, PhoneCall, ChevronRight } from 'lucide-react'
 
-const IDBI_MSME_BOOK_CR = 30000   // ~₹30,000 cr — IDBI's real MSME/priority book (frame the sample against it)
+// Default extrapolation base. IDBI's MSME/priority book isn't a single published figure; public
+// disclosures put it broadly in the ₹25,000–35,000 cr range, so this is an ADJUSTABLE assumption
+// (slider below), not a hard claim. The per-sample numbers are the defensible core.
+const DEFAULT_BOOK_CR = 30000
 
 function groupBy(rows, key) {
   const m = {}
@@ -37,6 +40,7 @@ function Slider({ label, value, set, min, max, step, fmt }) {
 export default function PortfolioRisk({ data, onSelect }) {
   const [cure, setCure] = useState(0.4)
   const [prov, setProv] = useState(0.15)
+  const [book, setBook] = useState(DEFAULT_BOOK_CR)
   const port = data.portfolio
 
   const bySector = useMemo(() => groupBy(port, 'sector'), [port])
@@ -51,12 +55,12 @@ export default function PortfolioRisk({ data, onSelect }) {
     const flagged = port.filter((r) => r.bucket !== 'green')
     const expNpa = flagged.reduce((s, r) => s + r.pd * r.sanctioned, 0)   // expected ₹ that turns NPA
     const sampleCr = port.reduce((s, r) => s + r.sanctioned, 0) / 1e7
-    const scale = IDBI_MSME_BOOK_CR / sampleCr
+    const scale = book / sampleCr
     const provAtRisk = expNpa * prov
     const provSaved = provAtRisk * cure
     const exposureProtected = expNpa * cure
     return { expNpa, sampleCr, scale, provSaved, exposureProtected, flaggedCount: flagged.length }
-  }, [port, cure, prov])
+  }, [port, cure, prov, book])
 
   const topSector = bySector[0]
 
@@ -77,7 +81,7 @@ export default function PortfolioRisk({ data, onSelect }) {
         <div className="bg-white rounded-xl border border-idbi-green/30 p-4 bg-idbi-green/5">
           <div className="flex items-center gap-2 text-idbi-green mb-1"><ShieldCheck size={16} /><span className="text-xs font-semibold uppercase tracking-wide">Provisioning saved / yr</span></div>
           <div className="text-2xl font-extrabold text-idbi-green">{inr(econ.provSaved * econ.scale)}</div>
-          <div className="text-xs text-slate-400">scaled to IDBI's ~₹{IDBI_MSME_BOOK_CR.toLocaleString('en-IN')} cr MSME book</div>
+          <div className="text-xs text-slate-400">assumes a ~₹{(book / 1000).toFixed(0)}k cr MSME book (adjustable below)</div>
         </div>
       </div>
 
@@ -91,7 +95,7 @@ export default function PortfolioRisk({ data, onSelect }) {
               <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" />
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} />
               <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} unit=" cr" />
-              <Tooltip formatter={(v, n) => [`₹${(+v).toFixed(2)} cr`, n === 'redCr' ? 'Red' : 'Amber']} />
+              <Tooltip formatter={(v, n) => [`₹${(+v).toFixed(2)} cr`, n]} />
               <Legend wrapperStyle={{ fontSize: 10 }} />
               <Bar dataKey="amberCr" name="Amber" stackId="a" fill="#d97706" isAnimationActive={false} />
               <Bar dataKey="redCr" name="Red" stackId="a" fill="#dc2626" radius={[4, 4, 0, 0]} isAnimationActive={false} />
@@ -180,9 +184,12 @@ export default function PortfolioRisk({ data, onSelect }) {
           <div className="space-y-5">
             <Slider label="Accounts cured by acting early" value={cure} set={setCure} min={0.1} max={0.7} step={0.05} fmt={(v) => `${Math.round(v * 100)}%`} />
             <Slider label="Provisioning rate on NPA (IRAC)" value={prov} set={setProv} min={0.1} max={0.4} step={0.05} fmt={(v) => `${Math.round(v * 100)}%`} />
+            <Slider label="Assumed IDBI MSME book size" value={book} set={setBook} min={25000} max={35000} step={1000} fmt={(v) => `₹${(v / 1000).toFixed(0)}k cr`} />
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Illustrative. Expected NPA = Σ (model PD × exposure) over flagged accounts; provisioning saved = that × rate × cure-rate,
-              then scaled from the ₹{Math.round(econ.sampleCr).toLocaleString('en-IN')} cr sample to IDBI's full MSME book.
+              <b>Assumptions (all adjustable):</b> Expected NPA = Σ (model PD × exposure) over the flagged accounts; provisioning
+              saved = Expected NPA × provisioning rate × cure rate — computed on this ₹{Math.round(econ.sampleCr).toLocaleString('en-IN')} cr
+              sample, then scaled to the full book. The book size is an assumption (public disclosures put IDBI's MSME/priority
+              book broadly at ₹25–35k cr); the ₹-sample figures below don't depend on it.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">

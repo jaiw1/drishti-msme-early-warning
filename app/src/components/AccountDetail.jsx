@@ -23,6 +23,8 @@ export default function AccountDetail({ data, accountId, onClose }) {
   }))
   const lastDate = series?.[series.length - 1]?.date
   const npaEta = rec.ground_truth_default ? rec.snap_months_to_npa : null
+  const futureMonths = series?.filter((p) => p.date > refMonth).length ?? 0
+  const hasFuture = futureMonths >= 2
 
   const copyMemo = () => {
     navigator.clipboard?.writeText(data.memos[accountId] || '')
@@ -81,10 +83,16 @@ export default function AccountDetail({ data, accountId, onClose }) {
           {/* PD timeline */}
           {series?.length > 0 && <>
           <section className="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 className="font-bold text-slate-800 text-sm mb-1">Default probability over time</h3>
-            <p className="text-xs text-slate-400 mb-3">Smoothed 12-month default probability (3-month trend). Left of “Today” is what the officer sees now; the shaded area is what actually happened next.</p>
-            <ResponsiveContainer width="100%" height={210}>
-              <ComposedChart data={series} margin={{ top: 5, right: 8, left: -18, bottom: 0 }}>
+            <h3 className="font-bold text-slate-800 text-sm mb-1">Model risk score over time</h3>
+            <p className="text-xs text-slate-400 mb-3">
+              Both lines are the <b>model's</b> 12-month default-risk score (green = 3-month smoothed, the value officers act on;
+              grey = raw monthly, shown for transparency) — <i>not</i> actual outcomes.
+              {hasFuture
+                ? ' Everything left of the “Today” line is what the officer would see now; the shaded band to its right is the period after Today (the actual outcome is called out in the banner above).'
+                : ' This account reaches NPA right after Today, so the score ends at the “Today” line — the actual outcome is in the banner above.'}
+            </p>
+            <ResponsiveContainer width="100%" height={235}>
+              <ComposedChart data={series} margin={{ top: 22, right: 8, left: -18, bottom: 0 }}>
                 <defs>
                   <linearGradient id="pdFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#02684F" stopOpacity={0.35} />
@@ -94,17 +102,18 @@ export default function AccountDetail({ data, accountId, onClose }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} interval={5} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} unit="%" />
-                <Tooltip formatter={(v, n) => [`${v}%`, n === 'pd' ? 'Risk (smoothed)' : 'Risk (raw)']} labelFormatter={(l) => l} />
-                {lastDate && <ReferenceArea x1={refMonth} x2={lastDate} fill="#0f172a" fillOpacity={0.04}
-                               label={{ value: 'what happened next', fontSize: 10, fill: '#94a3b8', position: 'insideTopRight' }} />}
+                <Tooltip formatter={(v, n) => [`${v}%`, n]} labelFormatter={(l) => l} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {hasFuture && <ReferenceArea x1={refMonth} x2={lastDate} fill="#0f172a" fillOpacity={0.07}
+                               label={{ value: 'after today →', fontSize: 10, fill: '#64748b', position: 'insideTopRight' }} />}
                 <ReferenceLine y={redThr} stroke="#dc2626" strokeDasharray="4 4"
                                label={{ value: 'Red', fontSize: 9, fill: '#dc2626', position: 'insideRight' }} />
                 <ReferenceLine y={amberThr} stroke="#d97706" strokeDasharray="4 4"
                                label={{ value: 'Amber', fontSize: 9, fill: '#d97706', position: 'insideRight' }} />
-                <ReferenceLine x={refMonth} stroke="#0f172a" strokeDasharray="5 3"
-                               label={{ value: 'Today', fontSize: 10, fill: '#0f172a', position: 'top' }} />
-                <Area type="monotone" dataKey="pd" stroke="#02684F" strokeWidth={2.5} fill="url(#pdFill)" isAnimationActive={false} />
-                <Line type="monotone" dataKey="pdRaw" stroke="#cbd5e1" strokeWidth={1} dot={false} isAnimationActive={false} />
+                <ReferenceLine x={refMonth} stroke="#0f172a" strokeWidth={2}
+                               label={{ value: `TODAY · ${refMonth}`, fontSize: 11, fontWeight: 700, fill: '#0f172a', position: hasFuture ? 'top' : 'insideTopLeft' }} />
+                <Area type="monotone" dataKey="pd" name="Risk score (smoothed)" stroke="#02684F" strokeWidth={2.5} fill="url(#pdFill)" isAnimationActive={false} />
+                <Line type="monotone" dataKey="pdRaw" name="Raw monthly score" stroke="#cbd5e1" strokeWidth={1} dot={false} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </section>
