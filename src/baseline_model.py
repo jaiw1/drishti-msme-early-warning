@@ -45,10 +45,10 @@ def main():
     tr, te = next(gss.split(X, y, groups=df["account_id"]))
     Xtr, Xte, ytr, yte = X.iloc[tr], X.iloc[te], y[tr], y[te]
 
-    scale = (ytr == 0).sum() / max(1, (ytr == 1).sum())
+    # same config as export_demo.py / rigor.py so every script reports the same model
     model = LGBMClassifier(
         n_estimators=600, learning_rate=0.03, num_leaves=48, subsample=0.8,
-        colsample_bytree=0.8, min_child_samples=80, scale_pos_weight=scale,
+        colsample_bytree=0.8, min_child_samples=80,
         random_state=7, n_jobs=-1, verbose=-1,
     )
     model.fit(Xtr, ytr, categorical_feature=CAT)

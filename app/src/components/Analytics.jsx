@@ -87,6 +87,51 @@ function Rigor({ rigor }) {
   )
 }
 
+function ThresholdExhibit({ data }) {
+  const rows = data.portfolio
+  const redThr = data.portfolio_summary.red_thr * 100
+  const amberThr = data.portfolio_summary.amber_thr * 100
+  // accounts in this snapshot that really do default within the next 12 months (demo outcome reveal)
+  const coming = rows.filter((r) => r.ground_truth_default === 1 && r.snap_months_to_npa >= 1 && r.snap_months_to_npa <= 12)
+  const point = (t) => ({
+    thr: t,
+    workload: +((100 * rows.filter((r) => r.pd * 100 >= t).length) / rows.length).toFixed(1),
+    caught: +((100 * coming.filter((r) => r.pd * 100 >= t).length) / Math.max(1, coming.length)).toFixed(1),
+  })
+  const curve = [0.5, 1, 1.5, 2, 3, 4, 6, 8, 12, 16, 22, 30, 40, 55, 70, 85].map(point)
+  const amber = point(amberThr)
+  const red = point(redThr)
+
+  return (
+    <section className="bg-white rounded-xl border border-slate-200 p-5">
+      <h3 className="font-bold text-slate-800">Where the Red / Amber lines sit — and why</h3>
+      <p className="text-xs text-slate-400 mt-1 mb-4">
+        Any cut-off trades <b>officer workload</b> against <b>catch-rate</b>, shown here on this book's actual
+        next-12-month outcomes. The Amber "watch" line ({amberThr}%) puts <b>{amber.workload}%</b> of the book under
+        watch and catches <b>{amber.caught}%</b> of the defaults coming in the next 12 months; the Red "act-now"
+        line ({redThr}%) concentrates urgent action on just <b>{red.workload}%</b> of accounts. The lines are sized
+        to a realistic review capacity — not picked to flatter the metrics.
+      </p>
+      <ResponsiveContainer width="100%" height={250}>
+        <LineChart data={curve} margin={{ top: 14, right: 12, left: -20, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" />
+          <XAxis dataKey="thr" type="number" scale="log" domain={[0.5, 85]} ticks={[1, 2, 4, 10, 20, 40, 80]}
+                 tick={{ fontSize: 10, fill: '#94a3b8' }} unit="%" />
+          <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} unit="%" />
+          <Tooltip formatter={(v, n) => [`${v}%`, n]} labelFormatter={(l) => `cut-off ${l}%`} />
+          <Legend wrapperStyle={{ fontSize: 10 }} />
+          <ReferenceLine x={amberThr} stroke="#d97706" strokeDasharray="4 4"
+                         label={{ value: 'Amber', fontSize: 9, fill: '#d97706', position: 'top' }} />
+          <ReferenceLine x={redThr} stroke="#dc2626" strokeDasharray="4 4"
+                         label={{ value: 'Red', fontSize: 9, fill: '#dc2626', position: 'top' }} />
+          <Line type="monotone" dataKey="caught" name="Coming defaults caught" stroke="#02684F" strokeWidth={2.5} dot={false} isAnimationActive={false} />
+          <Line type="monotone" dataKey="workload" name="Book flagged (workload)" stroke="#FF4D01" strokeWidth={2} dot={false} isAnimationActive={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </section>
+  )
+}
+
 function Stat({ value, label, hint }) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
@@ -153,6 +198,8 @@ export default function Analytics({ data }) {
           </ResponsiveContainer>
         </section>
       </div>
+
+      <ThresholdExhibit data={data} />
 
       <section className="bg-idbi-green/5 border border-idbi-green/20 rounded-xl p-5">
         <h3 className="font-bold text-idbi-green">Why we don't quote "90% accuracy"</h3>

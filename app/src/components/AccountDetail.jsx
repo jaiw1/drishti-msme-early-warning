@@ -48,7 +48,8 @@ export default function AccountDetail({ data, accountId, onClose }) {
             <div className={`text-3xl font-extrabold ${rag.text} leading-none`}>{pct(rec.pd)}</div>
             <div className="text-[11px] text-slate-400 uppercase tracking-wide">12-mo default prob.</div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={22} /></button>
+          <button onClick={onClose} aria-label="Close account detail"
+            className="text-slate-400 hover:text-slate-700 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green"><X size={22} /></button>
         </div>
 
         <div className="p-6 space-y-5">

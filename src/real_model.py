@@ -213,6 +213,19 @@ def main():
 
     auc, prauc, ksv = roc_auc_score(yte, p), average_precision_score(yte, p), ks(yte, p)
 
+    # company-clustered bootstrap -> 95% CI on the AUC (resample companies, not rows,
+    # because rows within a company are correlated and the split is company-grouped)
+    rng = np.random.default_rng(7)
+    comp = df.iloc[te]["company"].values
+    uniq = pd.unique(comp)
+    idx_by_comp = {c: np.flatnonzero(comp == c) for c in uniq}
+    boot = []
+    for _ in range(500):
+        idx = np.concatenate([idx_by_comp[c] for c in rng.choice(uniq, size=len(uniq), replace=True)])
+        if yte[idx].min() != yte[idx].max():
+            boot.append(roc_auc_score(yte[idx], p[idx]))
+    auc_lo, auc_hi = np.percentile(boot, [2.5, 97.5])
+
     # feature importances with plain-English labels
     LABEL = {"log_income": "Company size (income)", "borrow_to_income": "Borrowings ÷ income",
              "interest_cover": "Interest cover", "age": "Company age", "d_income": "Income trend",
@@ -255,6 +268,7 @@ def main():
                   n_defaults=int(df.default.sum()), default_rate=round(float(df.default.mean()), 3),
                   horizon_years=2, obs_year_range=f"{int(df.obs_year.min())}-{int(df.obs_year.max())}"),
         metrics=dict(auc=round(auc, 3), ks=round(ksv, 3), pr_auc=round(prauc, 3),
+                     auc_ci=[round(float(auc_lo), 3), round(float(auc_hi), 3)],
                      logistic_auc=round(float(roc_auc_score(yte, p_lr)), 3),
                      brier=round(float(brier_score_loss(yte, p)), 4)),
         top_features=top_features, reliability=reliability, examples=ex_rows,
@@ -263,7 +277,7 @@ def main():
 
     print("=" * 60)
     print(f"REAL-DATA MODEL — {out['meta']['n_companies']} companies, {out['meta']['n_company_years']} company-years, {out['meta']['n_defaults']} defaults ({out['meta']['default_rate']:.1%})")
-    print(f"ROC-AUC {auc:.3f} | KS {ksv:.3f} | PR-AUC {prauc:.3f}   [honest real-data band ~0.75-0.85]")
+    print(f"ROC-AUC {auc:.3f} (95% CI {auc_lo:.3f}-{auc_hi:.3f}) | KS {ksv:.3f} | PR-AUC {prauc:.3f}   [honest real-data band ~0.75-0.85]")
     print(f"LightGBM {auc:.3f}  vs  logistic baseline {roc_auc_score(yte, p_lr):.3f}   (model earns its keep on real data)")
     print("top features:", ", ".join(imp.head(8).index))
     print(f"wrote {OUT}")

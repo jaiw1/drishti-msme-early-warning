@@ -2,8 +2,8 @@ import { useState, useMemo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList,
 } from 'recharts'
-import { inr } from '../lib/format'
-import { TriangleAlert, Layers, IndianRupee, ShieldCheck } from 'lucide-react'
+import { inr, pct, RAG } from '../lib/format'
+import { TriangleAlert, Layers, IndianRupee, ShieldCheck, PhoneCall, ChevronRight } from 'lucide-react'
 
 const IDBI_MSME_BOOK_CR = 30000   // ~₹30,000 cr — IDBI's real MSME/priority book (frame the sample against it)
 
@@ -34,13 +34,18 @@ function Slider({ label, value, set, min, max, step, fmt }) {
   )
 }
 
-export default function PortfolioRisk({ data }) {
+export default function PortfolioRisk({ data, onSelect }) {
   const [cure, setCure] = useState(0.4)
   const [prov, setProv] = useState(0.15)
   const port = data.portfolio
 
   const bySector = useMemo(() => groupBy(port, 'sector'), [port])
   const bySegment = useMemo(() => groupBy(port, 'segment'), [port])
+  const actFirst = useMemo(() =>
+    port.filter((r) => r.bucket !== 'green')
+        .map((r) => ({ ...r, atRisk: r.pd * r.sanctioned }))
+        .sort((a, b) => b.atRisk - a.atRisk)
+        .slice(0, 10), [port])
 
   const econ = useMemo(() => {
     const flagged = port.filter((r) => r.bucket !== 'green')
@@ -111,6 +116,55 @@ export default function PortfolioRisk({ data }) {
           </ResponsiveContainer>
         </section>
       </div>
+
+      {/* act-first ranking */}
+      <section className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <PhoneCall size={16} className="text-idbi-green" />
+          <h3 className="font-bold text-slate-800">Who to call first — top 10 by ₹ at risk</h3>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">
+          Flagged accounts ranked by expected loss (model PD × sanctioned exposure) — the order that protects the
+          most money per officer-hour. Click any row for the full account story.
+        </p>
+        <div className="overflow-x-auto scroll-thin">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] text-slate-400 uppercase tracking-wide border-b border-slate-100">
+                <th className="py-2 pr-3 font-semibold">#</th>
+                <th className="py-2 pr-3 font-semibold">Account</th>
+                <th className="py-2 pr-3 font-semibold">Sector</th>
+                <th className="py-2 pr-3 font-semibold text-right">Sanctioned</th>
+                <th className="py-2 pr-3 font-semibold text-right">12-mo PD</th>
+                <th className="py-2 pr-3 font-semibold text-right">₹ at risk</th>
+                <th className="py-2 pr-3 font-semibold hidden lg:table-cell">Top early-warning signal</th>
+                <th className="py-2 w-6" />
+              </tr>
+            </thead>
+            <tbody>
+              {actFirst.map((r, i) => {
+                const rag = RAG[r.bucket]
+                return (
+                  <tr key={r.account_id} onClick={() => onSelect?.(r.account_id)}
+                      className="border-b border-slate-50 hover:bg-slate-50 cursor-pointer">
+                    <td className="py-2 pr-3 text-slate-400 font-semibold">{i + 1}</td>
+                    <td className="py-2 pr-3">
+                      <span className={`inline-block w-2 h-2 rounded-full mr-2 ${rag.dot}`} aria-hidden="true" />
+                      <span className="font-semibold text-slate-800">{r.account_id}</span>
+                    </td>
+                    <td className="py-2 pr-3 text-slate-500">{r.sector}</td>
+                    <td className="py-2 pr-3 text-right text-slate-700">{inr(r.sanctioned)}</td>
+                    <td className={`py-2 pr-3 text-right font-bold ${rag.text}`}>{pct(r.pd)}</td>
+                    <td className="py-2 pr-3 text-right font-bold text-slate-900">{inr(r.atRisk)}</td>
+                    <td className="py-2 pr-3 text-slate-500 hidden lg:table-cell truncate max-w-[280px]">{r.reasons?.[0] || '—'}</td>
+                    <td className="py-2 text-slate-300"><ChevronRight size={15} /></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {/* what-if */}
       <section className="bg-white rounded-xl border border-slate-200 p-5">
