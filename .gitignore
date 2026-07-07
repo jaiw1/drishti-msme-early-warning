@@ -18,3 +18,7 @@ data/demo_data.json
 
 # stale (app loads data from public/ at runtime now)
 app/src/data/
+
+# python bytecode
+__pycache__/
+*.pyc
