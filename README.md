@@ -4,6 +4,8 @@
 
 **One line:** A tool that spots small-business loans heading for trouble **about a year in advance**, so a bank officer can step in while there's still time to save the account.
 
+**🔴 Live demo:** **https://drishti-ews.vercel.app** — no login, no backend, loads in seconds.
+
 ---
 
 ## 1. The problem we're solving
@@ -31,14 +33,14 @@ A program that **taught itself the early-warning patterns** from those thousands
 It's an industry-standard model (a "gradient-boosted tree" — LightGBM). We grade it **honestly** (see §4).
 
 ### Part 3 — The cockpit (the web app)
-The screen a bank officer actually uses. Three tabs:
+The screen a bank officer actually uses. Four tabs:
 
 | Tab | What it shows |
 |-----|---------------|
 | **Watch-list** | The full book of businesses, ranked by risk, colour-coded, with each one's top warning signal and how many months of runway is left. Click any one to see its full story: a **risk-over-time chart** (healthy for years, then the slide), the **"why it's sliding"** chart (cash falling while overdraft use climbs), the reasons, and an **auto-drafted alert memo**. |
-| **Portfolio risk** | Where the risk is concentrated (which **sectors** and **segments** are stressed), plus an interactive **"what early action is worth"** calculator — how much **provisioning money** the bank saves by acting on the flags early. |
-| **Model & Metrics** | The honest scorecard: how good the model is, how early it catches trouble, and the **rigour checks** a bank's risk team would demand. |
-| **Real-data model** | The same method run on **real Indian MSMEs** (real defaults) → an honest ~0.81 score, with real anonymised companies and reason codes. Proof it works beyond synthetic data. |
+| **Portfolio risk** | Where the risk is concentrated (which **sectors** and **segments** are stressed), a **"who to call first"** top-10 ranked by ₹ at risk, plus an interactive **"what early action is worth"** calculator — how much **provisioning money** the bank saves by acting on the flags early. |
+| **Model & Metrics** | The honest scorecard: how good the model is, how early it catches trouble, **why the Red/Amber thresholds sit where they do** (workload vs catch-rate), and the **rigour checks** a bank's risk team would demand. |
+| **Real-data model** | The same method run on **real Indian MSMEs** (real defaults) → an honest ~0.81 score (with a bootstrap confidence interval), real anonymised companies and reason codes. Proof it works beyond synthetic data. |
 
 ---
 
@@ -62,7 +64,7 @@ So we deliberately **lead with the things that are hard to fake**, not the headl
 - **Out-of-time & leakage-safe testing** — tested on businesses (and time periods) it never trained on.
 - **Robustness** — even a simple transparent scorecard reaches the same score, proving the signal is real and not a black-box trick.
 
-**And we proved the method on real data.** We ran the *same modelling approach* on **~3,200 real Indian MSMEs** (17,000 company-years of real annual financials, FY2018–FY2026) with **1,284 real defaults** (an actual credit-rating downgrade to 'D'). On real data it scores an honest **AUC 0.81** — right in the realistic band — and here the model clearly **beats a logistic scorecard (0.81 vs 0.70)**, earning its keep. This is the **"Real-data model"** tab in the app, with real (anonymised) companies and real reason codes ("interest cover below 1", "negative net worth"). Almost no other team will have *any* real number.
+**And we proved the method on real data.** We ran the *same modelling approach* on **~3,200 real Indian MSMEs** (17,000 company-years of real annual financials, FY2018–FY2026) with **1,284 real defaults** (an actual credit-rating downgrade to 'D'). On real data it scores an honest **AUC 0.81 (95% bootstrap CI 0.78–0.84)** — right in the realistic band — and here the model clearly **beats a logistic scorecard (0.81 vs 0.70)**, earning its keep. This is the **"Real-data model"** tab in the app, with real (anonymised) companies and real reason codes ("interest cover below 1", "negative net worth"). Almost no other team will have *any* real number.
 
 We also say clearly, in the app itself, that the cockpit runs on synthetic data with the real bank data to come after shortlisting.
 
@@ -115,21 +117,23 @@ msme-ews/
 - Polished **4-tab** web app (Watch-list, Portfolio risk, Model & Metrics, Real-data model), tested across account types.
 - Sector-concentration view + interactive ₹-provisioning what-if.
 
+**✅ Also done**
+- **Deployed live** at https://drishti-ews.vercel.app (static, no backend to crash).
+- Public **GitHub repo** (this one).
+- "Who to call first" ₹-at-risk ranking, Red/Amber **threshold justification** exhibit, bootstrap **confidence interval** on the real-data AUC, mobile layout, graceful error/retry state.
+
 **📌 Open points / known limitations**
 - The **cockpit** runs on **synthetic data** (by design at this stage) — real *bank* data comes only after shortlisting. (The **real-data validation** tab uses a real Indian MSME financial-statement + credit-rating dataset.)
 - Real-data model caveats: rated-MSME universe (selection bias); annual financials (complements, not replaces, the monthly cockpit); default = a 'D' credit-rating event.
-- Not yet **deployed to a public URL** (currently runs locally).
-- No public **GitHub repo** yet.
-- The **pitch deck** (mandatory template) isn't filled in yet.
 
 ---
 
-## 7. Next steps
+## 7. Next steps (post-shortlisting)
 
-1. **Deploy the cockpit to a public URL** (Vercel) — a working live link is a key differentiator.
-2. **Publish the GitHub repo.**
-3. **Build the pitch deck** — lead with lead-time, the real-data validation, and the IDBI tailoring; keep the honest framing.
-4. *(Optional polish)* blend the real financial-statement risk with the behavioural score into one unified number; richer bureau/GST-style features; deeper sector "contagion" view.
+1. **Plug into the IDBI sandbox** — swap the synthetic panel for real internal loan-conduct data; the pipeline is already shaped for monthly account-level features.
+2. **Blend the two models** — combine the real financial-statement risk score with the behavioural score into one unified number per account.
+3. **Richer signals** — bureau enquiries, GST filings, transaction-graph "contagion" between linked borrowers.
+4. **Production hardening** — model registry, monthly re-train + calibration monitoring, audit trail for every flag (RBI AI-governance friendly).
 
 ---
 
