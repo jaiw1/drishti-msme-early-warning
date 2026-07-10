@@ -7,6 +7,7 @@ import PortfolioRisk from './components/PortfolioRisk'
 import RealModel from './components/RealModel'
 import Guide from './components/Guide'
 import { Radar, LayoutGrid, LineChart, PieChart, BadgeCheck, ShieldCheck, Info, Compass, TriangleAlert, RefreshCw } from 'lucide-react'
+import { runwayEstimate } from './lib/runway'
 
 const NAV = [
   { key: 'portfolio', label: 'Watch-list', short: 'Watch-list', icon: LayoutGrid },
@@ -36,7 +37,14 @@ export default function App() {
     const b = import.meta.env.BASE_URL
     fetch(`${b}demo_data.json`)
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-      .then(setData)
+      .then((d) => {
+        // decorate flagged accounts with the predicted runway (client-side, trajectory only)
+        const ref = d.meta.reference_month, red = d.portfolio_summary.red_thr
+        for (const rec of d.portfolio) {
+          rec.runway = rec.bucket === 'green' ? null : runwayEstimate(d.timelines[rec.account_id], ref, red)
+        }
+        setData(d)
+      })
       .catch(() => setLoadError(true))
     // real-data tab degrades gracefully without this file, so a failure here is non-fatal
     fetch(`${b}real_model.json`).then((r) => r.json()).then(setRealData).catch(() => {})

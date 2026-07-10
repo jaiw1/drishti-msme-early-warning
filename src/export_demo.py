@@ -167,6 +167,57 @@ def main():
         ))
     port_df = pd.DataFrame(portfolio)
 
+    # ---- ecosystem-stress lens (trading-partner linkage) ----
+    # Stress travels through trading networks: a supplier's default becomes its buyers'
+    # cash-flow problem. We build an illustrative linkage layer (real deployment plugs in
+    # CRILC exposures / GST buyer-supplier graphs): every account gets 2-4 partners drawn
+    # mostly from its own sector, and every RED account additionally "anchors" 2-4
+    # dependents — because real distress clusters, it doesn't scatter.
+    # The model PD is NOT altered — this is a second, network lens the officer sees.
+    rng_l = np.random.default_rng(42)
+    ids = list(port_df.account_id)
+    idx = {a: i for i, a in enumerate(ids)}
+    by_sector = {s: list(g.account_id) for s, g in port_df.groupby("sector")}
+    by_region = {s: list(g.account_id) for s, g in port_df.groupby("region")}
+    bucket_of = dict(zip(port_df.account_id, port_df.bucket))
+    links = {a: set() for a in ids}
+    for rec in portfolio:
+        aid = rec["account_id"]
+        pool_s, pool_r = by_sector[rec["sector"]], by_region[rec["region"]]
+        want = int(rng_l.integers(2, 5))
+        guard = 0
+        while len(links[aid]) < want and guard < 40:
+            guard += 1
+            pool = pool_s if rng_l.random() < 0.7 else pool_r
+            c = pool[int(rng_l.integers(0, len(pool)))]
+            if c != aid:
+                links[aid].add(c); links[c].add(aid)
+    for rec in portfolio:                       # red anchors pull dependents in
+        if rec["bucket"] == "red":
+            pool = by_sector[rec["sector"]]
+            for _ in range(int(rng_l.integers(2, 5))):
+                c = pool[int(rng_l.integers(0, len(pool)))]
+                if c != rec["account_id"]:
+                    links[rec["account_id"]].add(c); links[c].add(rec["account_id"])
+    for rec in portfolio:
+        ps = links[rec["account_id"]]
+        rec["eco_partners"] = len(ps)
+        rec["eco_flagged"] = sum(1 for p in ps if bucket_of[p] != "green")
+        rec["eco_red"] = sum(1 for p in ps if bucket_of[p] == "red")
+    green_1link = [r for r in portfolio if r["bucket"] == "green" and r["eco_red"] >= 1]
+    amber_1link = [r for r in portfolio if r["bucket"] == "amber" and r["eco_red"] >= 1]
+    eco_sector = {}
+    for r in green_1link + amber_1link:
+        e = eco_sector.setdefault(r["sector"], dict(sector=r["sector"], n=0, exposure=0.0))
+        e["n"] += 1; e["exposure"] += r["sanctioned"]
+    ecosystem = dict(
+        n_green_1link_red=len(green_1link), n_amber_1link_red=len(amber_1link),
+        exposure_1link_red=float(sum(r["sanctioned"] for r in green_1link + amber_1link)),
+        by_sector=sorted(eco_sector.values(), key=lambda x: -x["exposure"])[:6],
+    )
+    print(f"ecosystem: {len(green_1link)} green + {len(amber_1link)} amber accounts within 1 link of a red "
+          f"(₹{ecosystem['exposure_1link_red']/1e7:.1f} cr exposure)")
+
     # ---- spotlight accounts (present in snapshot) with full timelines ----
     # lead with "caught early, still has runway": amber today, NPA still 6-12 months away
     caught_early = port_df[(port_df.bucket == "amber") & (port_df.ground_truth_default == 1)
@@ -234,6 +285,7 @@ def main():
             red_thr=round(red_thr, 4), amber_thr=round(amber_thr, 4),
         ),
         portfolio=portfolio, spotlight=spotlight_ids, timelines=timelines, memos=memos,
+        ecosystem=ecosystem,
         rigor=rigor,
     )
     with open(OUT, "w") as f:

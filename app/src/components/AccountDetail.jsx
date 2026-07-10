@@ -3,7 +3,7 @@ import {
   Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ReferenceLine, ReferenceArea, ComposedChart, Area, Legend,
 } from 'recharts'
-import { X, TriangleAlert, FileText, Copy, Check, CalendarClock } from 'lucide-react'
+import { X, TriangleAlert, FileText, Copy, Check, CalendarClock, Share2 } from 'lucide-react'
 import { inr, pct, RAG } from '../lib/format'
 
 export default function AccountDetail({ data, accountId, onClose }) {
@@ -65,6 +65,18 @@ export default function AccountDetail({ data, accountId, onClose }) {
               <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold border ${rag.soft}`}>
                 <CalendarClock size={16} /> On the watch-list · {rag.label}
                 {rec.first_warning_lead ? ` · first flagged ${rec.first_warning_lead} mo before trouble` : ''}
+              </div>
+            )}
+            {rec.runway?.rising && rec.runway.months && (
+              <div className="flex items-center gap-2 bg-slate-100 text-slate-700 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold"
+                   title="Projected from the recent risk trend (least-squares). Median error ≈3 months on the synthetic book — a horizon for prioritisation, not a promise.">
+                <CalendarClock size={16} /> Runway: ≈{rec.runway.months} mo before {rec.runway.toCritical ? 'critical' : 'act-now (Red)'}
+              </div>
+            )}
+            {rec.eco_red >= 1 && (
+              <div className="flex items-center gap-2 bg-orange-50 text-idbi-orange border border-orange-200 rounded-lg px-3 py-2 text-sm font-semibold"
+                   title="Illustrative trading-partner links on the synthetic book; production plugs in CRILC exposures / GST buyer-supplier networks.">
+                <Share2 size={16} /> Ecosystem: {rec.eco_flagged} of {rec.eco_partners} trading partners flagged ({rec.eco_red} red)
               </div>
             )}
             {npaEta != null && (

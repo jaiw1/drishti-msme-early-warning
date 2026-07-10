@@ -37,8 +37,8 @@ The screen a bank officer actually uses. Four tabs:
 
 | Tab | What it shows |
 |-----|---------------|
-| **Watch-list** | The full book of businesses, ranked by risk, colour-coded, with each one's top warning signal and how many months of runway is left. Click any one to see its full story: a **risk-over-time chart** (healthy for years, then the slide), the **"why it's sliding"** chart (cash falling while overdraft use climbs), the reasons, and an **auto-drafted alert memo**. |
-| **Portfolio risk** | Where the risk is concentrated (which **sectors** and **segments** are stressed), a **"who to call first"** top-10 ranked by ₹ at risk, plus an interactive **"what early action is worth"** calculator — how much **provisioning money** the bank saves by acting on the flags early. |
+| **Watch-list** | The full book of businesses, ranked by risk, colour-coded, with each one's top warning signal, lead time, and a **predicted runway** ("≈N months before act-now", projected from the risk trend — median error ≈3 months, quoted honestly). Click any one to see its full story: a **risk-over-time chart**, the **"why it's sliding"** chart, the reasons, an **ecosystem chip** when trading partners are flagged, and an **auto-drafted alert memo**. |
+| **Portfolio risk** | Where the risk is concentrated (which **sectors** and **segments** are stressed), a **"who to call first"** top-10 ranked by ₹ at risk, a **network-contagion lens** ("stress travels through trading networks" — accounts within one link of a red cluster, wired for CRILC/GST graphs in production), plus an interactive **"what early action is worth"** provisioning calculator. |
 | **Model & Metrics** | The honest scorecard: how good the model is, how early it catches trouble, **why the Red/Amber thresholds sit where they do** (workload vs catch-rate), and the **rigour checks** a bank's risk team would demand. |
 | **Real-data model** | The same method run on **real Indian MSMEs** (real defaults) → an honest ~0.81 score (with a bootstrap confidence interval), real anonymised companies and reason codes. Proof it works beyond synthetic data. |
 

@@ -70,6 +70,7 @@ export default function PortfolioTable({ rows, onSelect }) {
               <Th k="sector">Sector</Th>
               <Th k="pd" right>PD (12-mo)</Th>
               <Th k="first_warning_lead" right>Lead</Th>
+              <th className="px-3 py-2 text-right font-semibold text-slate-500 whitespace-nowrap" title="Projected months before the risk trend crosses the next threshold (median error ≈3 mo)">Runway</th>
               <Th k="sanctioned" right>Exposure</Th>
               <th className="px-3 py-2 text-left font-semibold text-slate-500">Top early-warning signal</th>
             </tr>
@@ -89,6 +90,9 @@ export default function PortfolioTable({ rows, onSelect }) {
                   <td className="px-3 py-2.5 text-slate-500">{r.sector}</td>
                   <td className={`px-3 py-2.5 text-right font-bold ${rag.text}`}>{pct(r.pd)}</td>
                   <td className="px-3 py-2.5 text-right text-slate-600">{r.first_warning_lead ? `${r.first_warning_lead} mo` : '—'}</td>
+                  <td className={`px-3 py-2.5 text-right ${r.runway?.months && r.runway.months <= 3 ? 'text-rag-red font-semibold' : 'text-slate-600'}`}>
+                    {r.runway?.rising && r.runway.months ? `≈${r.runway.months} mo` : '—'}
+                  </td>
                   <td className="px-3 py-2.5 text-right text-slate-600">{inr(r.sanctioned)}</td>
                   <td className="px-3 py-2.5 text-slate-500 max-w-[280px] truncate">
                     {r.reasons?.find((x) => !x.startsWith('Adverse')) || r.reasons?.[0] || '—'}

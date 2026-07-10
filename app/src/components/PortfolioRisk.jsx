@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList,
 } from 'recharts'
 import { inr, pct, RAG } from '../lib/format'
-import { TriangleAlert, Layers, IndianRupee, ShieldCheck, PhoneCall, ChevronRight } from 'lucide-react'
+import { TriangleAlert, Layers, IndianRupee, ShieldCheck, PhoneCall, ChevronRight, Share2 } from 'lucide-react'
 
 // Default extrapolation base. IDBI's MSME/priority book isn't a single published figure; public
 // disclosures put it broadly in the ₹25,000–35,000 cr range, so this is an ADJUSTABLE assumption
@@ -169,6 +169,49 @@ export default function PortfolioRisk({ data, onSelect }) {
           </table>
         </div>
       </section>
+
+      {/* ecosystem stress (contagion lens) */}
+      {data.ecosystem && (
+        <section className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <Share2 size={16} className="text-idbi-orange" />
+            <h3 className="font-bold text-slate-800">Stress travels through trading networks</h3>
+          </div>
+          <p className="text-xs text-slate-400 mb-4 max-w-3xl">
+            A supplier's default becomes its buyers' cash-flow problem — often before their own numbers move. This second
+            lens looks one link out from every red account. The model's PD is untouched; these are accounts that deserve a
+            manual look <b>before</b> their own signals turn.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            <div className="rounded-xl border border-slate-200 p-4">
+              <div className="text-2xl font-extrabold text-rag-green">{data.ecosystem.n_green_1link_red}</div>
+              <div className="text-sm font-semibold text-slate-700">Green accounts, 1 link from a red</div>
+              <div className="text-xs text-slate-400">healthy today — trading beside distress</div>
+            </div>
+            <div className="rounded-xl border border-slate-200 p-4">
+              <div className="text-2xl font-extrabold text-rag-amber">{data.ecosystem.n_amber_1link_red}</div>
+              <div className="text-sm font-semibold text-slate-700">Amber accounts, 1 link from a red</div>
+              <div className="text-xs text-slate-400">already sliding, network adds pressure</div>
+            </div>
+            <div className="rounded-xl border border-idbi-orange/30 bg-orange-50/50 p-4">
+              <div className="text-2xl font-extrabold text-idbi-orange">{inr(data.ecosystem.exposure_1link_red)}</div>
+              <div className="text-sm font-semibold text-slate-700">Exposure within one link of distress</div>
+              <div className="text-xs text-slate-400">the contagion-watch book</div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {data.ecosystem.by_sector.map((s) => (
+              <span key={s.sector} className="text-xs bg-slate-100 border border-slate-200 text-slate-600 px-2.5 py-1 rounded-full">
+                {s.sector}: <b>{s.n}</b> accounts · {inr(s.exposure)}
+              </span>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-3">
+            Illustrative partner links on the synthetic book; in production this lens plugs into CRILC common-exposure data and
+            GST buyer–supplier networks — the cockpit is already wired for it.
+          </p>
+        </section>
+      )}
 
       {/* what-if */}
       <section className="bg-white rounded-xl border border-slate-200 p-5">
