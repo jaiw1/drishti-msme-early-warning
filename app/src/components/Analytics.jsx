@@ -87,6 +87,92 @@ function Rigor({ rigor }) {
   )
 }
 
+const BAND_FILL = { Green: '#16a34a', Amber: '#d97706', Red: '#dc2626' }
+const DEC_FILL = ['#16a34a', '#22c55e', '#4ade80', '#a3e635', '#facc15', '#f59e0b', '#f97316', '#ea580c', '#dc2626', '#991b1b']
+
+function fmtRate(r) {
+  const pct = r * 100
+  return `${pct < 1 ? pct.toFixed(2) : pct.toFixed(1)}%`
+}
+
+function RankOrder({ rank }) {
+  if (!rank?.by_band?.length || !rank?.by_decile?.length) return null
+  const h = rank.horizon_months
+  const bands = rank.by_band.map((b) => ({
+    ...b, ratePct: +(b.bad_rate * 100).toFixed(2), fill: BAND_FILL[b.band] || '#02684F',
+  }))
+  const deciles = rank.by_decile.map((d) => ({
+    ...d, name: `D${d.decile}`, ratePct: +(d.bad_rate * 100).toFixed(2),
+  }))
+  const green = rank.by_band.find((b) => b.band === 'Green')
+  const amber = rank.by_band.find((b) => b.band === 'Amber')
+  const red = rank.by_band.find((b) => b.band === 'Red')
+  const top = deciles[deciles.length - 1]
+  if (!green || !amber || !red || !top) return null
+
+  return (
+    <section className="bg-white rounded-xl border border-slate-200 p-5">
+      <h3 className="font-bold text-slate-800">Do high-risk flags actually go bad?</h3>
+      <p className="text-xs text-slate-400 mt-1 mb-4">
+        Realised NPA rate over the next <b>{h} months</b> — the 7–8 month window a desk can act in.
+        If the score ranks risk, the high-risk band must show a higher realised bad rate; defaults must
+        not sit in Green while Red barely moves. On this book they do not: Green {fmtRate(green.bad_rate)}
+        ({green.defaults.toLocaleString('en-IN')} of {green.n.toLocaleString('en-IN')}), Amber {fmtRate(amber.bad_rate)}
+        ({amber.defaults} of {amber.n}), Red {fmtRate(red.bad_rate)} ({red.defaults} of {red.n}).
+      </p>
+      <div className="grid lg:grid-cols-2 gap-5">
+        <div>
+          <div className="text-xs font-semibold text-slate-600 mb-2">By traffic-light band</div>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={bands} margin={{ top: 16, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" />
+              <XAxis dataKey="band" tick={{ fontSize: 11, fill: '#64748b' }} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} unit="%" />
+              <Tooltip formatter={(v, n, p) => {
+                const r = p.payload
+                return [`${fmtRate(r.bad_rate)} (${r.defaults} of ${r.n.toLocaleString('en-IN')})`, 'NPA in 8 mo']
+              }} />
+              <Bar dataKey="ratePct" radius={[6, 6, 0, 0]} isAnimationActive={false}>
+                <LabelList dataKey="ratePct" position="top" formatter={(v) => fmtRate(v / 100)}
+                           style={{ fontSize: 11, fill: '#334155', fontWeight: 700 }} />
+                {bands.map((b) => <Cell key={b.band} fill={b.fill} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-slate-600 mb-2">By score decile (D1 = safest 10%)</div>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={deciles} margin={{ top: 16, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} />
+              <YAxis domain={[0, 40]} tick={{ fontSize: 10, fill: '#94a3b8' }} unit="%" />
+              <Tooltip formatter={(v, n, p) => {
+                const r = p.payload
+                return [`${fmtRate(r.bad_rate)} (${r.defaults} of ${r.n})`, 'NPA in 8 mo']
+              }}
+                       labelFormatter={(l, payload) => {
+                         const r = payload?.[0]?.payload
+                         return r ? `${l} · PD ${r.pd_lo}–${r.pd_hi}` : l
+                       }} />
+              <Bar dataKey="ratePct" radius={[6, 6, 0, 0]} isAnimationActive={false}>
+                <LabelList dataKey="ratePct" position="top"
+                           formatter={(v) => (v >= 0.5 ? fmtRate(v / 100) : '')}
+                           style={{ fontSize: 10, fill: '#334155', fontWeight: 700 }} />
+                {deciles.map((d, i) => <Cell key={d.decile} fill={DEC_FILL[i]} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <p className="text-[11px] text-slate-400 mt-1">
+            D1–D8 are all Green and stay clean. Realised NPAs sit in the top of the book
+            (D10 = {fmtRate(top.bad_rate)}).
+          </p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function ThresholdExhibit({ data }) {
   const rows = data.portfolio
   const redThr = data.portfolio_summary.red_thr * 100
@@ -107,10 +193,11 @@ function ThresholdExhibit({ data }) {
       <h3 className="font-bold text-slate-800">Where the Red / Amber lines sit — and why</h3>
       <p className="text-xs text-slate-400 mt-1 mb-4">
         Any cut-off trades <b>officer workload</b> against <b>catch-rate</b>, shown here on this book's actual
-        next-12-month outcomes. The Amber "watch" line ({amberThr}%) puts <b>{amber.workload}%</b> of the book under
-        watch and catches <b>{amber.caught}%</b> of the defaults coming in the next 12 months; the Red "act-now"
-        line ({redThr}%) concentrates urgent action on just <b>{red.workload}%</b> of accounts. The lines are sized
-        to a realistic review capacity — not picked to flatter the metrics.
+        next-12-month outcomes. A missed NPA costs the book more than reviewing an extra account that stays
+        good, so Amber is set to catch most coming defaults even if that means a wider watch-list; Red stays
+        tight so urgent action is concentrated. The Amber "watch" line ({amberThr}%) puts <b>{amber.workload}%</b> of
+        the book under watch and catches <b>{amber.caught}%</b> of the defaults coming in the next 12 months; the
+        Red "act-now" line ({redThr}%) concentrates urgent action on just <b>{red.workload}%</b> of accounts.
       </p>
       <ResponsiveContainer width="100%" height={250}>
         <LineChart data={curve} margin={{ top: 14, right: 12, left: -20, bottom: 4 }}>
@@ -159,6 +246,8 @@ export default function Analytics({ data }) {
         <Stat value={`${m.median_first_warning_months} mo`} label="Median early warning" hint="how far ahead we raise the first flag" />
         <Stat value={pct(m.pct_flagged_6mo_ahead)} label="Flagged ≥6 mo ahead" hint="share of future defaults caught early" />
       </div>
+
+      <RankOrder rank={m.rank_order} />
 
       <div className="grid lg:grid-cols-2 gap-5">
         <section className="bg-white rounded-xl border border-slate-200 p-5">

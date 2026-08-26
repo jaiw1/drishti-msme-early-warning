@@ -39,7 +39,7 @@ The screen a bank officer actually uses. Four tabs:
 |-----|---------------|
 | **Watch-list** | The full book of businesses, ranked by risk, colour-coded, with each one's top warning signal, lead time, and a **predicted runway** ("≈N months before act-now", projected from the risk trend — median error ≈3 months, quoted honestly). Click any one to see its full story: a **risk-over-time chart**, the **"why it's sliding"** chart, the reasons, an **ecosystem chip** when trading partners are flagged, and an **auto-drafted alert memo**. |
 | **Portfolio risk** | Where the risk is concentrated (which **sectors** and **segments** are stressed), a **"who to call first"** top-10 ranked by ₹ at risk, a **network-contagion lens** ("stress travels through trading networks" — accounts within one link of a red cluster, wired for CRILC/GST graphs in production), plus an interactive **"what early action is worth"** provisioning calculator. |
-| **Model & Metrics** | The honest scorecard: how good the model is, how early it catches trouble, **why the Red/Amber thresholds sit where they do** (workload vs catch-rate), and the **rigour checks** a bank's risk team would demand. |
+| **Model & Metrics** | The honest scorecard: how good the model is, **rank-ordering** (realised NPA rate by risk band over 8 months), how early it catches trouble, **why the Red/Amber thresholds sit where they do** (a missed NPA costs more than an extra review), and the **rigour checks** a bank's risk team would demand. |
 | **Real-data model** | The same method run on **real Indian MSMEs** (real defaults) → an honest ~0.81 score (with a bootstrap confidence interval), real anonymised companies and reason codes. Proof it works beyond synthetic data. |
 
 ---
@@ -47,6 +47,7 @@ The screen a bank officer actually uses. Four tabs:
 ## 3. The headline results (on our practice data)
 
 - **Catches trouble early:** raises the first flag a **median of ~10 months** before a business goes bad; **93%** are flagged at least 6 months ahead.
+- **Rank-orders the book:** over the next 8 months, realised NPA rates are **0.13% in Green, 14% in Amber, 91% in Red** — defaults do not sit in the low-risk bucket.
 - **Practical for officers:** by reviewing just the **riskiest 10%** of accounts each month, they catch **~87%** of all future defaults.
 - **The money story:** acting early on flagged accounts could save on the order of **₹40–50 cr/year in provisioning** across IDBI's MSME book (illustrative, shown as an interactive what-if).
 - **Proven on real data:** the same method, run on **~3,200 real Indian MSMEs** (real credit-rating defaults), scores an honest **0.81** — see §4.
@@ -58,6 +59,7 @@ The screen a bank officer actually uses. Four tabs:
 Our model scores very high (technical score ~0.95) **because the data is synthetic — we designed the very signals it reads.** That is **not** proof it beats a real-world model, and we never claim it is. Real bank default models typically score ~0.75–0.85; a real-data version of ours would likely land there too.
 
 So we deliberately **lead with the things that are hard to fake**, not the headline score:
+- **Rank-ordering** — realised 8-month NPA rate rises with the risk band (Green 0.13% → Amber 14% → Red 91%).
 - **Lead-time** — *how early* we catch trouble (our sharpest, most defensible edge).
 - **A leakage check** that proves the year-ahead warnings come from **cash-flow signals, not** the obvious "already late on payments" signal. (At 10–12 months out, cash-flow + overdraft-use drive **~81%** of the decision and missed-payments just **1.8%**.)
 - **Calibration** — when it says "40% risk", the real default rate in that band *is* ~40%.
@@ -120,7 +122,7 @@ msme-ews/
 **✅ Also done**
 - **Deployed live** at https://drishti-ews.vercel.app (static, no backend to crash).
 - Public **GitHub repo** (this one).
-- "Who to call first" ₹-at-risk ranking, Red/Amber **threshold justification** exhibit, bootstrap **confidence interval** on the real-data AUC, mobile layout, graceful error/retry state.
+- "Who to call first" ₹-at-risk ranking, Red/Amber **threshold justification** exhibit, **8-month rank-ordering** (realised NPA rate by risk band and score decile), bootstrap **confidence interval** on the real-data AUC, mobile layout, graceful error/retry state.
 
 **📌 Open points / known limitations**
 - The **cockpit** runs on **synthetic data** (by design at this stage) — real *bank* data comes only after shortlisting. (The **real-data validation** tab uses a real Indian MSME financial-statement + credit-rating dataset.)
@@ -139,6 +141,6 @@ msme-ews/
 
 ## 8. How this tailors to IDBI (context)
 
-The demo is sized to IDBI's real figures (from public disclosures — to be re-verified before the pitch): MSME/priority book ~₹25–35k cr, gross bad-loan ratio ~2–3%, a "watch-list" (SMA) book ~₹3,000 cr, provision coverage ~99%. IDBI already runs an early-warning system called **SAJAG** — DRISHTi is designed to **complement** it by scoring accounts *before* they slip, not replace it.
+The demo is sized to IDBI's real figures (from public disclosures — to be re-verified before the pitch): MSME/priority book ~₹25–35k cr, gross bad-loan ratio ~2–3%, a "watch-list" (SMA) book ~₹3,000 cr, provision coverage ~99%.
 
 > **Note:** This is a hackathon prototype on synthetic data. It is decision-support for a human credit officer — the model advises, the officer decides.
