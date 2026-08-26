@@ -62,6 +62,44 @@ def ks_stat(y, p):
     return float(np.max(tpr - fpr))
 
 
+RANK_HORIZON = 8  # 7–8 month window: subsequent NPA rate by score (rank-order check)
+
+
+def rank_order_exhibit(port_df, horizon=RANK_HORIZON):
+    """Realised NPA rate over `horizon` months, by RAG band and by score decile.
+
+    An account is a subsequent NPA if months-to-NPA at the snapshot is in 1..horizon.
+    Computed on the same frozen book the cockpit shows — not a second cut of the panel.
+    """
+    mtn = port_df["snap_months_to_npa"]
+    went = (mtn >= 1) & (mtn <= horizon)
+    bands = []
+    for name, key in (("Green", "green"), ("Amber", "amber"), ("Red", "red")):
+        mask = port_df.bucket == key
+        n = int(mask.sum())
+        k = int(went[mask].sum())
+        bands.append(dict(band=name, n=n, defaults=k,
+                          bad_rate=round(k / n, 4) if n else 0.0))
+    ranked = port_df.sort_values("pd").reset_index(drop=True)
+    n = len(ranked)
+    deciles = []
+    for i in range(10):
+        lo, hi = int(i * n / 10), int((i + 1) * n / 10)
+        sl = ranked.iloc[lo:hi]
+        k = int(((sl.snap_months_to_npa >= 1) & (sl.snap_months_to_npa <= horizon)).sum())
+        deciles.append(dict(
+            decile=i + 1, n=int(len(sl)),
+            pd_lo=round(float(sl.pd.min()), 4), pd_hi=round(float(sl.pd.max()), 4),
+            defaults=k, bad_rate=round(k / len(sl), 4) if len(sl) else 0.0,
+        ))
+    return dict(
+        horizon_months=horizon,
+        definition=("Share of snapshot accounts that reach NPA (90+ DPD) within the next "
+                    f"{horizon} months, by model risk band and by score decile."),
+        by_band=bands, by_decile=deciles,
+    )
+
+
 def reason_codes(feat_row, contribs, cols, k=3):
     """Top-k risk-increasing, human-readable drivers for one account-month."""
     out = []
@@ -276,6 +314,7 @@ def main():
             recall_by_lead_time=lead_curve,
             median_first_warning_months=int(lead_series.median()),
             pct_flagged_6mo_ahead=round(float((lead_series >= 6).mean()), 3),
+            rank_order=rank_order_exhibit(port_df),
         ),
         portfolio_summary=dict(
             total_accounts=len(port_df),
@@ -297,6 +336,9 @@ def main():
     print(f"exposure at risk (red): ₹{s['exposure_at_risk']:,.0f}")
     print(f"spotlight w/ timelines: {len(spotlight_ids)}  ({sum(1 for a in spotlight_ids if port_df.set_index('account_id').loc[a,'ground_truth_default']==1)} true future-defaults)")
     print(f"median first-warning lead: {out['metrics']['median_first_warning_months']} mo | >=6mo: {out['metrics']['pct_flagged_6mo_ahead']:.0%}")
+    ro = out["metrics"]["rank_order"]
+    print("rank-order 8m NPA rate: " + " | ".join(
+        f"{b['band']} {b['bad_rate']:.1%} ({b['defaults']}/{b['n']})" for b in ro["by_band"]))
     print(f"recall@10% budget: {recall_at(0.10):.0%} | wrote {OUT} ({len(json.dumps(out))/1024:.0f} KB)")
 
 

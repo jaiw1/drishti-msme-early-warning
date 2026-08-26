@@ -18,7 +18,7 @@ const NAV = [
 const TITLES = {
   portfolio: ['MSME Loan Watch-list', 'Predicting default 12 months ahead'],
   risk: ['Portfolio Risk & Impact', 'Where the risk sits, and what acting early is worth'],
-  analytics: ['Model Performance', 'Honest metrics, lead-time and model rigor'],
+  analytics: ['Model Performance', 'Honest metrics, rank-ordering, lead-time and model rigor'],
   real: ['Real-Data Validation', 'The same method, proven on real Indian MSMEs'],
 }
 
