@@ -58,10 +58,19 @@ from .channels import (
     simulate_channels,
     trailing_features,
 )
-from .constitutions import SEGMENTS, segment_codes
-from .labels import default_within_12m, labelable_rows, months_to_npa_column, standard_rows
+from . import sources
+from .constitutions import SEGMENTS, files_gst, segment_codes
+from .labels import (
+    assert_base_rates,
+    default_within_12m,
+    labelable_rows,
+    measure_base_rates,
+    months_to_npa_column,
+    sma2_within_6m,
+    standard_rows,
+)
 from .latent import Population, build_stress_path, draw_population, state_levels
-from .noise import stream
+from .noise import statement_gaps, stream
 from .portfolios import POPULATION, PORTFOLIOS, PopulationMix, Portfolio, registry
 
 __all__ = [
@@ -109,7 +118,15 @@ CHANNEL_PANEL_COLUMNS: tuple[str, ...] = tuple(
 
 #: panel column order.  The legacy columns keep their relative order; the new
 #: ones are inserted before the three label columns so the labels stay last.
-_LABEL_COLUMNS: tuple[str, ...] = ("default_within_12m", "labelable", "months_to_npa")
+#: ``sma2_within_6m`` (SD-D5) is inserted between the primary label and the
+#: two bookkeeping columns, so the July columns keep their relative order and
+#: every label still sits at the END of the panel — which is the contract
+#: ``export_demo.py`` and ``rigor.py`` drop by name.
+#: 🔴 BOTH OF THEM MUST ADD ``sma2_within_6m`` TO THEIR ``DROP`` LIST.  It is a
+#: forward-looking label; left in, it trains the model on the answer.
+_LABEL_COLUMNS: tuple[str, ...] = (
+    "default_within_12m", "sma2_within_6m", "labelable", "months_to_npa",
+)
 PANEL_COLUMNS: tuple[str, ...] = (
     tuple(c for c in LEGACY_PANEL_COLUMNS if c not in _LABEL_COLUMNS)
     + POPULATION_COLUMNS
@@ -125,6 +142,9 @@ ACCOUNT_COLUMNS: tuple[str, ...] = (
     "is_defaulter", "npa_month", "severity", "onset",
     "portfolio", "constitution", "state", "city_tier", "nic_group", "secured",
     "tenor_months", "interest_rate_pa", "bureau_score_0", "risk_z",
+    # SD-D4 ground truth: never features, and never in the panel.  They are
+    # what the realism tests measure the generated book against.
+    "silent_default", "transient_months", "transient_arrears", "statement_gap_months",
 )
 
 #: decimal places each float column is rounded to before writing.  Rounding is
@@ -190,6 +210,16 @@ class GeneratorConfig:
     #: ``("msme_cc", "msme_tl")`` is how the equivalence suite regenerates the
     #: July 2026 book on its own.
     portfolio_keys: tuple[str, ...] | None = None
+    #: SD-D4 master switch: silent/fast defaulters, the hard-negative
+    #: extensions to the transient episodes, seasonal confounders, measurement
+    #: noise and MAR missingness.
+    #:
+    #: **The default is True and the shipped panel is the noisy one.**  Setting
+    #: it False reproduces the July 2026 fingerprint exactly and is used by the
+    #: equivalence suite and by nothing else — a panel generated with
+    #: ``noise=False`` is not the dataset DRISHTi is trained or validated on,
+    #: and its AUC is above the pre-registered ceiling by design.
+    noise: bool = True
 
 
 def _by_account(values: np.ndarray, keep: np.ndarray) -> np.ndarray:
@@ -224,11 +254,11 @@ def generate(config: GeneratorConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
     months, mix = config.months, config.mix
     selected = registry(config.portfolio_keys)
     population, portfolios = draw_population(
-        config.seed, config.n_accounts, months, mix, selected
+        config.seed, config.n_accounts, months, mix, selected, config.noise
     )
     stress = build_stress_path(
         population.is_defaulter, population.npa_month, population.onset,
-        population.severity, months, mix,
+        population.severity, months, mix, population.silent,
     )
 
     month_index = np.arange(months)
@@ -237,6 +267,8 @@ def generate(config: GeneratorConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
     shape = (config.n_accounts, months)
     raw: dict[str, np.ndarray] = {name: np.full(shape, np.nan) for name in _RAW_STACKS}
     extra: dict[str, np.ndarray] = {}
+    episode = np.zeros(shape, dtype=bool)
+    arrears = np.zeros(config.n_accounts, dtype=bool)
     for code, portfolio in enumerate(portfolios):
         rows = np.flatnonzero(population.portfolio_code == code)
         if rows.size == 0:
@@ -245,6 +277,7 @@ def generate(config: GeneratorConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
         block = simulate_channels(
             rng,
             stream(config.seed, f"channels_sdd3:{portfolio.key}"),
+            stream(config.seed, f"noise_sdd4:{portfolio.key}"),
             portfolio,
             draw_baselines(rng, population.sanctioned[rows], portfolio.params),
             BlockInputs(
@@ -258,6 +291,7 @@ def generate(config: GeneratorConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
             stress.select(rows),
             mix,
             months,
+            config.noise,
         )
         for name, values in raw.items():
             values[rows] = getattr(block, name)
@@ -265,6 +299,9 @@ def generate(config: GeneratorConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
             if name not in extra:
                 extra[name] = np.full(shape, np.nan)
             extra[name][rows] = values
+        if block.transient_episode is not None:
+            episode[rows] = block.transient_episode
+            arrears[rows] = block.transient_arrears
 
     stacked = Channels(
         utilisation=raw["utilisation"], inflow=raw["inflow"], gst_sales=raw["gst_sales"],
@@ -272,6 +309,28 @@ def generate(config: GeneratorConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
         minbal_breach=raw["minbal_breach"], adverse_remark=raw["adverse_remark"],
     )
     trailing = trailing_features(stacked)
+
+    # Every dynamic column as an ``(N, M)`` array, so SD-D4's missingness can
+    # be applied as a mask over cells rather than as a special case inside
+    # each channel.  The truth was simulated; what follows decides what the
+    # bank actually HELD that month.
+    dynamic: dict[str, np.ndarray] = {
+        "dpd": stacked.dpd,
+        "utilisation": stacked.utilisation,
+        "inflow": stacked.inflow,
+        "gst_sales": stacked.gst_sales,
+        "txn_count": stacked.txn,
+        "bounce": stacked.bounce,
+        "minbal_breach": stacked.minbal_breach,
+        "adverse_remark": stacked.adverse_remark,
+    }
+    dynamic.update(trailing)
+    dynamic.update(extra)
+    gaps = np.zeros(shape, dtype=bool)
+    if config.noise:
+        gaps = statement_gaps(stream(config.seed, "missingness"), config.n_accounts,
+                              months, mix)
+        _apply_missingness(dynamic, population, portfolios, mix, gaps)
 
     keep = standard_rows(stress, stacked.dpd, config.npa_dpd)
     dates = np.array([
@@ -330,20 +389,12 @@ def generate(config: GeneratorConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
         "secured": _by_account(population.secured, keep),
         "tenor_months": _by_account(population.tenor_months, keep),
         "interest_rate_pa": _by_account(population.interest_rate_pa, keep),
-        "dpd": stacked.dpd[keep],
-        "utilisation": stacked.utilisation[keep],
-        "inflow": stacked.inflow[keep],
-        "gst_sales": stacked.gst_sales[keep],
-        "txn_count": stacked.txn[keep],
-        "bounce": stacked.bounce[keep],
-        "minbal_breach": stacked.minbal_breach[keep],
-        "adverse_remark": stacked.adverse_remark[keep],
         "default_within_12m": default_within_12m(stress, config.horizon)[keep],
+        "sma2_within_6m": sma2_within_6m(stacked.dpd)[keep],
         "labelable": labelable_rows(config.n_accounts, months, config.horizon)[keep],
         "months_to_npa": months_to_npa_column(stress)[keep],
     }
-    panel.update({name: values[keep] for name, values in trailing.items()})
-    panel.update({name: values[keep] for name, values in extra.items()})
+    panel.update({name: values[keep] for name, values in dynamic.items()})
     for name in PANEL_COLUMNS:
         panel.setdefault(name, np.full(int(keep.sum()), np.nan))
 
@@ -383,6 +434,10 @@ def generate(config: GeneratorConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
         "interest_rate_pa": np.round(population.interest_rate_pa, 4),
         "bureau_score_0": np.round(population.bureau_score_0, 0),
         "risk_z": np.round(population.risk_z, 4),
+        "silent_default": population.silent.astype(np.int64),
+        "transient_months": episode.sum(axis=1).astype(np.int64),
+        "transient_arrears": arrears.astype(np.int64),
+        "statement_gap_months": gaps.sum(axis=1).astype(np.int64),
     })[list(ACCOUNT_COLUMNS)]
     return frame, accounts
 
@@ -418,6 +473,76 @@ def _blank_absent_channels(
                 frame.loc[rows, column] = np.nan
 
 
+#: what a missing bank statement takes with it.  These are the columns a
+#: lender computes FROM the statement feed, so if the month never arrived none
+#: of them exists — and writing a zero instead would tell the model the
+#: borrower banked nothing, which is a different and much worse claim.
+_STATEMENT_COLUMNS: tuple[str, ...] = (
+    "inflow", "inflow_trend_3m", "inflow_vs_6m_avg",
+    "txn_count", "txn_drop_flag", "balance", "min_balance_6m",
+)
+
+
+def _apply_missingness(
+    dynamic: dict[str, np.ndarray],
+    population: Population,
+    portfolios: list[Portfolio],
+    mix: PopulationMix,
+    gaps: np.ndarray,
+) -> None:
+    """Blank the cells the bank did not actually have.  SD-D4.
+
+    Three rules, and every one of them is **missing at random** — the
+    missingness depends on things the model can SEE (the borrower's legal form,
+    their occupation) or on nothing at all (a failed statement pull), never on
+    the borrower's condition or on the label:
+
+    * **No GST return for an Individual.**  A portfolio can carry a GST channel
+      and still have borrowers who file nothing; LAP is where it bites, at
+      roughly two in five.  Portfolio-level absence
+      (:attr:`~generator.portfolios.Portfolio.absent_channels`) covers the
+      products where nobody files — this is the per-borrower half.
+    * **No salary credit for the self-employed.**  A self-employed home-loan
+      borrower is underwritten on returns and business banking, not payroll, so
+      the portfolio's own first link is dark for them and the model has to fall
+      back on the shared spine.
+    * **Statement gaps.**  One to three months, on a share of accounts, drawn
+      from a stream that has never seen the latent stress.
+
+    Args:
+        dynamic: column name -> ``(N, M)`` array, modified in place.
+        population: supplies constitution, sector and portfolio per account.
+        portfolios: the registry in code order.
+        mix: supplies the category universes.
+        gaps: ``(N, M)`` statement-gap mask.
+    """
+    files = files_gst(population.constitution_code, mix.constitution_levels)
+    salaried_code = (
+        mix.sector_levels.index("Salaried") if "Salaried" in mix.sector_levels else -1
+    )
+    self_employed = population.sector_code != salaried_code
+
+    per_column: dict[str, np.ndarray] = {}
+    for code, portfolio in enumerate(portfolios):
+        held = population.portfolio_code == code
+        if portfolio.has("gst"):
+            _add(per_column, CHANNEL_COLUMNS["gst"], held & ~files)
+        if portfolio.has("salary"):
+            _add(per_column, CHANNEL_COLUMNS["salary"], held & self_employed)
+    for column, accounts in per_column.items():
+        if column in dynamic:
+            dynamic[column] = np.where(accounts[:, None], np.nan, dynamic[column])
+    for column in _STATEMENT_COLUMNS:
+        if column in dynamic:
+            dynamic[column] = np.where(gaps, np.nan, dynamic[column])
+
+
+def _add(store: dict[str, np.ndarray], columns: tuple[str, ...], mask: np.ndarray) -> None:
+    """OR ``mask`` into each column's account-level blanking mask."""
+    for column in columns:
+        store[column] = store[column] | mask if column in store else mask.copy()
+
+
 def _finalise_integers(frame: pd.DataFrame) -> None:
     """Give every whole-number column an integer dtype.
 
@@ -439,10 +564,38 @@ def _finalise_integers(frame: pd.DataFrame) -> None:
 
 
 def write(panel: pd.DataFrame, accounts: pd.DataFrame, outdir: Path) -> None:
-    """Write both CSVs into ``outdir``."""
+    """Write both CSVs into ``outdir``.
+
+    The panel is 2 million rows by 69 columns at the validation population, and
+    **writing it was costing more than simulating it** — 41 s of a 60 s budget
+    against 9 s of generation.  ``pyarrow.csv.write_csv`` does the same job in
+    about 5 s, so it is used when pyarrow is installed (it is, as a pandas
+    dependency) and ``DataFrame.to_csv`` remains the fallback.
+
+    The two writers are interchangeable for this panel, and the equivalence
+    suite is what proves it: every column round-trips to the same dtype and the
+    same values.  The only visible difference is that pyarrow quotes strings,
+    which ``read_csv`` strips.
+
+    Args:
+        panel: the account-month panel.
+        accounts: one row per account.
+        outdir: directory to write into; created if absent.
+    """
     outdir.mkdir(parents=True, exist_ok=True)
-    panel.to_csv(outdir / "msme_loan_panel.csv", index=False)
-    accounts.to_csv(outdir / "accounts_static.csv", index=False)
+    _write_csv(panel, outdir / "msme_loan_panel.csv")
+    _write_csv(accounts, outdir / "accounts_static.csv")
+
+
+def _write_csv(frame: pd.DataFrame, path: Path) -> None:
+    """Write one frame, preferring pyarrow's writer."""
+    try:
+        import pyarrow as pa
+        import pyarrow.csv as pacsv
+    except ImportError:                                   # pragma: no cover
+        frame.to_csv(path, index=False)
+        return
+    pacsv.write_csv(pa.Table.from_pandas(frame, preserve_index=False), str(path))
 
 
 def _default_outdir() -> Path:
@@ -465,11 +618,17 @@ def main(argv: list[str] | None = None) -> None:
                         help="output directory for the two CSVs")
     parser.add_argument("--portfolios", type=str, default=None,
                         help="comma-separated registry keys to generate (default: all)")
+    parser.add_argument("--no-noise", action="store_true",
+                        help="switch off SD-D4 (silent defaulters, hard negatives, "
+                             "seasonal confounders, measurement noise, missingness). "
+                             "Reproduces the July 2026 fingerprint; NOT the shipped "
+                             "dataset, and its AUC is above the pre-registered ceiling")
     args = parser.parse_args(argv)
 
     keys = tuple(args.portfolios.split(",")) if args.portfolios else None
     config = GeneratorConfig(
-        seed=args.seed, n_accounts=args.n, months=args.months, portfolio_keys=keys
+        seed=args.seed, n_accounts=args.n, months=args.months, portfolio_keys=keys,
+        noise=not args.no_noise,
     )
     print("Building accounts ...")
     panel, accounts = generate(config)
@@ -484,6 +643,28 @@ def main(argv: list[str] | None = None) -> None:
     print(f"  label prevalence (rows that will default within 12m) = "
           f"{panel.default_within_12m.mean():.2%}")
     print(f"  unique accounts appearing in panel = {panel.account_id.nunique():,}")
+
+    # ---- SD-D5: the rates are ASSERTED, not hoped for -------------------- #
+    rates = measure_base_rates(panel, accounts)
+    print("Checking the pre-registered rates ...")
+    print(f"  12-month default rate (labelable rows) = {rates.book:.2%} "
+          f"[DR-03 band {sources.value('book.annual_slippage_band')}]")
+    for portfolio in (PORTFOLIOS[key] for key in (keys or tuple(PORTFOLIOS))):
+        observed = rates.by_portfolio.get(portfolio.code)
+        if observed is not None:
+            low, high = portfolio.default_rate_band
+            print(f"    {portfolio.code:18s} {observed:.2%}  band "
+                  f"[{low:.1%}, {high:.1%}]")
+    print(f"  SMA-2 within 6m = {rates.sma2:.2%} "
+          f"({rates.sma2_to_npa:.2f}x the 12-month NPA rate; "
+          f"{rates.sma2_to_npa_events:.2f} SMA-2 entries per NPA per unit time, "
+          f"band {sources.value('book.sma2_to_npa_event_ratio_band')})")
+    print(f"  defaulters with no warning chain = {rates.silent_share:.1%}")
+    if config.noise:
+        assert_base_rates(rates, list(registry(keys).values()))
+    else:
+        print("  (noise off: bands NOT asserted — this is not the shipped dataset)")
+
     write(panel, accounts, args.out)
     print(f"Wrote {args.out}/msme_loan_panel.csv and accounts_static.csv")
 
