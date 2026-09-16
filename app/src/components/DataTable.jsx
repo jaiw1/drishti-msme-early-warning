@@ -16,11 +16,18 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 
 const ARIA_SORT = { asc: 'ascending', desc: 'descending' }
 
+/**
+ * A sortable column header.
+ *
+ * `direction` is fixed, not toggled: `GET /drishti/portfolio` takes a `sort` field and no
+ * order, and it sorts descending. A header that offered to reverse the order would be
+ * promising something the server will not do — so the button says "sort by this column"
+ * and `aria-sort` reports the order that is actually in force.
+ */
 export function SortableHeader({ column, sort, onSort, align = 'left', title, children }) {
   const active = sort?.key === column
-  const direction = active ? sort.direction : null
+  const direction = sort?.direction || 'desc'
   const Icon = !active ? ArrowUpDown : direction === 'asc' ? ArrowUp : ArrowDown
-  const next = active && direction === 'desc' ? 'asc' : 'desc'
   return (
     <th
       scope="col"
@@ -29,7 +36,7 @@ export function SortableHeader({ column, sort, onSort, align = 'left', title, ch
     >
       <button
         type="button"
-        onClick={() => onSort?.({ key: column, direction: next })}
+        onClick={() => onSort?.({ key: column, direction })}
         title={title}
         className={`inline-flex items-center gap-1 rounded font-semibold transition hover:text-idbi-green focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green ${align === 'right' ? 'flex-row-reverse' : ''}`}
       >
@@ -37,8 +44,8 @@ export function SortableHeader({ column, sort, onSort, align = 'left', title, ch
         <Icon size={12} aria-hidden="true" className={active ? 'text-idbi-green' : 'opacity-50'} />
         <span className="sr-only">
           {active
-            ? `, sorted ${ARIA_SORT[direction]}. Activate to sort ${ARIA_SORT[next]}.`
-            : `, not sorted. Activate to sort ${ARIA_SORT[next]}.`}
+            ? `, the column the list is sorted by, ${ARIA_SORT[direction]}.`
+            : `, activate to sort the list by this column, ${ARIA_SORT[direction]}.`}
         </span>
       </button>
     </th>

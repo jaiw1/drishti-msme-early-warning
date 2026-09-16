@@ -106,17 +106,29 @@ export async function loadWholeBook({ live, signal } = {}) {
       source: SOURCE_KIND.SNAPSHOT,
     }
   }
-  // 500 is the contract's maximum page. Page until the server says there is no more.
+  // 500 is the contract's maximum page. Page until the server says there is no more, and
+  // say so in the meta when a cap stops us short — an exhibit computed over part of the
+  // book, presented as the whole book, is the kind of quiet lie this product exists to
+  // avoid.
+  const PAGE = 500
+  const MAX_PAGES = 40 // 20,000 accounts; beyond that the exhibits belong server-side
   const rows = []
   let meta = {}
-  for (let offset = 0; offset < 5000; offset += 500) {
-    const page = await apiFetch(`/drishti/portfolio${query({ limit: 500, offset })}`, { signal })
-    meta = page.meta || {}
-    rows.push(...(page.data || []).map((row) => toRow(row, { thresholds: meta.thresholds })))
+  let truncated = false
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const result = await apiFetch(`/drishti/portfolio${query({ limit: PAGE, offset: page * PAGE })}`, { signal })
+    meta = result.meta || {}
+    const batch = result.data || []
+    rows.push(...batch.map((row) => toRow(row, { thresholds: meta.thresholds })))
+    if (batch.length < PAGE) break
     if (rows.length >= (meta.total ?? rows.length)) break
-    if (!page.data?.length) break
+    if (page === MAX_PAGES - 1) truncated = true
   }
-  return { data: rows, meta, source: SOURCE_KIND.API }
+  return {
+    data: rows,
+    meta: { ...meta, loaded: rows.length, truncated },
+    source: SOURCE_KIND.API,
+  }
 }
 
 // ------------------------------------------------------------------------ account detail
