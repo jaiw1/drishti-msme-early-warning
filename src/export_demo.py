@@ -28,12 +28,17 @@ from sklearn.metrics import roc_auc_score, average_precision_score, roc_curve
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))   # so `generator` imports
 
-import costs                                               # noqa: E402  (path shim first)
+import bank                                                # noqa: E402  (path shim first)
+import costs                                               # noqa: E402
+import export_contract                                     # noqa: E402
 from generator.portfolios import ALL_CHANNELS, PORTFOLIOS   # noqa: E402
 
 ROOT = __file__.rsplit("/src/", 1)[0]
 PANEL = f"{ROOT}/data/msme_loan_panel.csv"
 OUT = f"{ROOT}/data/demo_data.json"
+#: DM-6 — the sampled file the SPA actually fetches at runtime (app/public/).
+#: NEVER commit this file: it is a build artefact, regenerated per run.
+DEMO_PUBLIC = f"{ROOT}/app/public/demo_data.json"
 REF_MONTH = 24                       # "today" for the frozen portfolio snapshot
 
 # The five SD-D2 statics are CATEGORICAL, not numeric: without them LightGBM raises
@@ -41,11 +46,20 @@ REF_MONTH = 24                       # "today" for the frozen portfolio snapshot
 # `tenor_months` and `interest_rate_pa` are genuinely numeric and stay out.
 CAT = ["sector", "region", "loan_type", "segment", "qualification", "promoter_age_group"]
 CAT += ["portfolio", "constitution", "state", "city_tier", "nic_group"]
+# SD-D8: a bank-style vintage bucket (0-6/7-12/13-18/19-30/31-48/49+ months on
+# book), scored in place of the raw month counter below — see DROP's note.
+CAT += ["vintage_band"]
 # Every FORWARD-LOOKING column is dropped here or the model trains on the answer.
 # `sma2_within_6m` (SD-D5) is a label, not a feature: it says whether the account
 # reaches 61-90 DPD in the NEXT six months. A test pins this list against the
 # generator's own declaration, so a label added later cannot slip into training.
-DROP = ["account_id", "month_idx", "date",
+# SD-D8: `vintage_months` also drops out of the FEATURE set (not the CSV — it
+# stays a column, validation cuts use it). It drifts by construction under any
+# time-split OOT: it is account-age + elapsed months, so a later test window is
+# mechanically older than train, which was DR-14's binding max-CSI feature.
+# `vintage_band` (above) is the model's replacement — a legitimate modelling
+# choice (banks bucket vintage), not gaming; see DATA_CARD.md/MODEL_CARD.md.
+DROP = ["account_id", "month_idx", "date", "vintage_months",
         "default_within_12m", "sma2_within_6m", "labelable", "months_to_npa"]
 
 #: contract portfolio code -> the observation channels that portfolio actually has.
@@ -700,7 +714,8 @@ def reason_codes(feat_row, contribs, cols, k=3):
     return out
 
 
-def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_legacy=False):
+def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_legacy=False,
+                 stats_sink=None):
     """Train, score and assemble the whole cockpit payload from an in-memory panel.
 
     Split out of ``main`` so the pipeline can be exercised end to end on a small panel
@@ -714,6 +729,13 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
         horizon: months ahead for the rank-order exhibit.
         keep_legacy: pin the July 2026 RAG thresholds instead of the
             cost-minimising pair, while still emitting the cost evidence.
+        stats_sink: optional dict. When given, populated with the row-level
+            ``account_id``/``y``/``p`` arrays the held-out AUC was computed
+            from, so a caller (``export_contract.build_contract_export``) can
+            bootstrap a confidence interval around it without a second model
+            run. Never written to the JSON payload — the return type and
+            shape of ``out`` are unchanged, so every existing caller is
+            unaffected by passing (or not passing) this.
 
     Returns:
         The payload dict. It is JSON-valid: no NaN, no infinity, anywhere.
@@ -744,6 +766,11 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
     # ---- honest metrics (row level, over all test account-months) ----
     yte = te_df["default_within_12m"].values
     auc, prauc, ks = roc_auc_score(yte, p), average_precision_score(yte, p), ks_stat(yte, p)
+    if stats_sink is not None:
+        # captured here, aligned by position, before te_df is re-sorted below
+        stats_sink["account_id"] = te_df["account_id"].to_numpy()
+        stats_sink["y"] = np.asarray(yte, dtype="float64")
+        stats_sink["p"] = np.asarray(p, dtype="float64")
 
     def recall_at(budget):
         k = max(1, int(len(p) * budget))
@@ -1000,12 +1027,47 @@ def format_thresholds(block):
     return lines
 
 
+def _parse_args(argv):
+    import argparse
+
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--keep-legacy-thresholds", action="store_true",
+                    help="pin the July 2026 0.04/0.40 RAG pair; still emit the cost evidence")
+    ap.add_argument("--bank", action="store_true",
+                    help="DM-6: overlay data/bank/{pulled,provenance,fixture}.json identity "
+                         "fields into the --out contract export. No effect without --out — "
+                         "the app-facing demo_data.json is never bank-enriched.")
+    ap.add_argument("--out", default=None, metavar="PATH",
+                    help="DM-6: also write the full, UNSAMPLED platform-contract-shaped "
+                         "export (meta/accounts/scores/provenance/...) to PATH. Validate "
+                         "with contracts/validate.py in the platform repo.")
+    ap.add_argument("--demo-sample", nargs="?", type=int, const=2500, default=2500,
+                    metavar="N",
+                    help="DM-6: accounts (stratified by portfolio+band) written to "
+                         "app/public/demo_data.json; metrics/thresholds/rank_order still "
+                         "come from the full panel. Default 2500. Pass with no value to "
+                         "keep the default explicitly.")
+    ap.add_argument("--no-demo-sample", action="store_true",
+                    help="skip writing app/public/demo_data.json entirely")
+    ap.add_argument("--panel", default=PANEL, metavar="PATH", help="override the account-month panel CSV")
+    ap.add_argument("--static", default=None, metavar="PATH", help="override accounts_static.csv")
+    ap.add_argument("--seed", type=int, default=7, help="meta.seed on the --out export")
+    ap.add_argument("--label", default=None,
+                    help="folded into meta.model_run_id via uuid5, so a re-run with the "
+                         "same label reproduces the same run id (batch/run.py's contract)")
+    return ap.parse_args(argv)
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
-    keep_legacy = "--keep-legacy-thresholds" in argv
-    df = pd.read_csv(PANEL)
-    static = pd.read_csv(f"{ROOT}/data/accounts_static.csv").set_index("account_id")
-    out = build_export(df, static, keep_legacy=keep_legacy)
+    args = _parse_args(argv)
+    keep_legacy = args.keep_legacy_thresholds
+    static_path = args.static or f"{ROOT}/data/accounts_static.csv"
+    df = pd.read_csv(args.panel)
+    static = pd.read_csv(static_path).set_index("account_id")
+
+    stats_sink = {} if args.out else None
+    out = build_export(df, static, keep_legacy=keep_legacy, stats_sink=stats_sink)
     rank_order = out["metrics"]["rank_order"]
 
     s = out["portfolio_summary"]
@@ -1041,6 +1103,47 @@ def main(argv=None):
         # bare `NaN` literals, which are not JSON and which the cockpit cannot parse.
         json.dump(out, f, allow_nan=False)
     print(f"recall@10% budget: {recall10:.0%} | wrote {OUT} ({len(json.dumps(out))/1024:.0f} KB)")
+
+    # DM-6 — the sampled file the SPA fetches at runtime. Metrics/thresholds/rank_order
+    # are the FULL panel's; only accounts/timelines are sampled, so the file stays small
+    # (DM-4/5 saw 65 MB at 45k accounts, which the app cannot ship). Never committed —
+    # it is a build artefact, regenerated per run, exactly like OUT above.
+    if not args.no_demo_sample:
+        demo = export_contract.stratified_sample(out, args.demo_sample, seed=args.seed)
+        Path(DEMO_PUBLIC).parent.mkdir(parents=True, exist_ok=True)
+        with open(DEMO_PUBLIC, "w") as f:
+            json.dump(demo, f, allow_nan=False)
+        ds = demo["_demo_sample"]
+        print(f"demo sample: {ds['sampled']}/{ds['full_panel']} accounts -> {DEMO_PUBLIC} "
+              f"({len(json.dumps(demo))/1024:.0f} KB) — DO NOT COMMIT this file")
+
+    # DM-6 — the full, UNSAMPLED platform-contract export. --bank overlays
+    # data/bank/{pulled,provenance,fixture}.json identity fields per SCHEMA.md's
+    # fallback rule; without it every account's provenance is honestly SIMULATED.
+    if args.out:
+        bank_ctx = bank.build_context(f"{ROOT}/data", enabled=args.bank)
+        print(f"bank enrichment: {'ENABLED' if args.bank else 'disabled'} — {bank_ctx.reason}")
+        if bank_ctx.enabled:
+            print(f"  mode={bank_ctx.mode}  families={bank_ctx.families}  "
+                  f"fixture coverage={bank_ctx.coverage()['fixture_accounts']} accounts")
+        contract, debug = export_contract.build_contract_export(
+            out, label=args.label, seed=args.seed, bank_ctx=bank_ctx,
+            root=Path(ROOT), bootstrap_data=stats_sink)
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+        with open(args.out, "w") as f:
+            json.dump(contract, f, allow_nan=False)
+        print(f"contract export: model_run_id={debug['model_run_id']} (label={debug['label']!r}) "
+              f"git_sha={debug['git_sha'][:12]}{'…' if debug['git_note'] else ''} "
+              f"criteria_sha={debug['criteria_sha'][:12]}…")
+        if debug["git_note"]:
+            print(f"  NOTE git_sha: {debug['git_note']}")
+        print(f"  wrote {args.out} ({len(json.dumps(contract))/1024:.0f} KB, "
+              f"{len(contract['accounts'])} accounts) — "
+              f"validate with contracts/validate.py drishti {args.out}")
+        print("  KNOWN, DOCUMENTED contract deviation: metrics.rank_order.by_portfolio is an "
+              "ARRAY here (matches app/public/demo_data.json and the FE's .map()); the schema "
+              "specifies an OBJECT keyed by portfolio code. BE-7 flagged this exact API-vs-"
+              "export mismatch already — see src/export_contract.py's module docstring.")
 
     # DR-11 / DR-12 gate, LAST: the file and the table are written first so a failure
     # arrives with the evidence that caused it and the other lanes still have a shape to
