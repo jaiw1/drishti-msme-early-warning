@@ -22,3 +22,14 @@ app/src/data/
 # python bytecode
 __pycache__/
 *.pyc
+
+# sandbox / secrets
+**/atlas*.env
+*.env
+!app/.env.example
+data/bank/raw/
+data/bank/enriched.csv
+data/bank/provenance.json
+scratch/
+state-*.json
+validation/report/
