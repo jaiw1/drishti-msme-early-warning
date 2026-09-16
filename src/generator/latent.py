@@ -2,22 +2,32 @@
 
 Two stages, both fully vectorised over the ``N`` accounts:
 
-**Cross-section** (:func:`draw_population`).  Static borrower attributes plus a
-weak latent-risk scorecard.  The scorecard is deliberately weak: the
-irreducible-randomness term dominates, so a static scorecard alone cannot
-predict well and the model is forced to learn the *dynamic* deterioration,
-which is the whole early-warning thesis.  Accounts that will default also draw
+**Cross-section** (:func:`draw_population`).  Static borrower attributes, drawn
+*per portfolio* from that portfolio's own sourced distributions
+(``sources.yaml``), plus one shared latent-risk scorecard.  The scorecard is
+deliberately weak: the irreducible-randomness term dominates, so a static
+scorecard alone cannot predict well and the model is forced to learn the
+*dynamic* deterioration, which is the whole early-warning thesis.  A portfolio
+shifts the scorecard by exactly one number — :attr:`Portfolio.risk_offset`, a
+log-odds constant calibrated so its realised 12-month default rate lands inside
+the band ``sources.yaml`` records for it.  Accounts that will default also draw
 their NPA month, the *onset* (how many months before NPA the slide begins) and
 a *severity* (how steep it is).
 
 **Time series** (:func:`build_stress_path`).  An ``(N, M)`` stress intensity
 ``decline`` — zero while the account is healthy, stepping to
 ``0.30 * severity`` the month the slide begins and ramping to
-``1.00 * severity`` at NPA.  This is the shared latent state ``S_t``:
+``1.00 * severity`` at NPA.  This is the shared latent state ``S_t``.
+
+Why this split is the whole argument
+------------------------------------
+``S_t`` is ONE process with ONE shape for all eight portfolios.
 :mod:`generator.channels` is the only place it becomes an *observation*, and
-each portfolio maps it to its own channels with its own elasticities.  That
-separation is what makes one holistic model across portfolios legitimate —
-the portfolios differ in what the bank can see, not in what is happening.
+each portfolio maps it to its own channels with its own elasticities.  A
+housing borrower and a KCC farmer under the same stress are the same event
+seen through different instruments — which is precisely why one holistic model
+across all borrower types is legitimate, and why a per-portfolio model would be
+fitting the instrument rather than the borrower.
 """
 
 from __future__ import annotations
@@ -26,25 +36,56 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .noise import stream
 from .portfolios import PopulationMix, Portfolio, portfolio_mix
 
-__all__ = ["Population", "StressPath", "build_stress_path", "draw_population"]
+__all__ = [
+    "Population",
+    "StressPath",
+    "build_stress_path",
+    "draw_population",
+    "state_levels",
+]
 
 #: months-to-NPA placeholder for accounts that never reach NPA
 NEVER = np.iinfo(np.int32).max
 
 
-def _weights(mix: dict[str, float | tuple[float, float]]) -> tuple[tuple[str, ...], np.ndarray]:
-    """Category labels and normalised probabilities from a mix dict."""
-    keys = tuple(mix)
-    raw = np.array(
-        [v[0] if isinstance(v, tuple) else v for v in mix.values()], dtype=np.float64
-    )
-    return keys, raw / raw.sum()
+def _weights(mix: dict[str, float], levels: tuple[str, ...]) -> tuple[np.ndarray, np.ndarray]:
+    """Global level codes and normalised probabilities for one portfolio's mix.
+
+    Args:
+        mix: level name -> relative weight, as declared in ``sources.yaml``.
+        levels: the panel-wide ordered level universe.
+
+    Returns:
+        ``(codes, probabilities)`` — codes index into ``levels``.
+    """
+    index = {level: code for code, level in enumerate(levels)}
+    codes = np.array([index[k] for k in mix], dtype=np.int64)
+    raw = np.array(list(mix.values()), dtype=np.float64)
+    return codes, raw / raw.sum()
+
+
+def _draw(rng: np.random.Generator, mix: dict[str, float],
+          levels: tuple[str, ...], size: int) -> np.ndarray:
+    """Draw ``size`` global level codes from a portfolio's mix."""
+    codes, probabilities = _weights(mix, levels)
+    return codes[rng.choice(codes.shape[0], size=size, p=probabilities)]
 
 
 def _sigmoid(x: np.ndarray) -> np.ndarray:
     return 1.0 / (1.0 + np.exp(-x))
+
+
+def state_levels(mix: PopulationMix) -> tuple[str, ...]:
+    """Every state name, in region order then within-region declaration order."""
+    names: list[str] = []
+    for region in mix.region_levels:
+        for state in mix.states_within_region.get(region, {}):
+            if state not in names:
+                names.append(state)
+    return tuple(names)
 
 
 @dataclass(frozen=True)
@@ -55,11 +96,20 @@ class Population:
     portfolio_code: np.ndarray        # (N,) int  -> index into the registry order
     sector_code: np.ndarray           # (N,) int
     region_code: np.ndarray           # (N,) int
+    state_code: np.ndarray            # (N,) int
+    city_tier_code: np.ndarray        # (N,) int
+    constitution_code: np.ndarray     # (N,) int
     qualification_code: np.ndarray    # (N,) int
     age_group_code: np.ndarray        # (N,) int
+    nic_code: np.ndarray              # (N,) int, -1 where the borrower is not an enterprise
     sanctioned: np.ndarray            # (N,) float
     business_age_years: np.ndarray    # (N,) int
     vintage_months_0: np.ndarray      # (N,) int
+    secured: np.ndarray               # (N,) int 0/1
+    tenor_months: np.ndarray          # (N,) int
+    interest_rate_pa: np.ndarray      # (N,) float
+    bureau_score_0: np.ndarray        # (N,) float, NaN where the bureau has no file
+    risk_z: np.ndarray                # (N,) float, the latent-risk index
     is_defaulter: np.ndarray          # (N,) bool
     npa_month: np.ndarray             # (N,) int, -1 when never
     severity: np.ndarray              # (N,) float, 0.0 when never
@@ -70,58 +120,104 @@ class Population:
 
 
 def draw_population(
-    rng: np.random.Generator,
+    seed: int,
     n_accounts: int,
     months: int,
     mix: PopulationMix,
+    selected: dict[str, Portfolio] | None = None,
 ) -> tuple[Population, list[Portfolio]]:
     """Draw the static book and decide who defaults, when and how steeply.
 
+    Attributes are drawn per portfolio, from that portfolio's own stream, so
+    adding or removing a portfolio does not perturb the others' draws.  The
+    *fate* — defaulter, NPA month, onset, severity — is drawn once from the
+    shared stream, because it is one latent process.
+
     Args:
-        rng: source of randomness (one named stream).
+        seed: master seed; each stage derives its own named stream from it.
         n_accounts: number of accounts ``N``.
         months: observation window ``M`` (bounds the NPA month).
-        mix: population distributions and the latent-risk scorecard.
+        mix: shared category universes, scorecard and stress shape.
+        selected: registry to draw from; ``None`` uses the full registry.
 
     Returns:
-        The population, and the portfolio registry in code order.
+        The population, and the portfolios in code order.
     """
-    portfolios, shares = portfolio_mix()
-    sector_keys, sector_p = _weights(mix.sectors)
-    region_keys, region_p = _weights(mix.regions)
-    qual_keys, qual_p = _weights(mix.qualifications)
-    age_keys, age_p = _weights(mix.age_groups)
-
+    portfolios, shares = portfolio_mix(selected)
+    states = state_levels(mix)
+    rng = stream(seed, "population")
     portfolio_code = rng.choice(len(portfolios), size=n_accounts, p=np.asarray(shares))
-    sector_code = rng.choice(len(sector_keys), size=n_accounts, p=sector_p)
-    region_code = rng.choice(len(region_keys), size=n_accounts, p=region_p)
-    qual_code = rng.choice(len(qual_keys), size=n_accounts, p=qual_p)
-    age_code = rng.choice(len(age_keys), size=n_accounts, p=age_p)
 
-    sanctioned = np.clip(
-        rng.lognormal(mix.ticket_log_mean, mix.ticket_log_sd, size=n_accounts),
-        *mix.ticket_bounds,
+    empty_int = lambda: np.zeros(n_accounts, dtype=np.int64)          # noqa: E731
+    empty_float = lambda: np.zeros(n_accounts, dtype=np.float64)      # noqa: E731
+    sector_code, region_code, state_code = empty_int(), empty_int(), empty_int()
+    city_tier_code, constitution_code = empty_int(), empty_int()
+    qualification_code, age_group_code = empty_int(), empty_int()
+    sanctioned, business_age = empty_float(), empty_int()
+    vintage0, secured, tenor = empty_int(), empty_int(), empty_int()
+    rate, ticket_centre = empty_float(), empty_float()
+    risk_offset = empty_float()
+
+    for code, portfolio in enumerate(portfolios):
+        rows = np.flatnonzero(portfolio_code == code)
+        if rows.size == 0:
+            continue
+        block = _draw_block(
+            stream(seed, f"population:{portfolio.key}"), portfolio, mix, states, rows.size
+        )
+        for target, name in (
+            (sector_code, "sector_code"), (region_code, "region_code"),
+            (state_code, "state_code"), (city_tier_code, "city_tier_code"),
+            (constitution_code, "constitution_code"),
+            (qualification_code, "qualification_code"),
+            (age_group_code, "age_group_code"), (sanctioned, "sanctioned"),
+            (business_age, "business_age"), (vintage0, "vintage0"),
+            (secured, "secured"), (tenor, "tenor"), (rate, "rate"),
+        ):
+            target[rows] = block[name]
+        assert portfolio.population is not None
+        ticket_centre[rows] = portfolio.population.ticket_log_mean
+        risk_offset[rows] = portfolio.risk_offset
+
+    nic_names = [mix.nic_groups.get(level) for level in mix.sector_levels]
+    nic_levels = tuple(name for name in nic_names if name is not None)
+    nic_index = {name: code for code, name in enumerate(nic_levels)}
+    sector_to_nic = np.array(
+        [nic_index[name] if name is not None else -1 for name in nic_names], dtype=np.int64
     )
-    business_age = np.clip(
-        rng.gamma(mix.business_age_shape, mix.business_age_scale, size=n_accounts),
-        *mix.business_age_bounds,
-    ).astype(np.int64)
-    vintage0 = rng.integers(*mix.vintage_bounds, size=n_accounts).astype(np.int64)
+    nic_code = sector_to_nic[sector_code]
 
-    sector_risk = np.array([v[1] for v in mix.sectors.values()])[sector_code]
-    qual_adj = np.array([mix.risk_qualification[k] for k in qual_keys])[qual_code]
-    age_adj = np.array([mix.risk_age_group[k] for k in age_keys])[age_code]
+    # ---- the shared latent-risk scorecard -------------------------------- #
+    sector_risk = np.array(
+        [mix.sector_risk[level] for level in mix.sector_levels]
+    )[sector_code]
+    qual_adj = np.array(
+        [mix.risk_qualification.get(level, 0.0) for level in mix.qualification_levels]
+    )[qualification_code]
+    age_adj = np.array(
+        [mix.risk_age_group.get(level, 0.0) for level in mix.age_group_levels]
+    )[age_group_code]
 
     z = (
         mix.risk_sector_gain * (sector_risk - 1.0)
         + mix.risk_business_age * business_age
         + mix.risk_vintage * vintage0
-        + mix.risk_log_ticket * (np.log(sanctioned) - mix.ticket_log_mean)
+        + mix.risk_log_ticket * (np.log(sanctioned) - ticket_centre)
         + qual_adj
         + age_adj
+        + risk_offset
         + rng.normal(0.0, mix.risk_noise_sd, size=n_accounts)
     )
     p_default = _sigmoid(mix.risk_intercept + mix.risk_slope * z)
+    # The scorecard gives the probability of going bad AT SOME POINT in the
+    # observation window, so a longer window would otherwise thin the annual
+    # rate every metric is quoted in. Re-expand it from the reference window's
+    # implied monthly hazard, which makes the per-portfolio default-rate bands
+    # a property of the book rather than of --months. At the reference window
+    # the arithmetic is skipped entirely, so that panel is bit-identical.
+    exposure = max(months - mix.npa_month_lo, 1)
+    if exposure != mix.hazard_reference_months:
+        p_default = 1.0 - np.power(1.0 - p_default, exposure / mix.hazard_reference_months)
     is_defaulter = rng.random(n_accounts) < p_default
 
     # draw the fate of every account, then blank it for the survivors
@@ -137,6 +233,15 @@ def draw_population(
     severity = np.where(is_defaulter, severity, 0.0)
     onset = np.where(is_defaulter, onset, 0)
 
+    # ---- bureau file (7% of borrowers have none) ------------------------- #
+    bureau = stream(seed, "bureau")
+    score = np.clip(
+        bureau.normal(mix.bureau_score_mean, mix.bureau_score_sd, n_accounts)
+        - mix.bureau_risk_gain * z,
+        *mix.bureau_score_bounds,
+    )
+    score[bureau.random(n_accounts) < mix.bureau_missing_share] = np.nan
+
     account_id = np.array([f"MSME{i:05d}" for i in range(n_accounts)])
     return (
         Population(
@@ -144,11 +249,20 @@ def draw_population(
             portfolio_code=portfolio_code,
             sector_code=sector_code,
             region_code=region_code,
-            qualification_code=qual_code,
-            age_group_code=age_code,
+            state_code=state_code,
+            city_tier_code=city_tier_code,
+            constitution_code=constitution_code,
+            qualification_code=qualification_code,
+            age_group_code=age_group_code,
+            nic_code=nic_code,
             sanctioned=sanctioned,
             business_age_years=business_age,
             vintage_months_0=vintage0,
+            secured=secured,
+            tenor_months=tenor,
+            interest_rate_pa=rate,
+            bureau_score_0=score,
+            risk_z=z,
             is_defaulter=is_defaulter,
             npa_month=npa_month,
             severity=severity,
@@ -156,6 +270,75 @@ def draw_population(
         ),
         portfolios,
     )
+
+
+def _draw_block(
+    rng: np.random.Generator,
+    portfolio: Portfolio,
+    mix: PopulationMix,
+    states: tuple[str, ...],
+    size: int,
+) -> dict[str, np.ndarray]:
+    """Draw one portfolio's static attributes from its own sourced mixes.
+
+    Args:
+        rng: this portfolio's population stream.
+        portfolio: the portfolio being drawn.
+        mix: shared category universes.
+        states: the panel-wide ordered state universe.
+        size: number of accounts in this block.
+
+    Returns:
+        Attribute name -> ``(size,)`` array of global level codes or values.
+    """
+    population = portfolio.population
+    assert population is not None
+
+    region_code = _draw(rng, population.regions, mix.region_levels, size)
+    # state is drawn CONDITIONAL on region, so the region cut keeps the shares
+    # the July 2026 build published while the new state column stays sourced
+    state_code = np.zeros(size, dtype=np.int64)
+    for code, region in enumerate(mix.region_levels):
+        within = mix.states_within_region.get(region)
+        if not within:
+            continue
+        rows = np.flatnonzero(region_code == code)
+        if rows.size:
+            state_code[rows] = _draw(rng, within, states, rows.size)
+
+    sanctioned = np.clip(
+        rng.lognormal(population.ticket_log_mean, population.ticket_log_sd, size=size),
+        *population.ticket_bounds,
+    )
+    business_age = np.clip(
+        rng.gamma(population.business_age_shape, population.business_age_scale, size=size),
+        *population.business_age_bounds,
+    ).astype(np.int64)
+    tenor_lo, tenor_hi = population.tenor_bounds
+    tenor = (
+        np.full(size, tenor_lo, dtype=np.int64)
+        if tenor_hi <= tenor_lo
+        else rng.integers(tenor_lo, tenor_hi + 1, size=size).astype(np.int64)
+    )
+    return {
+        "sector_code": _draw(rng, population.sectors, mix.sector_levels, size),
+        "region_code": region_code,
+        "state_code": state_code,
+        "city_tier_code": _draw(rng, population.city_tiers, mix.city_tier_levels, size),
+        "constitution_code": _draw(
+            rng, population.constitutions, mix.constitution_levels, size),
+        "qualification_code": _draw(
+            rng, population.qualifications, mix.qualification_levels, size),
+        "age_group_code": _draw(rng, population.age_groups, mix.age_group_levels, size),
+        "sanctioned": sanctioned,
+        "business_age": business_age,
+        "vintage0": rng.integers(*population.vintage_bounds, size=size).astype(np.int64),
+        "secured": (rng.random(size) < population.secured_share).astype(np.int64),
+        "tenor": tenor,
+        # no risk tilt on price: a rate that encoded the borrower's latent risk
+        # would smuggle the label into a static column
+        "rate": rng.uniform(*population.rate_bounds, size=size),
+    }
 
 
 @dataclass(frozen=True)

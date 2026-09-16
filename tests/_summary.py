@@ -17,7 +17,10 @@ __all__ = [
     "CATEGORICAL_COLUMNS",
     "NUMERIC_COLUMNS",
     "QUANTILES",
+    "SLIDE_WINDOW",
+    "baselines_by_account",
     "channel_leads",
+    "signal_lead",
     "summarise",
 ]
 
@@ -84,6 +87,65 @@ def channel_leads(panel: pd.DataFrame) -> dict[str, float]:
         lead = joined.loc[mask].groupby("account_id").months_to_npa.max()
         leads[name] = float(lead.median()) if len(lead) else 0.0
     return leads
+
+
+def baselines_by_account(panel: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    """Each account's own healthy level for ``columns``.
+
+    The healthy level is the median over the months before the slide could
+    have begun; accounts with no such month fall back to their first three
+    observed months.  Judging a signal against the account's own baseline is
+    what lets one rule work across portfolios whose levels differ by orders of
+    magnitude (a KCC farmer's crop receipt and a home-loan salary credit).
+
+    Args:
+        panel: the generated account-month panel, ``account_id`` as strings.
+        columns: the columns to baseline.
+
+    Returns:
+        A frame indexed by ``account_id``, one column per requested column.
+    """
+    pre_slide = panel[panel.months_to_npa > SLIDE_WINDOW]
+    early = panel[panel.month_idx < 3]
+    base = pre_slide.groupby("account_id")[columns].median()
+    fallback = early.groupby("account_id")[columns].median()
+    return base.reindex(fallback.index).fillna(fallback)
+
+
+def signal_lead(
+    panel: pd.DataFrame,
+    column: str,
+    rule: str,
+    threshold: float,
+    base: pd.DataFrame | None = None,
+) -> tuple[float, float]:
+    """Median months before NPA at which a signal first fires, and its reach.
+
+    Args:
+        panel: rows for one portfolio, ``account_id`` as strings.
+        column: the signal.
+        rule: ``"lt"``/``"gt"`` compare against ``threshold`` directly;
+            ``"rel_lt"``/``"rel_gt"`` compare against ``threshold`` times the
+            account's own baseline.
+        threshold: the level, or the multiple of the baseline.
+        base: per-account baselines, required for the relative rules.
+
+    Returns:
+        ``(median lead in months, share of defaulting accounts it fires for)``.
+    """
+    rows = panel[(panel.months_to_npa >= 1) & (panel.months_to_npa <= SLIDE_WINDOW)]
+    if rule.startswith("rel"):
+        assert base is not None, "a relative rule needs baselines"
+        rows = rows.join(base[[column]], on="account_id", rsuffix="_base")
+        reference = threshold * rows[f"{column}_base"]
+    else:
+        reference = threshold
+    fired = rows[column] < reference if rule.endswith("lt") else rows[column] > reference
+    hits = rows.loc[fired.fillna(False)].groupby("account_id").months_to_npa.max()
+    accounts = rows.account_id.nunique()
+    if not accounts:
+        return 0.0, 0.0
+    return (float(hits.median()) if len(hits) else 0.0), len(hits) / accounts
 
 
 def summarise(panel: pd.DataFrame) -> dict:

@@ -1,13 +1,16 @@
-"""The vectorised generator must be a drop-in for the row-by-row simulator.
+"""The generator must still be a drop-in for the row-by-row July 2026 simulator.
 
 ``src/generator/`` replaced a per-account, per-month Python loop with
-per-portfolio ``(N, M)`` numpy arrays.  That changes the order in which random
-numbers are drawn, so the two cannot be *bit*-identical — but everything the
-downstream pipeline depends on must be:
+per-portfolio ``(N, M)`` numpy arrays, and SD-D2/SD-D3 then grew the book from
+two MSME portfolios to eight and added the columns each new product is observed
+through.  Neither change is allowed to move the MSME book, so this suite
+regenerates **only** ``msme_cc`` and ``msme_tl`` and holds them against the
+July fingerprint:
 
 (a) reproducible — one seed, one CSV;
-(b) schema-identical to the July CSV (columns, order, dtypes after a CSV
-    round trip);
+(b) schema-compatible — every July column survives, with the same name, the
+    same relative order and the same dtype after a CSV round trip.  New columns
+    are added, never substituted, and the labels stay last;
 (c) distributionally equivalent on every key column, with the default rate
     within 0.3 pp and the median first-warning lead within 1 month;
 (d) still ordered — for defaulters the cash-flow dip precedes the utilisation
@@ -28,7 +31,8 @@ import pytest
 
 from _summary import CATEGORICAL_COLUMNS, NUMERIC_COLUMNS, QUANTILES, summarise
 from generator import GeneratorConfig, generate
-from generator.build import PANEL_COLUMNS, write
+from generator.build import LEGACY_PANEL_COLUMNS, PANEL_COLUMNS, write
+from generator.portfolios import MSME_KEYS
 
 #: the vectorised maths must not silently overflow or divide by zero
 pytestmark = pytest.mark.filterwarnings("error::RuntimeWarning")
@@ -58,19 +62,23 @@ def reference() -> dict:
         return json.load(handle)
 
 
+#: the July 2026 book, regenerated on its own out of the eight-portfolio registry
+MSME_ONLY = GeneratorConfig(portfolio_keys=MSME_KEYS)
+
+
 @pytest.fixture(scope="module")
-def panel(tmp_path_factory: pytest.TempPathFactory) -> pd.DataFrame:
-    """The new generator's default panel, round-tripped through CSV."""
-    frame, accounts = generate(GeneratorConfig())
+def msme_panel(tmp_path_factory: pytest.TempPathFactory) -> pd.DataFrame:
+    """The two MSME portfolios, generated alone and round-tripped through CSV."""
+    frame, accounts = generate(MSME_ONLY)
     outdir = tmp_path_factory.mktemp("panel")
     write(frame, accounts, outdir)
     return pd.read_csv(outdir / "msme_loan_panel.csv")
 
 
 @pytest.fixture(scope="module")
-def fingerprint(panel: pd.DataFrame) -> dict:
-    """The new generator's fingerprint, computed by the same code as the reference."""
-    return summarise(panel)
+def fingerprint(msme_panel: pd.DataFrame) -> dict:
+    """The MSME book's fingerprint, computed by the same code as the reference."""
+    return summarise(msme_panel)
 
 
 # --------------------------------------------------------------------------- #
@@ -108,12 +116,33 @@ def test_config_is_honoured() -> None:
 # --------------------------------------------------------------------------- #
 # (b) schema equality with the old CSV
 # --------------------------------------------------------------------------- #
-def test_columns_match_the_old_csv(fingerprint: dict, reference: dict) -> None:
-    assert fingerprint["columns"] == reference["columns"]
+def test_every_old_column_survives(fingerprint: dict, reference: dict) -> None:
+    """Every July column is still there, under the same name.
+
+    Eight portfolios need more columns, not different ones: ``export_demo.py``
+    and ``rigor.py`` address the panel by name, so a rename would be a silent
+    break and a reorder would be a noisy one.
+    """
+    columns = fingerprint["columns"]
+    assert set(reference["columns"]) <= set(columns)
+    assert [c for c in columns if c in reference["columns"]] == reference["columns"]
+    assert columns[-3:] == ["default_within_12m", "labelable", "months_to_npa"]
+
+
+def test_new_columns_are_additions(fingerprint: dict, reference: dict) -> None:
+    """The additions are SD-D2's population block and SD-D3's channels."""
+    added = [c for c in fingerprint["columns"] if c not in reference["columns"]]
+    assert added, "SD-D2/SD-D3 added no columns"
+    assert set(added) <= set(PANEL_COLUMNS) - set(LEGACY_PANEL_COLUMNS)
+    for expected in ("portfolio", "constitution", "secured", "collection_ratio",
+                     "balance", "bureau_score"):
+        assert expected in added, expected
 
 
 def test_dtypes_match_the_old_csv(fingerprint: dict, reference: dict) -> None:
-    assert fingerprint["dtypes"] == reference["dtypes"]
+    """After a CSV round trip, every July column reads back as it used to."""
+    for column, dtype in reference["dtypes"].items():
+        assert fingerprint["dtypes"][column] == dtype, column
 
 
 def test_population_shape_matches(fingerprint: dict, reference: dict) -> None:
@@ -182,52 +211,69 @@ def test_deterioration_is_ordered(fingerprint: dict) -> None:
     assert leads["cash_flow"] >= leads["utilisation"] > leads["bounces"] > leads["dpd"] > 0, leads
 
 
-def test_no_row_is_already_npa(panel: pd.DataFrame) -> None:
+def test_no_row_is_already_npa(msme_panel: pd.DataFrame) -> None:
     """Only accounts that still look STANDARD today are scoreable."""
-    assert panel.dpd.max() < 90
-    assert (panel.loc[panel.months_to_npa >= 0, "months_to_npa"] >= 1).all()
+    assert msme_panel.dpd.max() < 90
+    assert (msme_panel.loc[msme_panel.months_to_npa >= 0, "months_to_npa"] >= 1).all()
 
 
-def test_label_matches_its_definition(panel: pd.DataFrame) -> None:
+def test_label_matches_its_definition(msme_panel: pd.DataFrame) -> None:
     """``default_within_12m`` is exactly ``1 <= months_to_npa <= 12``."""
-    expected = panel.months_to_npa.between(1, 12).astype(int)
-    assert panel.default_within_12m.equals(expected)
+    expected = msme_panel.months_to_npa.between(1, 12).astype(int)
+    assert msme_panel.default_within_12m.equals(expected)
 
 
 # --------------------------------------------------------------------------- #
 # the extension point SD-D2/SD-D3 will use
 # --------------------------------------------------------------------------- #
-def test_portfolio_shares_are_honoured(panel: pd.DataFrame) -> None:
-    """Each registered portfolio lands in the book at its declared share."""
-    from generator.portfolios import portfolio_mix
+def test_portfolio_shares_are_honoured(msme_panel: pd.DataFrame) -> None:
+    """Restricting the registry renormalises the shares over what is left.
 
-    portfolios, shares = portfolio_mix()
-    observed = panel.drop_duplicates("account_id").loan_type.value_counts(normalize=True)
+    The two MSME portfolios hold 10.1% and 8.3% of the eight-portfolio book;
+    generated alone they must come back at 55/45, the cash-credit / term-loan
+    split the July build used and ``book.msme_cc_share_of_msme`` records.
+    """
+    from generator.portfolios import portfolio_mix, registry as select
+
+    portfolios, shares = portfolio_mix(select(MSME_KEYS))
+    observed = msme_panel.drop_duplicates("account_id").portfolio.value_counts(
+        normalize=True
+    )
     for portfolio, share in zip(portfolios, shares):
-        assert abs(observed[portfolio.loan_type] - share) < 0.02, portfolio.key
+        assert abs(observed[portfolio.code] - share) < 0.02, portfolio.key
+    assert dict(zip(MSME_KEYS, shares)) == pytest.approx(
+        {"msme_cc": 0.55, "msme_tl": 0.45}, abs=0.01
+    )
 
 
 def test_absent_channels_are_blanked(monkeypatch: pytest.MonkeyPatch) -> None:
     """A portfolio can declare a channel it structurally cannot observe.
 
-    No portfolio does today, so this exercises the hook SD-D2 needs when it
-    adds Housing or Education borrowers who file no GST return.
+    The registry uses this for real now — a salaried borrower files no GST
+    return — but the hook itself is what makes one wide panel legal across
+    heterogeneous products, so it keeps its own test: register a portfolio that
+    differs from an existing one *only* by dropping a channel, and prove that
+    exactly its rows go NaN and nobody else's do.
     """
     from dataclasses import replace
 
     from generator import portfolios as registry
 
+    donor = registry.PORTFOLIOS["msme_tl"]
     salaried = replace(
-        registry.PORTFOLIOS["msme_tl"],
+        donor,
         key="salaried",
-        loan_type="Salaried",
-        channels=tuple(c for c in registry.ALL_CHANNELS if c != "gst"),
+        code="Salaried",
+        label="Synthetic no-GST portfolio",
+        channels=tuple(c for c in donor.channels if c != "gst"),
     )
-    assert salaried.absent_channels == {"gst"}
+    assert salaried.absent_channels == donor.absent_channels | {"gst"}
     monkeypatch.setitem(registry.PORTFOLIOS, "salaried", salaried)
 
-    frame, _ = generate(GeneratorConfig(n_accounts=600))
-    blanked = frame.loan_type == "Salaried"
+    frame, _ = generate(GeneratorConfig(
+        n_accounts=900, portfolio_keys=MSME_KEYS + ("salaried",)
+    ))
+    blanked = frame.portfolio == "Salaried"
     assert blanked.any()
     for column in ("gst_sales", "sales_trend_3m"):
         assert frame.loc[blanked, column].isna().all()

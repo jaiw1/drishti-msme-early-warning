@@ -1,75 +1,73 @@
-"""Portfolio registry — the one place a new lending portfolio gets declared.
+"""Portfolio registry — the one place a lending portfolio is declared.
 
-TODAY this registry holds only the two MSME portfolios the shipped panel
-already contains: MSME cash-credit (revolving working capital) and MSME term
-loan (EMI).  Their mix (55/45) and parameters reproduce the original
-single-file simulator exactly; the only thing that differs between them today
-is the baseline credit-limit utilisation (0.52 vs 0.35).
+The registry holds the **eight** portfolios DRISHTi scores, keyed by the
+snake_case codes the build plan fixed::
 
-HOW TO EXTEND (SD-D2 / SD-D3 — deliberately NOT implemented here yet)
----------------------------------------------------------------------
-Adding Housing / Education / Agri-KCC / Personal / LAP / Auto is purely
-additive — one new ``Portfolio`` entry in :data:`PORTFOLIOS`::
+    msme_cc  msme_tl  housing  education  agri  retail_unsecured  lap  auto
 
-    PORTFOLIOS["housing"] = Portfolio(
-        key="housing",
-        label="Housing loan",
-        loan_type="Housing",
-        share=0.12,
-        channels=("utilisation", "cash_flow", "transactions",
-                  "repayment", "adverse"),      # salaried borrower: no GST
-        params=replace(BASE_CHANNEL_PARAMS, base_util_mean=0.0, ...),
-    )
+Each one carries two very different kinds of number, and they are kept in two
+different places on purpose:
 
-Nothing else in the package has to change, because:
+*Empirical* parameters — the mix, constitutions, ticket sizes, geography,
+vintage, sector, tenor, rate bands, default-rate bands — live in
+``sources.yaml`` with a citation and a confidence level, and are read through
+:mod:`generator.sources`.  Nothing about the Indian lending market is hard-coded
+in this file.
 
-* :mod:`generator.build` partitions the population by ``Portfolio.key`` and
-  simulates each block as its own ``(N_p, M)`` array stack — a new portfolio
-  is simply a new block, and blocks are scattered back into the full panel by
-  account index, so account ordering is unaffected.
-* :mod:`generator.channels` is driven entirely by the portfolio's
-  :class:`ChannelParams` block; a new portfolio brings its own observation
-  parameters rather than editing shared code.
-* ``Portfolio.channels`` declares which observation channels the portfolio
-  *has*; everything else is structurally unobservable for it
-  (``Portfolio.absent_channels``).  :mod:`generator.build` blanks those
-  columns to NaN after assembly, which is what makes one wide panel legal
-  across heterogeneous portfolios (an individual borrower has no GST turnover,
-  a term loan has no drawing power, and so on).
+*Model-shape* parameters — elasticities, lead months, AR(1) φ, how steeply a
+channel responds to stress — live in :class:`ChannelParams` below.  No public
+source could back them; they describe the simulator, and pretending they were
+sourced would be worse than saying so.
 
-The population attributes (sector, geography, ticket size, vintage, promoter
-profile) currently live in the shared :data:`POPULATION` block because every
-portfolio in the July build drew from the same MSME population.  SD-D2 moves
-them onto :class:`Portfolio` so each portfolio can carry its own ticket and
-geography mix; the call sites already take the mix as an argument.
+Why the split matters
+---------------------
+``Portfolio.channels`` is a **positive** declaration of what the bank can
+observe for that product.  Everything it omits is structurally unobservable and
+lands in the panel as NaN (:attr:`Portfolio.absent_channels`, blanked in
+:func:`generator.build._blank_absent_channels`).  A salaried home-loan borrower
+files no GST return; a term loan has no drawing power; a KCC farmer has no
+salary credit.  That, and not a different model per product, is why one model
+across all eight portfolios is legitimate: the *latent* stress process is
+shared (:mod:`generator.latent`), only the *observation* channels differ.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
+from . import sources
+from .constitutions import constitution_levels
+
 __all__ = [
     "ALL_CHANNELS",
     "BASE_CHANNEL_PARAMS",
+    "CHANNEL_PARAM_SOURCES",
+    "MSME_KEYS",
     "POPULATION",
     "PORTFOLIOS",
     "ChannelParams",
     "PopulationMix",
     "Portfolio",
+    "PortfolioPopulation",
     "portfolio_mix",
+    "registry",
 ]
 
 
 # --------------------------------------------------------------------------- #
-# Channel parameter block (one per portfolio)
+# Channel parameter block (one per portfolio) — SIMULATION SHAPE, NOT SOURCED
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class ChannelParams:
     """Every numeric knob :mod:`generator.channels` reads, for one portfolio.
 
     Grouped by the observation channel it drives.  Defaults reproduce the
-    original MSME simulator; a new portfolio overrides only what differs
+    original MSME simulator; a portfolio overrides only what differs
     (``dataclasses.replace(BASE_CHANNEL_PARAMS, ...)``).
+
+    Fields listed in :data:`CHANNEL_PARAM_SOURCES` are filled from
+    ``sources.yaml`` when the registry is built — those are the empirical ones.
+    Everything else is a deliberate simulation choice.
     """
 
     # ---- per-account baselines ------------------------------------------- #
@@ -151,13 +149,176 @@ class ChannelParams:
     post_npa_inflow_mult: float = 0.4
     post_npa_sales_mult: float = 0.4
 
+    # ======================================================================= #
+    # SD-D3 — the shared columns and the portfolio-specific channel chains
+    # ======================================================================= #
+
+    # ---- EMI / interest demanded vs collected (every portfolio) ---------- #
+    #: an interest-only facility (cash credit, KCC) demands interest on the
+    #: outstanding; an EMI facility demands the amortised instalment
+    interest_only: bool = False
+    #: months before NPA at which part-payment starts — the MSME-TL chain's
+    #: middle link, and the shared "money stops arriving" signal
+    collection_lead_months: int = 8
+    #: fraction of the demand left unpaid at full latent stress
+    collection_shortfall_gain: float = 0.62
+    #: healthy-account collection noise (a late transfer, a part-payment)
+    collection_noise_sd: float = 0.018
+    collection_short_rate: float = 0.03
+
+    # ---- balance (every portfolio) --------------------------------------- #
+    balance_elasticity: float = 0.75
+    balance_floor: float = 0.0
+
+    # ---- drawing power (cash credit, KCC) -------------------------------- #
+    dp_to_limit_mean: float = 0.93
+    dp_to_limit_sd: float = 0.05
+    dp_squeeze_gain: float = 0.30
+
+    # ---- salary (housing, education, retail-unsecured, auto) ------------- #
+    salary_multiple_mean: float = 3.1
+    salary_multiple_sd: float = 0.9
+    salary_multiple_bounds: tuple[float, float] = (1.6, 9.0)
+    salary_gap_threshold: float = 0.60
+    #: the salary channel fires from the onset of the slide, with no gate —
+    #: it is the LEADING signal for every salaried portfolio
+    salary_elasticity: float = 0.52
+    salary_miss_base: float = 0.02
+    salary_miss_gain: float = 0.34
+
+    # ---- EMI stacking (retail-unsecured) --------------------------------- #
+    other_emi_count_lambda: float = 1.3
+    other_emi_share_of_own: float = 0.55
+    stress_new_emi_rate: float = 0.22
+    emi_burden_breach: float = 0.55
+
+    # ---- loan-to-value (housing, LAP, auto) ------------------------------ #
+    ltv_origination: float = 0.74
+    ltv_origination_sd: float = 0.08
+    ltv_collateral_drift_pa: float = 0.045
+    ltv_collateral_noise_sd: float = 0.012
+    #: distress shaves the realisable collateral value on top of drift
+    ltv_stress_haircut: float = 0.16
+
+    # ---- rental income (LAP) --------------------------------------------- #
+    rental_share_of_emi: float = 0.85
+    rental_share_sd: float = 0.35
+    rental_vacancy_rate: float = 0.05
+    rental_elasticity: float = 0.70
+    rental_stress_vacancy_gain: float = 0.35
+
+    # ---- harvest / KCC renewal (agri) ------------------------------------ #
+    harvest_receipt_multiple: float = 3.2
+    harvest_off_season_floor: float = 0.18
+    harvest_miss_depth: float = 0.62
+    renewal_cycle_months: int = 12
+    #: months before NPA at which the annual KCC renewal starts slipping.  It
+    #: spans the whole slide on purpose: a renewal comes round once a crop
+    #: year, so a narrower gate would leave most defaulters with no renewal due
+    #: inside it and the signal would be structurally dead.
+    renewal_lead_months: int = 18
+    renewal_slip_gain: float = 0.85
+
+    # ---- moratorium (education) ------------------------------------------ #
+    moratorium_end_bounds: tuple[int, int] = (-36, 30)
+    moratorium_post_end_months: int = 9
+    #: extra collection shortfall in the months right after the moratorium ends
+    moratorium_shock_gain: float = 0.45
+
+    # ---- commute spend (auto) -------------------------------------------- #
+    commute_share_of_emi: float = 0.30
+    commute_share_sd: float = 0.12
+    commute_stress_drop: float = 0.70
+
 
 BASE_CHANNEL_PARAMS = ChannelParams()
 
-#: Every observation channel a portfolio can declare.
+#: ``ChannelParams`` field -> dotted path in ``sources.yaml``, relative to the
+#: portfolio.  These are the empirical knobs; everything else is model shape.
+CHANNEL_PARAM_SOURCES: dict[str, str] = {
+    "ltv_origination": "ltv.origination",
+    "ltv_origination_sd": "ltv.origination_sd",
+    "ltv_collateral_drift_pa": "ltv.collateral_drift_pa",
+    "rental_share_of_emi": "rental.share_of_emi",
+    "rental_share_sd": "rental.share_sd",
+    "rental_vacancy_rate": "rental.vacancy_rate",
+    "harvest_miss_depth": "harvest.miss_depth",
+    "renewal_cycle_months": "harvest.renewal_month",
+    "moratorium_end_bounds": "moratorium.end_month_bounds",
+    "moratorium_post_end_months": "moratorium.post_end_stress_months",
+    "other_emi_count_lambda": "emi_stacking.other_emi_count_lambda",
+    "other_emi_share_of_own": "emi_stacking.other_emi_share_of_own",
+    "stress_new_emi_rate": "emi_stacking.stress_new_emi_rate",
+    "emi_burden_breach": "emi_stacking.burden_breach",
+    "commute_share_of_emi": "commute.spend_share_of_emi",
+    "commute_share_sd": "commute.spend_share_sd",
+    "commute_stress_drop": "commute.stress_drop",
+    "harvest_receipt_multiple": "seasonality.harvest_receipt_multiple",
+    "harvest_off_season_floor": "seasonality.off_season_floor",
+    "salary_multiple_mean": "salary.credit_to_emi_multiple",
+    "salary_multiple_sd": "salary.multiple_sd",
+    "salary_multiple_bounds": "salary.multiple_bounds",
+    "salary_gap_threshold": "salary.gap_threshold",
+}
+
+#: Every observation channel a portfolio can declare.  The first six are the
+#: July 2026 build's; the rest are SD-D3's portfolio-specific chains.
 ALL_CHANNELS: tuple[str, ...] = (
     "utilisation", "cash_flow", "gst", "transactions", "repayment", "adverse",
+    "drawing_power", "salary", "emi_stacking", "ltv", "rental", "harvest",
+    "moratorium", "commute",
 )
+
+#: the two portfolios the July 2026 panel already contained
+MSME_KEYS: tuple[str, str] = ("msme_cc", "msme_tl")
+
+
+# --------------------------------------------------------------------------- #
+# Population attributes — per portfolio, all of it from sources.yaml
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class PortfolioPopulation:
+    """Static borrower attributes for one portfolio, as sourced distributions."""
+
+    constitutions: dict[str, float]
+    sectors: dict[str, float]
+    regions: dict[str, float]
+    city_tiers: dict[str, float]
+    qualifications: dict[str, float]
+    age_groups: dict[str, float]
+    ticket_log_mean: float
+    ticket_log_sd: float
+    ticket_bounds: tuple[float, float]
+    business_age_shape: float
+    business_age_scale: float
+    business_age_bounds: tuple[float, float]
+    vintage_bounds: tuple[int, int]
+    secured_share: float
+    tenor_bounds: tuple[int, int]
+    rate_bounds: tuple[float, float]
+
+    @classmethod
+    def from_sources(cls, key: str) -> "PortfolioPopulation":
+        """Read one portfolio's attribute distributions out of ``sources.yaml``."""
+        get = lambda path: sources.portfolio_value(key, path)  # noqa: E731
+        return cls(
+            constitutions=dict(get("constitutions")),
+            sectors=dict(get("sectors")),
+            regions=dict(get("regions")),
+            city_tiers=dict(get("city_tiers")),
+            qualifications=dict(get("qualifications")),
+            age_groups=dict(get("age_groups")),
+            ticket_log_mean=float(get("ticket.log_mean")),
+            ticket_log_sd=float(get("ticket.log_sd")),
+            ticket_bounds=tuple(get("ticket.bounds")),
+            business_age_shape=float(get("business_age.shape")),
+            business_age_scale=float(get("business_age.scale")),
+            business_age_bounds=tuple(get("business_age.bounds")),
+            vintage_bounds=tuple(get("vintage_months_bounds")),
+            secured_share=float(get("secured_share")),
+            tenor_bounds=tuple(get("tenor_months")),
+            rate_bounds=tuple(get("interest_rate_pa")),
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -168,6 +329,9 @@ class Portfolio:
     """One lending portfolio: its share of the book and how it is observed."""
 
     key: str
+    #: the spelling the platform contract requires in the panel's ``portfolio``
+    #: column (``data/bank/SCHEMA.md``, ``validation/criteria.yaml``)
+    code: str
     label: str
     #: value written to the panel's ``loan_type`` column
     loan_type: str
@@ -177,6 +341,12 @@ class Portfolio:
     #: structurally unobservable and lands in the panel as NaN
     channels: tuple[str, ...] = ALL_CHANNELS
     params: ChannelParams = BASE_CHANNEL_PARAMS
+    population: PortfolioPopulation | None = None
+    #: log-odds shift on the shared latent-risk scorecard; calibrated so the
+    #: realised 12-month label rate lands inside ``default_rate_band``
+    risk_offset: float = 0.0
+    #: the pre-registered plausibility band for this portfolio's annual rate
+    default_rate_band: tuple[float, float] = (0.0, 1.0)
 
     def __post_init__(self) -> None:
         unknown = set(self.channels) - set(ALL_CHANNELS)
@@ -188,68 +358,271 @@ class Portfolio:
         """Channels the bank cannot observe here -> NaN columns in the panel."""
         return frozenset(ALL_CHANNELS) - set(self.channels)
 
+    def has(self, channel: str) -> bool:
+        """Whether this portfolio declares ``channel``."""
+        return channel in self.channels
 
-PORTFOLIOS: dict[str, Portfolio] = {
-    "msme_cc": Portfolio(
-        key="msme_cc",
-        label="MSME cash credit / overdraft",
-        loan_type="CashCredit",
-        share=0.55,
-        params=BASE_CHANNEL_PARAMS,
-    ),
-    "msme_tl": Portfolio(
-        key="msme_tl",
-        label="MSME term loan",
-        loan_type="TermLoan",
-        share=0.45,
-        # a term loan is drawn down once, so the "utilisation" a bank sees is
-        # the outstanding-to-sanction ratio and sits structurally lower
-        params=replace(BASE_CHANNEL_PARAMS, base_util_mean=0.35),
-    ),
+
+def _channel_params(key: str, channels: tuple[str, ...]) -> ChannelParams:
+    """Build a portfolio's ``ChannelParams``, overlaying the sourced knobs.
+
+    Args:
+        key: portfolio registry key.
+        channels: the channels it declares (only their knobs are read).
+
+    Returns:
+        ``BASE_CHANNEL_PARAMS`` with every sourced field the portfolio declares
+        replaced by the value in ``sources.yaml``.
+    """
+    overrides: dict[str, object] = {}
+    for field_name, path in CHANNEL_PARAM_SOURCES.items():
+        try:
+            raw = sources.portfolio_value(key, path)
+        except KeyError:
+            continue
+        current = getattr(BASE_CHANNEL_PARAMS, field_name)
+        overrides[field_name] = tuple(raw) if isinstance(current, tuple) else type(current)(raw)
+    overrides.update(_SHAPE_OVERRIDES.get(key, {}))
+    return replace(BASE_CHANNEL_PARAMS, **overrides)
+
+
+#: Simulation-shape departures from the base block, per portfolio.  Sourced
+#: numbers never appear here — they come from ``sources.yaml`` above.
+_SHAPE_OVERRIDES: dict[str, dict[str, object]] = {
+    # A term loan is drawn down once, so the "utilisation" a bank sees is the
+    # outstanding-to-sanction ratio and sits structurally lower.  (July 2026.)
+    "msme_tl": {"base_util_mean": 0.35},
+    # A cash-credit limit is interest-serviced monthly, not amortised.
+    "msme_cc": {"interest_only": True},
+    # Housing: the salary gap leads, the balance floor breaks, then the EMI
+    # bounces.  A mortgage borrower defends the mortgage longest, so the
+    # collection shortfall is shallower and later than an unsecured product's.
+    "housing": {
+        "ltv_stress_haircut": 0.16,
+        "collection_lead_months": 7,
+        "collection_shortfall_gain": 0.52,
+        "bounce_slide_gain": 0.55,
+        "inflow_elasticity": 0.45,
+        "transient_share": 0.16,
+    },
+    # Education: the moratorium end is the event; the borrower simply stops.
+    "education": {
+        "collection_lead_months": 9,
+        "collection_shortfall_gain": 0.78,
+        "salary_elasticity": 0.60,
+        "inflow_elasticity": 0.50,
+    },
+    # Agri/KCC: interest-serviced, seasonal, renewed annually.
+    "agri": {
+        "interest_only": True,
+        "base_util_mean": 0.68,
+        "base_util_sd": 0.17,
+        "collection_lead_months": 10,
+        "collection_shortfall_gain": 0.70,
+        "inflow_elasticity": 0.60,
+        "util_lead_months": 11,
+        "transient_share": 0.24,
+    },
+    # Retail-unsecured: stacking starts early, the buffer is thin, and the
+    # borrower walks away fastest of the eight.
+    "retail_unsecured": {
+        "collection_lead_months": 7,
+        "collection_shortfall_gain": 0.80,
+        "minbal_slide_gain": 0.55,
+        "bounce_slide_gain": 0.60,
+        "balance_elasticity": 0.95,
+        "transient_share": 0.22,
+    },
+    # LAP: secured and slow, but the rental dip and the LTV drift lead by a
+    # long way because both are re-measured, not reported by the borrower.
+    "lap": {
+        # a distress sale of commercial or mixed-use property clears well below
+        # the valuation a lender carries it at
+        "ltv_stress_haircut": 0.32,
+        "collection_lead_months": 8,
+        "collection_shortfall_gain": 0.58,
+        "inflow_elasticity": 0.50,
+    },
+    # Auto: small ticket, short tenor, the vehicle stops moving first.
+    "auto": {
+        # a vehicle has an active resale market, so the distress discount is
+        # small next to the depreciation already in ltv_collateral_drift_pa
+        "ltv_stress_haircut": 0.10,
+        "collection_lead_months": 6,
+        "collection_shortfall_gain": 0.70,
+        "balance_elasticity": 0.85,
+    },
 }
 
 
-def portfolio_mix() -> tuple[list[Portfolio], list[float]]:
-    """Registry order plus normalised population weights."""
-    items = list(PORTFOLIOS.values())
+def _build_registry() -> dict[str, Portfolio]:
+    """Assemble the registry from ``sources.yaml``.
+
+    Returns:
+        Registry key -> :class:`Portfolio`, in the order the YAML declares.
+    """
+    problems = sources.validate()
+    if problems:
+        raise ValueError("sources.yaml is malformed:\n  " + "\n  ".join(problems))
+
+    built: dict[str, Portfolio] = {}
+    for key in sources.portfolio_keys():
+        channels = tuple(sources.value(f"portfolios.{key}.channels"))
+        band = tuple(sources.value(f"portfolios.{key}.annual_default_rate_band"))
+        built[key] = Portfolio(
+            key=key,
+            code=sources.value(f"portfolios.{key}.contract_code"),
+            label=_LABELS[key],
+            loan_type=sources.value(f"portfolios.{key}.loan_type"),
+            share=float(sources.value(f"portfolios.{key}.account_share")),
+            channels=channels,
+            params=_channel_params(key, channels),
+            population=PortfolioPopulation.from_sources(key),
+            risk_offset=float(sources.value(f"portfolios.{key}.risk_offset")),
+            default_rate_band=(float(band[0]), float(band[1])),
+        )
+    return built
+
+
+#: human labels for the CLI's progress lines
+_LABELS: dict[str, str] = {
+    "msme_cc": "MSME cash credit / overdraft",
+    "msme_tl": "MSME term loan",
+    "housing": "Housing loan",
+    "education": "Education loan",
+    "agri": "Agriculture (Kisan Credit Card)",
+    "retail_unsecured": "Personal loan (unsecured)",
+    "lap": "Loan against property",
+    "auto": "Vehicle loan",
+}
+
+
+PORTFOLIOS: dict[str, Portfolio] = _build_registry()
+
+
+def registry(keys: tuple[str, ...] | None = None) -> dict[str, Portfolio]:
+    """The registry, optionally restricted to a subset of portfolios.
+
+    Restriction is how the equivalence suite regenerates *only* the two MSME
+    portfolios and compares them against the July 2026 reference: nothing else
+    in the package needs to know that some portfolios are absent.
+
+    Args:
+        keys: registry keys to keep, in registry order.  ``None`` keeps all.
+
+    Returns:
+        A new mapping; the module-level :data:`PORTFOLIOS` is never mutated.
+
+    Raises:
+        KeyError: if a requested key is not registered.
+    """
+    if keys is None:
+        return dict(PORTFOLIOS)
+    unknown = [k for k in keys if k not in PORTFOLIOS]
+    if unknown:
+        raise KeyError(f"unknown portfolio keys: {unknown}")
+    return {k: PORTFOLIOS[k] for k in keys}
+
+
+def portfolio_mix(
+    selected: dict[str, Portfolio] | None = None,
+) -> tuple[list[Portfolio], list[float]]:
+    """Registry order plus normalised population weights.
+
+    Args:
+        selected: the registry to use; defaults to the full one.
+
+    Returns:
+        ``(portfolios, shares)`` with ``shares`` summing to 1.
+    """
+    items = list((selected if selected is not None else PORTFOLIOS).values())
     total = sum(p.share for p in items)
     return items, [p.share / total for p in items]
 
 
 # --------------------------------------------------------------------------- #
-# Population mix (shared by every portfolio today; per-portfolio in SD-D2)
+# Shared population block — the latent risk scorecard and the stress shape.
+# Everything here is common to all eight portfolios by design: the LATENT is
+# one process, and only the observation channels differ.
 # --------------------------------------------------------------------------- #
+def _level_order(attribute: str, portfolio_field: str) -> tuple[str, ...]:
+    """Stable category order for one attribute across the whole registry.
+
+    The shared mix's keys come first — that is what keeps the July 2026 MSME
+    category codes and ``accounts_static.csv`` stable — followed by any extra
+    level a portfolio introduces, in registry order.
+
+    Args:
+        attribute: dotted path of the shared mix in ``sources.yaml``.
+        portfolio_field: matching field name on :class:`PortfolioPopulation`.
+
+    Returns:
+        The ordered level names.
+    """
+    order: list[str] = list(sources.value(f"shared.{attribute}"))
+    for portfolio in PORTFOLIOS.values():
+        assert portfolio.population is not None
+        for level in getattr(portfolio.population, portfolio_field):
+            if level not in order:
+                order.append(level)
+    return tuple(order)
+
+
 @dataclass(frozen=True)
 class PopulationMix:
-    """Static borrower attributes and their distributions."""
+    """What every portfolio shares: the risk scorecard and the stress shape."""
 
-    #: sector -> (population weight, base-risk multiplier)
-    sectors: dict[str, tuple[float, float]] = field(default_factory=lambda: {
-        "Manufacturing": (0.22, 1.05),
-        "Trading":       (0.30, 1.15),
-        "Services":      (0.24, 0.90),
-        "Retail":        (0.16, 1.10),
-        "Logistics":     (0.08, 1.20),
-    })
-    regions: dict[str, float] = field(default_factory=lambda: {
-        "North": 0.24, "South": 0.26, "West": 0.28, "East": 0.14, "Central": 0.08,
-    })
-    qualifications: dict[str, float] = field(default_factory=lambda: {
-        "Graduate": 0.45, "UnderGrad": 0.30, "Professional": 0.15, "SchoolOnly": 0.10,
-    })
-    age_groups: dict[str, float] = field(default_factory=lambda: {
-        "<30": 0.12, "30-40": 0.34, "40-50": 0.30, "50-60": 0.17, "60+": 0.07,
-    })
-    #: micro-heavy ticket: lognormal(14.0, 1.1) clipped to ₹0.5L-₹5cr
-    ticket_log_mean: float = 14.0
-    ticket_log_sd: float = 1.1
-    ticket_bounds: tuple[float, float] = (5e4, 5e7)
-    #: years in business ~ gamma(2.2, 3.0), truncated to 0-30
-    business_age_shape: float = 2.2
-    business_age_scale: float = 3.0
-    business_age_bounds: tuple[float, float] = (0.0, 30.0)
-    #: months since origination at t=0
-    vintage_bounds: tuple[int, int] = (0, 48)
+    # ---- category universes (order fixes the panel's categorical codes) --- #
+    sector_levels: tuple[str, ...] = field(
+        default_factory=lambda: _level_order("sectors", "sectors"))
+    region_levels: tuple[str, ...] = field(
+        default_factory=lambda: _level_order("regions", "regions"))
+    qualification_levels: tuple[str, ...] = field(
+        default_factory=lambda: _level_order("qualifications", "qualifications"))
+    age_group_levels: tuple[str, ...] = field(
+        default_factory=lambda: _level_order("age_groups", "age_groups"))
+    constitution_levels: tuple[str, ...] = field(
+        default_factory=constitution_levels)
+    city_tier_levels: tuple[str, ...] = field(
+        default_factory=lambda: _level_order("city_tiers", "city_tiers"))
+
+    # ---- sourced lookups -------------------------------------------------- #
+    sector_risk: dict[str, float] = field(
+        default_factory=lambda: dict(sources.value("shared.sector_risk")))
+    nic_groups: dict[str, str | None] = field(
+        default_factory=lambda: dict(sources.value("shared.nic_groups")))
+    states_within_region: dict[str, dict[str, float]] = field(
+        default_factory=lambda: {
+            region: dict(states)
+            for region, states in sources.value("shared.states_within_region").items()
+        })
+
+    bureau_missing_share: float = field(
+        default_factory=lambda: float(sources.value("shared.bureau.missing_share")))
+    bureau_score_bounds: tuple[float, float] = field(
+        default_factory=lambda: tuple(sources.value("shared.bureau.score_bounds")))
+    bureau_score_mean: float = field(
+        default_factory=lambda: float(sources.value("shared.bureau.score_mean")))
+    bureau_score_sd: float = field(
+        default_factory=lambda: float(sources.value("shared.bureau.score_sd")))
+    bureau_risk_gain: float = field(
+        default_factory=lambda: float(sources.value("shared.bureau.risk_gain")))
+    bureau_stress_drop: float = field(
+        default_factory=lambda: float(sources.value("shared.bureau.stress_drop")))
+    bureau_report_lag_months: int = field(
+        default_factory=lambda: int(sources.value("shared.bureau.report_lag_months")))
+
+    kharif_harvest_months: tuple[int, ...] = field(
+        default_factory=lambda: tuple(sources.value("shared.seasonality.kharif_harvest_months")))
+    rabi_harvest_months: tuple[int, ...] = field(
+        default_factory=lambda: tuple(sources.value("shared.seasonality.rabi_harvest_months")))
+
+    balance_months_of_emi: float = field(
+        default_factory=lambda: float(sources.value("shared.balance.months_of_emi")))
+    balance_months_of_emi_sd: float = field(
+        default_factory=lambda: float(sources.value("shared.balance.months_of_emi_sd")))
+    minimum_balance: float = field(
+        default_factory=lambda: float(sources.value("shared.balance.minimum_balance")))
 
     # ---- latent-risk scorecard (who eventually defaults) ----------------- #
     #: static profile only WEAKLY tilts the odds — the irreducible-randomness
@@ -271,6 +644,12 @@ class PopulationMix:
 
     # ---- shared latent stress: timing and intensity of the slide --------- #
     npa_month_lo: int = 6
+    #: months of NPA exposure the scorecard was calibrated against (the July
+    #: 2026 build's 36-month window, less the 6 months before an NPA can occur).
+    #: :func:`generator.latent.draw_population` rescales the window probability
+    #: to this reference so the ANNUAL default rate does not move with
+    #: ``--months``.
+    hazard_reference_months: int = 30
     severity_mean: float = 1.0
     severity_sd: float = 0.25
     severity_bounds: tuple[float, float] = (0.5, 1.7)
