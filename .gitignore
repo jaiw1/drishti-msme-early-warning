@@ -37,3 +37,5 @@ data/bank/provenance.json
 scratch/
 state-*.json
 data/bank/pulled.json
+data/export/
+data/validation_panel_cache/
