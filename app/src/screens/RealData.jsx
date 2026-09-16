@@ -10,7 +10,7 @@ import Empty from '../components/states/Empty'
 import Loading from '../components/states/Loading'
 import { useAuth } from '../auth/AuthContext'
 import useAsync from '../lib/useAsync'
-import { loadMetrics, loadRealDataModel } from '../data/drishti'
+import { loadMetrics, loadRealDataModel } from '../domain/drishti'
 import { SOURCE } from '../components/SourceBadge'
 
 export default function RealData() {

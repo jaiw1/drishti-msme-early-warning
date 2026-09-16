@@ -26,9 +26,9 @@ import Loading from './states/Loading'
 import { useToast } from './Toasts'
 import useAsync from '../lib/useAsync'
 import { inr, pct, RAG } from '../lib/format'
-import { ACTIONS, loadAccount, loadMemo, loadTimeline, recordAction, saveMemo } from '../data/drishti'
-import { FIELD_STATE, normaliseChannels, renderField } from '../data/channels'
-import { badgeForFamilySource } from '../data/provenance'
+import { ACTIONS, loadAccount, loadMemo, loadTimeline, recordAction, saveMemo } from '../domain/drishti'
+import { FIELD_STATE, normaliseChannels, renderField } from '../domain/channels'
+import { badgeForFamilySource } from '../domain/provenance'
 
 /** The timeline, with absent channels kept absent. Recharts draws a gap for `null`. */
 export function toSeries(points, channels) {

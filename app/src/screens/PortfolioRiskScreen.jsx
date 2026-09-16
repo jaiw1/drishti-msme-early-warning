@@ -8,8 +8,8 @@ import Loading from '../components/states/Loading'
 import Empty from '../components/states/Empty'
 import { useAuth } from '../auth/AuthContext'
 import useAsync from '../lib/useAsync'
-import { loadMetrics, loadWholeBook } from '../data/drishti'
-import { badgeForMode } from '../data/provenance'
+import { loadMetrics, loadWholeBook } from '../domain/drishti'
+import { badgeForMode } from '../domain/provenance'
 import { useSearchParams } from 'react-router-dom'
 
 export default function PortfolioRiskScreen() {

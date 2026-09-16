@@ -25,7 +25,7 @@ import useAsync from '../lib/useAsync'
 import { ROLE_LABEL } from '../auth/roles'
 import {
   createUser, loadAudit, loadUsers, resetUserPassword, setUserActive, setUserRole, verifyAuditChain,
-} from '../data/drishti'
+} from '../domain/drishti'
 
 const ROLES = ['admin', 'manager', 'credit_officer', 'relationship_manager']
 const PORTFOLIOS = ['MSME-CC', 'MSME-TL', 'Housing', 'Education', 'Agri', 'Retail-Unsecured', 'LAP', 'Auto']

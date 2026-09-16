@@ -14,8 +14,8 @@ import ErrorState from '../components/states/ErrorState'
 import Loading from '../components/states/Loading'
 import { useAuth } from '../auth/AuthContext'
 import useAsync from '../lib/useAsync'
-import { loadMetrics, loadValidation } from '../data/drishti'
-import { badgeForMode } from '../data/provenance'
+import { loadMetrics, loadValidation } from '../domain/drishti'
+import { badgeForMode } from '../domain/provenance'
 
 const STATUS = {
   pass: { label: 'Pass', icon: CircleCheck, className: 'text-rag-greentx', row: '' },

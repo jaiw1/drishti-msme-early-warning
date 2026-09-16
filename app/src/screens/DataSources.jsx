@@ -23,8 +23,8 @@ import ErrorState from '../components/states/ErrorState'
 import Loading from '../components/states/Loading'
 import { useAuth } from '../auth/AuthContext'
 import useAsync from '../lib/useAsync'
-import { loadProvenance, loadSync } from '../data/drishti'
-import { badgeForFamilySource, badgeForMode } from '../data/provenance'
+import { loadProvenance, loadSync } from '../domain/drishti'
+import { badgeForFamilySource, badgeForMode } from '../domain/provenance'
 
 export const SYNC_STATE = {
   never: { label: 'Never called', icon: CircleSlash, className: 'text-slate-600', row: '' },

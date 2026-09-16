@@ -25,9 +25,9 @@ import Loading from '../components/states/Loading'
 import { useAuth } from '../auth/AuthContext'
 import useAsync from '../lib/useAsync'
 import { inr, pct, RAG } from '../lib/format'
-import { loadMetrics, loadWatchlist } from '../data/drishti'
-import { DPD_BANDS, TICKET_BANDS, dpdBand, ticketBand } from '../data/shapes'
-import { badgeForMode } from '../data/provenance'
+import { loadMetrics, loadWatchlist } from '../domain/drishti'
+import { DPD_BANDS, TICKET_BANDS, dpdBand, ticketBand } from '../domain/shapes'
+import { badgeForMode } from '../domain/provenance'
 
 const PORTFOLIOS = ['MSME-CC', 'MSME-TL', 'Housing', 'Education', 'Agri', 'Retail-Unsecured', 'LAP', 'Auto']
 const CONSTITUTIONS = ['Proprietorship', 'Partnership', 'PvtLtd', 'LLP', 'Individual']

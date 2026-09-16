@@ -6,7 +6,7 @@
 //  1. `SIGNAL_GROUPS` hard-coded five feature families while `src/rigor.py` emits nine.
 //     The four extras were dropped silently, so the "what the model looks at" bars stopped
 //     summing to 100% and the chart implied the missing third did not exist. The family
-//     list now comes from `data/families.js`, anything unexpected is still drawn, and the
+//     list now comes from `domain/families.js`, anything unexpected is still drawn, and the
 //     coverage is asserted on screen rather than assumed.
 //  2. `rank_order.by_portfolio` was never rendered, so the mentors' "does it rank-order
 //     per portfolio?" question had no answer on the screen that claims to answer it.
@@ -16,8 +16,8 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { pct } from '../lib/format'
-import { SIGNAL_FAMILIES, coverageGap, familiesIn } from '../data/families'
-import { byPortfolioList, honestyBlock, redBandPrecision } from '../data/shapes'
+import { SIGNAL_FAMILIES, coverageGap, familiesIn } from '../domain/families'
+import { byPortfolioList, honestyBlock, redBandPrecision } from '../domain/shapes'
 
 function Rigor({ rigor }) {
   if (!rigor) return null

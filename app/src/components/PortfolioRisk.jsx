@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import DataTable, { useRovingRows } from './DataTable'
 import { inr, pct, RAG } from '../lib/format'
-import { byPortfolioList } from '../data/shapes'
+import { byPortfolioList } from '../domain/shapes'
 
 // IDBI's MSME/priority book isn't a single published figure; public disclosures put it
 // broadly in the ₹25,000–35,000 cr range, so this is an ADJUSTABLE assumption (slider

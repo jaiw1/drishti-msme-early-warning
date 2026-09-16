@@ -26,8 +26,8 @@ import { useToast } from '../components/Toasts'
 import { useAuth } from '../auth/AuthContext'
 import useAsync from '../lib/useAsync'
 import { inr, pct } from '../lib/format'
-import { loadThreshold, saveThreshold } from '../data/drishti'
-import { badgeForMode } from '../data/provenance'
+import { loadThreshold, saveThreshold } from '../domain/drishti'
+import { badgeForMode } from '../domain/provenance'
 
 const MIN_JUSTIFICATION = 10
 
