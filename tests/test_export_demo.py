@@ -430,9 +430,16 @@ def _banded_book():
     return _book(rows)
 
 
+#: a stand-in for the DM-5 block, so the honesty guard's "say where Red starts"
+#: rule has something to read.  Hand-built: these tests are about the prose and
+#: the arithmetic, not about where the cost model would put the bands.
+STUB_THRESHOLDS = dict(amber=0.05, red=0.60, method="cost_minimising",
+                       applied="cost_minimising")
+
+
 @pytest.fixture(scope="module")
 def honest():
-    return export_demo.honest_metrics(_banded_book())
+    return export_demo.honest_metrics(_banded_book(), thresholds=STUB_THRESHOLDS)
 
 
 def test_ci_helper_is_a_wilson_interval_around_the_point_estimate():
@@ -628,3 +635,24 @@ def test_the_july_thresholds_can_still_be_pinned():
 
 def test_exposure_at_default_reaches_the_cockpit(payload):
     assert any(record["outstanding"] for record in payload["portfolio"])
+
+
+def test_the_headline_says_where_red_starts(honest):
+    """A precision figure nobody can reproduce is a claim, not a measurement."""
+    point = honest["honesty"]["at_operating_point"]
+    assert (point["amber"], point["red"]) == (0.05, 0.60)
+    assert point["method"] == "cost_minimising"
+
+
+def test_a_headline_with_no_operating_point_fails_the_guard():
+    blind = export_demo.honest_metrics(_banded_book())
+    problems = export_demo.honesty_violations(blind)
+    assert any("where Red starts" in p for p in problems)
+    with pytest.raises(AssertionError, match="where Red starts"):
+        export_demo.assert_honesty(blind)
+
+
+def test_the_payload_headline_carries_the_live_thresholds(payload):
+    point = payload["metrics"]["honesty"]["at_operating_point"]
+    assert point["amber"] == payload["thresholds"]["amber"]
+    assert point["red"] == payload["thresholds"]["red"]

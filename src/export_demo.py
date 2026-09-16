@@ -403,7 +403,8 @@ def _red_precision_cell(frame, horizon):
                 n_defaulted_in_book=int(went.sum()))
 
 
-def honest_metrics(port_df, horizon=RANK_HORIZON, long_horizon=12, budget=0.10):
+def honest_metrics(port_df, horizon=RANK_HORIZON, long_horizon=12, budget=0.10,
+                   thresholds=None):
     """DM-4: the honest headline and everything that has to be read beside it.
 
     Every proportion here carries a 95% Wilson interval, every one is measured
@@ -416,6 +417,8 @@ def honest_metrics(port_df, horizon=RANK_HORIZON, long_horizon=12, budget=0.10):
         horizon: the action window the headline is measured over (8 months).
         long_horizon: the label horizon, for the base rate (12 months).
         budget: the review budget recall is measured at.
+        thresholds: the DM-5 block, so the headline can say where Red starts.
+            "x% of Red-flagged accounts" is not reproducible without it.
 
     Returns:
         A dict to merge straight into the export's ``metrics`` block.
@@ -521,6 +524,16 @@ def honest_metrics(port_df, horizon=RANK_HORIZON, long_horizon=12, budget=0.10):
             headline=headline,
             not_claimed=DISOWNED_WORD,
             why=why,
+            # A precision figure is only reproducible if the reader knows where
+            # the band it describes begins. Without this the headline is a
+            # number without a definition, which is the failure mode the whole
+            # block exists to avoid.
+            at_operating_point=dict(
+                amber=(thresholds or {}).get("amber"),
+                red=(thresholds or {}).get("red"),
+                method=(thresholds or {}).get("method"),
+                applied=(thresholds or {}).get("applied"),
+            ),
             derived_from=["red_band_precision_8m", "base_rate_8m", "raw_accuracy_8m",
                           "missed_npa_share"],
         ),
@@ -582,6 +595,11 @@ def honesty_violations(metrics):
             f"claim, not a measurement: {honesty['headline']!r}")
     if honesty.get("not_claimed") != DISOWNED_WORD:
         problems.append(f"$.honesty.not_claimed: must be {DISOWNED_WORD!r}")
+    point = honesty.get("at_operating_point") or {}
+    if point.get("red") is None or point.get("amber") is None:
+        problems.append(
+            "$.honesty.at_operating_point: the headline reports what the Red band did but "
+            "does not say where Red starts, so nobody can reproduce it")
     return problems
 
 
@@ -935,7 +953,7 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
             rank_order=rank_order,
             # DM-4. Merged last so the honest numbers cannot be shadowed by an
             # older key, and asserted below before anything is written.
-            **honest_metrics(port_df, horizon=horizon),
+            **honest_metrics(port_df, horizon=horizon, thresholds=thresholds),
         ),
         portfolio_summary=dict(
             total_accounts=len(port_df),
