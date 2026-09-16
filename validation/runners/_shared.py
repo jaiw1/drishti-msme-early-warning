@@ -201,6 +201,11 @@ def prepare_features(ctx: RunnerContext, panel: pd.DataFrame):
     import export_demo as ed
 
     df = panel[panel["labelable"] == 1].reset_index(drop=True).copy()
+    # DM-8 round 2: `add_elapsed_time_bands` builds the `_band` columns
+    # export_demo.py's own CAT/DROP now expect (e.g.
+    # `months_since_moratorium_end_band`) — imported and called, never
+    # copy-pasted, same as CAT/DROP themselves (module docstring above).
+    ed.add_elapsed_time_bands(df)
     cats = [c for c in ed.CAT if c in df.columns]
     for c in cats:
         df[c] = df[c].astype("category")

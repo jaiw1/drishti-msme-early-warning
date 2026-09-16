@@ -41,6 +41,57 @@ OUT = f"{ROOT}/data/demo_data.json"
 DEMO_PUBLIC = f"{ROOT}/app/public/demo_data.json"
 REF_MONTH = 24                       # "today" for the frozen portfolio snapshot
 
+# --------------------------------------------------------------------------- #
+# DM-8 round 2 / DR-14 — elapsed-time feature banding.
+#
+# Any months_since_* (or other elapsed-time) column drifts by construction under
+# a time-split OOT: it is calendar time minus a fixed reference event, so a later
+# test window is mechanically further from that event than train ever was.
+# `vintage_months` was exactly this (SD-D8 banded it into `vintage_band`, a real
+# GENERATOR column — see DROP's note below); round 2's binding DR-14 feature is
+# `months_since_moratorium_end`, and `src/generator/**` is frozen this round, so
+# the bucket is built here instead — same fix, same reasoning, computed post-hoc
+# from the CSV column rather than baked into it.
+#
+# The 0-6 / 7+ split is not picked to chase the CSI number: it is the exact
+# threshold `HUMAN["months_since_moratorium_end"]` already uses to flag "first
+# demands after moratorium" (0 <= v <= 6) — the bucket is the reason-code's own
+# distinction (just exited vs long since exited), which happens to also be the
+# coarsest, and therefore most drift-resistant, split available. A finer bucket
+# (mirroring `vintage_band`'s 6 levels) was tried first and measured WORSE on a
+# 9k x 48 dev check (CSI 4.15 vs the raw column's 3.07) — a band whose top level
+# has zero training-window rows produces a bigger, not smaller, PSI-style
+# divergence. See MODEL_CARD.md for the honest post-fix number: banding reduces
+# the drift (~3x on the dev check) but does not clear the 0.25 floor, because the
+# pre-registered OOT split embargoes a 12-month gap between train and test
+# months — a structural gap this reading of DR-14 has no feature-engineering
+# answer for. (The same dev check found `vintage_band` itself, unchanged this
+# round, sitting well above 0.25 too, once measured against a non-stale
+# validation panel — see MODEL_CARD.md §"DR-14, round 2".)
+_ELAPSED_TIME_BANDS: dict[str, tuple[list[float], list[str]]] = {
+    "months_since_moratorium_end": (
+        [-math.inf, -1, 6, math.inf], ["in moratorium", "0-6", "7+"],
+    ),
+}
+
+
+def add_elapsed_time_bands(df):
+    """Add ``<col>_band`` for every registered elapsed-time column present in
+    ``df`` (a no-op for one that is absent, e.g. a small test fixture that
+    dropped the moratorium channel). The raw column is left untouched — still
+    in the frame/CSV — only the model's feature set drops it, via DROP below.
+    """
+    for col, (edges, labels) in _ELAPSED_TIME_BANDS.items():
+        if col not in df.columns:
+            continue
+        band_col = f"{col}_band"
+        if band_col in df.columns:
+            continue
+        raw = pd.to_numeric(df[col], errors="coerce")
+        df[band_col] = pd.cut(raw, bins=edges, labels=labels)
+    return df
+
+
 # The five SD-D2 statics are CATEGORICAL, not numeric: without them LightGBM raises
 # "pandas dtypes must be int, float or bool" on the eight-portfolio panel. `secured`,
 # `tenor_months` and `interest_rate_pa` are genuinely numeric and stay out.
@@ -49,6 +100,12 @@ CAT += ["portfolio", "constitution", "state", "city_tier", "nic_group"]
 # SD-D8: a bank-style vintage bucket (0-6/7-12/13-18/19-30/31-48/49+ months on
 # book), scored in place of the raw month counter below — see DROP's note.
 CAT += ["vintage_band"]
+# DM-8 round 2 (DR-14): every OTHER months_since_* / elapsed-time feature drifts
+# by construction under a time-split OOT for the exact same reason vintage_months
+# did — see _ELAPSED_TIME_BANDS below. `src/generator/**` is frozen this round,
+# so the bucket is built here (post-hoc, from the CSV column) rather than baked
+# into the panel the way `vintage_band` was.
+CAT += [f"{col}_band" for col in _ELAPSED_TIME_BANDS]
 # Every FORWARD-LOOKING column is dropped here or the model trains on the answer.
 # `sma2_within_6m` (SD-D5) is a label, not a feature: it says whether the account
 # reaches 61-90 DPD in the NEXT six months. A test pins this list against the
@@ -61,6 +118,9 @@ CAT += ["vintage_band"]
 # choice (banks bucket vintage), not gaming; see DATA_CARD.md/MODEL_CARD.md.
 DROP = ["account_id", "month_idx", "date", "vintage_months",
         "default_within_12m", "sma2_within_6m", "labelable", "months_to_npa"]
+# DM-8 round 2: the raw elapsed-time columns _ELAPSED_TIME_BANDS buckets — same
+# treatment as `vintage_months` above (dropped from FEATURES only, kept in the CSV).
+DROP += list(_ELAPSED_TIME_BANDS)
 
 #: contract portfolio code -> the observation channels that portfolio actually has.
 #: A column belonging to a channel a portfolio does not declare is NaN in the panel and
@@ -740,6 +800,7 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
     Returns:
         The payload dict. It is JSON-valid: no NaN, no infinity, anywhere.
     """
+    add_elapsed_time_bands(df)
     cats = [c for c in CAT if c in df.columns]
     for c in cats:
         df[c] = df[c].astype("category")
@@ -1041,12 +1102,17 @@ def _parse_args(argv):
                     help="DM-6: also write the full, UNSAMPLED platform-contract-shaped "
                          "export (meta/accounts/scores/provenance/...) to PATH. Validate "
                          "with contracts/validate.py in the platform repo.")
-    ap.add_argument("--demo-sample", nargs="?", type=int, const=2500, default=2500,
+    ap.add_argument("--demo-sample", nargs="?", type=int, const=700, default=700,
                     metavar="N",
-                    help="DM-6: accounts (stratified by portfolio+band) written to "
+                    help="DM-8 round 2: accounts (stratified by portfolio+band) written to "
                          "app/public/demo_data.json; metrics/thresholds/rank_order still "
-                         "come from the full panel. Default 2500. Pass with no value to "
-                         "keep the default explicitly.")
+                         "come from the full panel. Default 700 — measured at 2,500 "
+                         "(the DM-6 default) the file was 12.5 MB, well over the app's "
+                         "4 MB budget; 800 (the first candidate) still landed at 4.08 MB "
+                         "because stratified rounding samples slightly more than N. 700 "
+                         "-> 710 accounts sampled -> 3.59 MB, comfortably under budget, "
+                         "while timelines still cover every portfolio x band cell. Pass "
+                         "with no value to keep the default explicitly.")
     ap.add_argument("--no-demo-sample", action="store_true",
                     help="skip writing app/public/demo_data.json entirely")
     ap.add_argument("--panel", default=PANEL, metavar="PATH", help="override the account-month panel CSV")

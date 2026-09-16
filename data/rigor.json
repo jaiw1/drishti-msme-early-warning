@@ -5,7 +5,7 @@
   "reliability": [
    {
     "pred": 0.002,
-    "obs": 0.003,
+    "obs": 0.002,
     "n": 61235
    },
    {
@@ -25,32 +25,32 @@
    },
    {
     "pred": 0.008,
-    "obs": 0.006,
+    "obs": 0.007,
     "n": 61234
    },
    {
     "pred": 0.009,
-    "obs": 0.009,
+    "obs": 0.008,
     "n": 61234
    },
    {
-    "pred": 0.012,
+    "pred": 0.011,
     "obs": 0.011,
     "n": 61234
    },
    {
     "pred": 0.014,
-    "obs": 0.014,
+    "obs": 0.015,
     "n": 61234
    },
    {
     "pred": 0.021,
-    "obs": 0.02,
+    "obs": 0.019,
     "n": 61234
    },
    {
     "pred": 0.23,
-    "obs": 0.232,
+    "obs": 0.233,
     "n": 61234
    }
   ]
@@ -60,69 +60,69 @@
    "bucket": "1-3 mo",
    "n": 4938,
    "shares": {
-    "Days-past-due / repayment": 23.0,
-    "Cash-flow (inflows / GST)": 5.5,
+    "Days-past-due / repayment": 22.9,
+    "Cash-flow (inflows / GST)": 5.3,
     "Demand vs collection": 28.7,
-    "Credit-limit utilisation": 17.8,
-    "Income & balance": 7.4,
+    "Credit-limit utilisation": 17.6,
+    "Income & balance": 7.5,
     "Leverage & collateral": 1.5,
     "Bureau": 3.4,
     "Adverse filings": 6.3,
-    "Borrower profile": 6.5
+    "Borrower profile": 6.7
    },
-   "dpd_share": 0.2297,
-   "dpd_share_alt": 0.5164
+   "dpd_share": 0.2295,
+   "dpd_share_alt": 0.5161
   },
   {
    "bucket": "4-6 mo",
    "n": 4938,
    "shares": {
     "Days-past-due / repayment": 8.6,
-    "Cash-flow (inflows / GST)": 6.2,
-    "Demand vs collection": 34.5,
-    "Credit-limit utilisation": 20.5,
-    "Income & balance": 8.9,
+    "Cash-flow (inflows / GST)": 6.1,
+    "Demand vs collection": 34.3,
+    "Credit-limit utilisation": 20.4,
+    "Income & balance": 9.2,
     "Leverage & collateral": 1.7,
     "Bureau": 4.1,
-    "Adverse filings": 6.8,
-    "Borrower profile": 8.6
+    "Adverse filings": 6.7,
+    "Borrower profile": 8.8
    },
-   "dpd_share": 0.0865,
-   "dpd_share_alt": 0.4314
+   "dpd_share": 0.0862,
+   "dpd_share_alt": 0.4296
   },
   {
    "bucket": "7-9 mo",
    "n": 4708,
    "shares": {
-    "Days-past-due / repayment": 3.8,
+    "Days-past-due / repayment": 3.7,
     "Cash-flow (inflows / GST)": 7.6,
-    "Demand vs collection": 30.3,
-    "Credit-limit utilisation": 23.2,
-    "Income & balance": 11.6,
-    "Leverage & collateral": 2.0,
+    "Demand vs collection": 30.0,
+    "Credit-limit utilisation": 23.3,
+    "Income & balance": 12.0,
+    "Leverage & collateral": 1.9,
     "Bureau": 4.9,
-    "Adverse filings": 4.6,
-    "Borrower profile": 12.0
+    "Adverse filings": 4.5,
+    "Borrower profile": 12.1
    },
-   "dpd_share": 0.0379,
-   "dpd_share_alt": 0.3408
+   "dpd_share": 0.0366,
+   "dpd_share_alt": 0.3368
   },
   {
    "bucket": "10-12 mo",
    "n": 4330,
    "shares": {
-    "Days-past-due / repayment": 4.0,
-    "Cash-flow (inflows / GST)": 11.1,
-    "Demand vs collection": 17.6,
-    "Credit-limit utilisation": 20.3,
-    "Income & balance": 17.3,
-    "Leverage & collateral": 2.5,
+    "Days-past-due / repayment": 3.8,
+    "Cash-flow (inflows / GST)": 11.0,
+    "Demand vs collection": 17.1,
+    "Credit-limit utilisation": 20.7,
+    "Income & balance": 17.8,
+    "Leverage & collateral": 2.3,
     "Bureau": 6.5,
-    "Adverse filings": 0.6,
-    "Borrower profile": 20.1
+    "Adverse filings": 0.5,
+    "Borrower profile": 20.3
    },
-   "dpd_share": 0.0402,
-   "dpd_share_alt": 0.2159
+   "dpd_share": 0.0381,
+   "dpd_share_alt": 0.2092
   }
  ],
  "leakage_families": {
@@ -131,7 +131,7 @@
    "families": [
     "Days-past-due / repayment"
    ],
-   "share": 0.0402,
+   "share": 0.0381,
    "reading": "`collection_ratio` is its own family: it measures money arriving, not days late, and it leads arrears by 5-8 months across the eight portfolios. This is the reading DR-15 is scored against."
   },
   "alternative": {
@@ -139,7 +139,7 @@
     "Days-past-due / repayment",
     "Demand vs collection"
    ],
-   "share": 0.2159,
+   "share": 0.2092,
    "reading": "`collection_ratio` folded into days-past-due, on the argument that a short collection IS the arrear one month before it is one. Reported so the choice is visible rather than inherited."
   },
   "criterion": "DR-15: DPD-family attribution share at 10-12 months must be <= 0.05",
@@ -155,12 +155,12 @@
    "Leverage & collateral"
   ]
  },
- "leakage_dpd_share": 0.0402,
- "leakage_alt_dpd_share": 0.2159,
+ "leakage_dpd_share": 0.0381,
+ "leakage_alt_dpd_share": 0.2092,
  "out_of_time": {
   "train_window": "months 0-17",
   "test_window": "months 18+",
-  "auc": 0.91,
+  "auc": 0.909,
   "ks": 0.702,
   "grouped_auc": 0.902
  },

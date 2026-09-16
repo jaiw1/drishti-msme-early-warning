@@ -13,6 +13,7 @@ Four checks, all on the synthetic panel:
 """
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -34,6 +35,35 @@ from generator.build import PANEL_COLUMNS   # noqa: E402  (path shim must run fi
 ROOT = __file__.rsplit("/src/", 1)[0]
 PANEL = f"{ROOT}/data/msme_loan_panel.csv"
 OUT = f"{ROOT}/data/rigor.json"
+
+# DM-8 round 2 / DR-14 — kept byte-for-byte identical to export_demo.py's own
+# table + function (a test asserts CAT == and DROP == across the two files):
+# every months_since_* / elapsed-time feature drifts by construction under a
+# time-split OOT for the same reason `vintage_months` did, and `src/generator/**`
+# is frozen this round, so the bucket is built here post-hoc rather than baked
+# into the panel. See export_demo.py's copy of this comment for the full
+# reasoning and the 9k dev-check numbers behind the 0-6/7+ split.
+_ELAPSED_TIME_BANDS: dict[str, tuple[list[float], list[str]]] = {
+    "months_since_moratorium_end": (
+        [-math.inf, -1, 6, math.inf], ["in moratorium", "0-6", "7+"],
+    ),
+}
+
+
+def add_elapsed_time_bands(df):
+    """Add ``<col>_band`` for every registered elapsed-time column present in
+    ``df``. Identical to export_demo.py's function of the same name."""
+    for col, (edges, labels) in _ELAPSED_TIME_BANDS.items():
+        if col not in df.columns:
+            continue
+        band_col = f"{col}_band"
+        if band_col in df.columns:
+            continue
+        raw = pd.to_numeric(df[col], errors="coerce")
+        df[band_col] = pd.cut(raw, bins=edges, labels=labels)
+    return df
+
+
 # The five SD-D2 statics are categorical; without them LightGBM refuses the panel
 # ("pandas dtypes must be int, float or bool").  Kept identical to export_demo.py's list.
 CAT = ["sector", "region", "loan_type", "segment", "qualification", "promoter_age_group"]
@@ -41,6 +71,8 @@ CAT += ["portfolio", "constitution", "state", "city_tier", "nic_group"]
 # SD-D8: a bank-style vintage bucket, scored in place of the raw month counter
 # below — see export_demo.py's matching CAT/DROP note (kept identical, always).
 CAT += ["vintage_band"]
+# DM-8 round 2: see _ELAPSED_TIME_BANDS above (kept identical to export_demo.py).
+CAT += [f"{col}_band" for col in _ELAPSED_TIME_BANDS]
 # Every FORWARD-LOOKING column is dropped here or the model trains on the answer.
 # `sma2_within_6m` (SD-D5) is a label, not a feature: it says whether the account
 # reaches 61-90 DPD in the NEXT six months. A test pins this list against the
@@ -50,6 +82,9 @@ CAT += ["vintage_band"]
 # feature); `vintage_band` above is the model's replacement.
 DROP = ["account_id", "month_idx", "date", "vintage_months",
         "default_within_12m", "sma2_within_6m", "labelable", "months_to_npa"]
+# DM-8 round 2: the raw elapsed-time columns _ELAPSED_TIME_BANDS buckets — same
+# treatment as `vintage_months` above (kept identical to export_demo.py).
+DROP += list(_ELAPSED_TIME_BANDS)
 
 # --------------------------------------------------------------------------- #
 # Feature FAMILIES for the leakage attribution.  Every scored column must belong to
@@ -77,13 +112,20 @@ GROUPS = {
     "Income & balance": ["salary_credit", "salary_vs_6m_avg", "salary_gap_6m", "balance", "min_balance_6m",
                          "rental_income", "rental_vs_6m_avg", "crop_receipt", "crop_receipt_vs_norm",
                          "commute_spend", "commute_vs_6m_avg"],
+    # DM-8 round 2: `months_since_moratorium_end` moved to DROP (not scored) in
+    # favour of `months_since_moratorium_end_band` — familied under "Borrower
+    # profile" below, alongside `vintage_band`, because every CATEGORICAL
+    # column lives there (test_every_categorical_is_familied_as_borrower_profile).
     "Leverage & collateral": ["other_bank_emi", "emi_burden_ratio", "ltv", "ltv_vs_schedule",
-                              "renewal_overdue_months", "moratorium_active", "months_since_moratorium_end"],
+                              "renewal_overdue_months", "moratorium_active"],
     "Bureau": ["bureau_score"],
     "Adverse filings": ["adverse_remark", "adverse_remark_6m"],
     # SD-D8: `vintage_months` moved to DROP (not scored) in favour of the
     # `vintage_band` categorical, which is scored and familied here instead.
-    "Borrower profile": ["log_sanctioned", "vintage_band", "business_age_years", "sector", "region",
+    # DM-8 round 2: `months_since_moratorium_end_band` joins it for the same
+    # reason (see "Leverage & collateral" above and _ELAPSED_TIME_BANDS).
+    "Borrower profile": ["log_sanctioned", "vintage_band", "months_since_moratorium_end_band",
+                         "business_age_years", "sector", "region",
                          "loan_type", "segment", "qualification", "promoter_age_group",
                          "portfolio", "constitution", "state", "city_tier", "nic_group",
                          "secured", "tenor_months", "interest_rate_pa"],
@@ -117,6 +159,7 @@ def ks(y, p):
 
 def main():
     df = pd.read_csv(PANEL)
+    add_elapsed_time_bands(df)
     cats = [c for c in CAT if c in df.columns]
     for c in cats:
         df[c] = df[c].astype("category")

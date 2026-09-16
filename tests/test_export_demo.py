@@ -71,6 +71,57 @@ def test_cat_and_drop_do_not_overlap():
     assert not set(export_demo.CAT) & set(export_demo.DROP)
 
 
+def test_dm8_r2_static_profile_subset_was_tested_and_kept():
+    """DM-8 round 2, DR-19: dropping the static-profile subset (constitution,
+    state, city_tier, nic_group, tenor_months, interest_rate_pa, secured) was
+    measured on the 9k x 36 book — pooled AUC improved and ECE improved, but
+    Retail-Unsecured's per-portfolio AUC fell to 0.7375, below the 0.78 floor
+    (already marginal there pre-drop, at 0.7408 — a ~3k-account cell at this
+    scale). One floor breaking is enough per the brief's own rule ("if any
+    floor breaks, keep them"), so the columns stay in the model — see
+    MODEL_CARD.md for the full numbers. `portfolio` itself was never a
+    candidate: it is the one-model-many-portfolios mandate's own key.
+    """
+    kept = ["constitution", "state", "city_tier", "nic_group",
+            "tenor_months", "interest_rate_pa", "secured"]
+    for col in kept:
+        assert col not in export_demo.DROP, f"{col} was dropped despite the guardrail breaking"
+    assert "portfolio" not in export_demo.DROP
+
+
+# --------------------------------------------------------------------------- #
+# DM-8 round 2 — elapsed-time feature banding (DR-14)
+# --------------------------------------------------------------------------- #
+def test_elapsed_time_bands_are_registered_correctly():
+    """Every _ELAPSED_TIME_BANDS entry's band column is scored, its raw column
+    dropped from features (kept in the frame), same as `vintage_band` /
+    `vintage_months`."""
+    for col in export_demo._ELAPSED_TIME_BANDS:
+        assert f"{col}_band" in export_demo.CAT
+        assert col in export_demo.DROP
+        assert col not in export_demo.CAT
+        assert f"{col}_band" not in export_demo.DROP
+
+
+def test_add_elapsed_time_bands_buckets_moratorium_correctly():
+    """0-6 matches HUMAN's own "first demands after moratorium" cutoff; negative
+    values (still inside the moratorium) and NaN (no moratorium channel at all)
+    are their own, distinct outcomes."""
+    df = pd.DataFrame({"months_since_moratorium_end": [-5, 0, 6, 7, 40, float("nan")]})
+    export_demo.add_elapsed_time_bands(df)
+    band = df["months_since_moratorium_end_band"]
+    assert band.astype(object).tolist()[:5] == ["in moratorium", "0-6", "0-6", "7+", "7+"]
+    assert pd.isna(band.iloc[5])
+
+
+def test_add_elapsed_time_bands_is_a_no_op_without_the_raw_column():
+    """A panel that never had the column (e.g. a portfolio mix with no
+    moratorium channel) is left alone rather than raising."""
+    df = pd.DataFrame({"account_id": ["A1"]})
+    export_demo.add_elapsed_time_bands(df)
+    assert "months_since_moratorium_end_band" not in df.columns
+
+
 def test_every_label_the_generator_declares_is_dropped():
     """The leakage guard that survives the next label.
 

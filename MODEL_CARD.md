@@ -8,8 +8,12 @@
 validated on
 **Validation:** `validation/criteria.yaml` (26 pre-registered criteria, DR-01..DR-26),
 `validation/runners/01`–`12`
-**Version:** DM-6/DM-7 (plan §B/L5), 2026-09-17. This card describes the model as trained on
-the 9,000×36 and 45,000×48 populations `DATA_CARD.md` documents; both seed `20260709`.
+**Version:** DM-8 round 2 (plan §B/L5), 2026-09-17 — **the last permitted tuning round.** The
+plan allows two model-tuning rounds; this is round 2, and every number in this card from here
+on is reported as measured, not chased toward a band. §17 is round 2's own record: what changed,
+what was tested and rejected, and the two DR-18/DR-12 findings that stay reported fails by
+design. This card describes the model as trained on the 9,000×36 and 45,000×48 populations
+`DATA_CARD.md` documents; both seed `20260709`.
 
 ---
 
@@ -51,10 +55,10 @@ asserts the mapping is total — zero unfamilied columns of 62-63 scored):
 | Demand vs collection | `demanded_amount`, `collected_amount`, `collection_ratio(_3m)` |
 | Credit-limit utilisation | `utilisation`, `util_avg_3m`, `util_max_6m`, `months_over_90pct_util_6m`, `drawing_power`, `outstanding` |
 | Income & balance | `salary_credit`, `salary_vs_6m_avg`, `salary_gap_6m`, `balance`, `min_balance_6m`, `rental_*`, `crop_receipt*`, `commute_*` |
-| Leverage & collateral | `other_bank_emi`, `emi_burden_ratio`, `ltv(_vs_schedule)`, `renewal_overdue_months`, `moratorium_*` |
+| Leverage & collateral | `other_bank_emi`, `emi_burden_ratio`, `ltv(_vs_schedule)`, `renewal_overdue_months`, `moratorium_active` |
 | Bureau | `bureau_score` |
 | Adverse filings | `adverse_remark(_6m)` |
-| Borrower profile | `log_sanctioned`, `vintage_band`, `business_age_years`, `sector`, `region`, `loan_type`, `segment`, `qualification`, `promoter_age_group`, `portfolio`, `constitution`, `state`, `city_tier`, `nic_group`, `secured`, `tenor_months`, `interest_rate_pa` |
+| Borrower profile | `log_sanctioned`, `vintage_band`, `months_since_moratorium_end_band`, `business_age_years`, `sector`, `region`, `loan_type`, `segment`, `qualification`, `promoter_age_group`, `portfolio`, `constitution`, `state`, `city_tier`, `nic_group`, `secured`, `tenor_months`, `interest_rate_pa` |
 
 **The DPD-vs-collection ruling.** "Demand vs collection" is deliberately its **own** family, not
 folded into days-past-due. `collection_ratio` measures money actually arriving against what was
@@ -69,6 +73,18 @@ CSV for validation cuts, never trained on): `vintage_months` is account-age-plus
 construction, so it drifts mechanically under any time-split OOT and was DR-14's binding
 max-CSI feature before the bucket replaced it.
 
+**Round 2:** the same mechanism resurfaced on `months_since_moratorium_end` (elapsed months since
+an Education-portfolio account's moratorium ended — negative while still inside it), which became
+DR-14's new binding feature once `vintage_band` stopped being it. `src/generator/**` is frozen
+this round, so the fix is built post-hoc instead of as a generator column:
+`export_demo.py::add_elapsed_time_bands` (mirrored byte-for-byte in `rigor.py`, and called from
+`validation/runners/_shared.py::prepare_features` so every runner sees it) buckets the raw column
+into `months_since_moratorium_end_band` (`in moratorium` / `0-6` / `7+`), and the raw column moves
+to `DROP`, exactly like `vintage_months`. The 0-6 cut is not picked to chase the CSI number — it
+is the same threshold `HUMAN["months_since_moratorium_end"]` already used for its reason-code text
+("first demands after moratorium"). See §17 for the honest result: banding reduces the drift but
+does not clear DR-14's floor, because the gap is structural, not a feature-encoding problem.
+
 ## 4. Forbidden inputs
 
 Two columns are structurally excluded from the feature matrix (`export_demo.py::DROP` /
@@ -82,7 +98,8 @@ label added later fails the test rather than quietly inflating AUC):
 
 `months_to_npa`, `labelable`, `account_id`, `month_idx` and `date` are also dropped: bookkeeping
 and ground-truth columns, none of them a legitimate signal. `vintage_months` is dropped from
-FEATURES only (§3), not from the panel.
+FEATURES only (§3), not from the panel — as of round 2, so is `months_since_moratorium_end`
+(§3, §17), for the identical reason.
 
 ## 5. Label and horizons
 
@@ -140,18 +157,24 @@ normal approximation because several cells are small and some have zero defaults
 normal interval collapses to a point. Source: DM-4/DM-5's reported table, both from the same
 frozen 8-month-horizon book at each size.
 
-| metric | 9k × 36 | 45k × 48 (AUC 0.902 shipped) |
+| metric | 9k × 36 (DM-4/5, pre-round-2) | 45k × 48 (AUC 0.902, round 2, 2026-09-17) |
 |---|---|---|
-| **`red_band_precision_8m`** | **44.1% [35.4–53.1]** (52/118) | **80.7% [75.9–84.8]** (243/301) |
-| `missed_npa_share` | 13.9% [8.0–23.2] | 18.2% [14.5–22.6] |
-| `raw_accuracy_8m` / flag-nobody baseline | 96.3% / **96.9%** | 98.7% / 97.3% |
+| **`red_band_precision_8m`** | **44.1% [35.4–53.1]** (52/118) | **84.5% [79.8–88.2]** (239/283) |
+| `missed_npa_share` | 13.9% [8.0–23.2] | 17.6% [13.9–21.9] |
+| `raw_accuracy_8m` / flag-nobody baseline | 96.3% / **96.9%** | 98.8% / 97.3% |
 | `base_rate_8m` / `base_rate_12m` | 3.1% / 3.9% | 2.7% / 3.9% |
-| `recall_at_10pct_budget` | 74.7% [64.1–83.0] | 86.2% [82.1–89.4] |
-| `flagged_share` | 27.8% | 4.7% |
+| `recall_at_10pct_budget` | 74.7% [64.1–83.0] | 86.5% [82.5–89.7%] |
+| `flagged_share` | 27.8% | 4.7% [4.3–5.0] |
+
+The 9k column is DM-4/5's original run, not re-measured this round (round 2 touched no code path
+that changes the 9k demo book). The 45k column is round 2's own run (`src/export_demo.py`, the
+same frozen book DR-14/DR-19 discuss elsewhere in this card) — superseding the DM-4/5 45k figures
+this table carried before round 2, which moved with the panel regeneration + elapsed-time-band
+feature change (§3, §17), not with any threshold or label change.
 
 **The headline, derived and asserted in-script (`assert_honesty`), never typed:**
-> "80.7% of Red-flagged accounts went NPA within 8 months (95% CI 75.9%–84.8%, n=301)" — 45k.
-> At 9k: "44.1% ... (95% CI 35.4%–53.1%, n=118)".
+> "84.5% of Red-flagged accounts went NPA within 8 months (95% CI 79.8%–88.2%, n=283)" — 45k, round 2.
+> At 9k (pre-round-2): "44.1% ... (95% CI 35.4%–53.1%, n=118)".
 
 **Why not "accuracy".** At 9k the model scores *below* the flag-nobody baseline on raw accuracy
 (96.3% vs 96.9%) — the cleanest possible demonstration of why the July 2026 "90% accuracy" claim
@@ -175,40 +198,42 @@ testable. DR-11 (bands strictly monotone Green < Amber < Red) passes **pooled an
 portfolios at 45k** (5/8 at 9k, where three portfolios' Red bands are simply too thin — 1, 3, 3
 accounts — to be statistically informative, not evidence the model fails there).
 
-**Per-portfolio AUC** (SD-D4/D5's grouped-LightGBM diagnostic, 45k, 3 seeds): 0.9018 / 0.9016 /
-0.8968 pooled; per portfolio 0.851–0.918, worst Retail-Unsecured (0.851), best Agri (0.918) — all
-eight clear the DR-06 floor of 0.78 on the point estimate. The more granular table below is from
-DM-2/DM-3's run at the pre-final-noise checkpoint (pooled AUC 0.927, before the borrower-
-heterogeneity addition that brought the shipped model to 0.902 — see §13); it is reported because
-it is the only per-portfolio breakdown this build actually measured cell-by-cell, and every
-portfolio's AUC only *improves* between 0.927 and the eventual 0.902-band model per the 0.851–
-0.918 range above, so nothing here overstates the shipped model:
+**Per-portfolio AUC — round 2's official measurement** (`validation/runners/01_holdout.py`,
+DR-06, 45k×48, seed 7 — the validation lane's own panel, independently generated from the main
+pipeline's, hence a slightly different pooled figure than §8's 0.902): pooled **0.8885**; every
+portfolio clears the DR-06 floor of 0.78 on the point estimate:
 
-| Portfolio | AUC (0.927 checkpoint) |
+| Portfolio | AUC (round 2, DR-06) |
 |---|---|
-| MSME-TL | 0.949 |
-| LAP | 0.946 |
-| Agri | 0.913 |
-| Housing | 0.905 |
-| Auto | 0.889 |
-| MSME-CC | 0.883 |
-| Education | 0.874 |
-| Retail-Unsecured | 0.809 |
+| Agri | 0.9069 |
+| Education | 0.8752 |
+| MSME-CC | 0.8724 |
+| Housing | 0.8659 |
+| MSME-TL | 0.8605 |
+| LAP | 0.8500 |
+| Retail-Unsecured | 0.8388 |
+| Auto | 0.8374 |
+
+(SD-D4/D5's earlier 3-seed, pre-round-2 diagnostic — pooled 0.9018/0.9016/0.8968, per portfolio
+0.851–0.918 — is superseded by the table above as the per-portfolio reference; it is not
+reproduced here to avoid two "current" tables.)
 
 **DR-12, literal vs CI-aware — the ruling this card records.** DR-12 (≥9/10 decile step-ups
 non-decreasing) is pre-registered on literal arithmetic and **fails at both sizes on the literal
-reading** (5/9 pooled at 9k, 5–7/9 pooled at 45k depending on the run) — not because the model
-doesn't rank risk, but because almost all realised risk concentrates in the top decile at this
-score's separation, leaving deciles 1–9 sitting at 0.0–1.8% where step-to-step ordering is
-statistical noise (one clear example: MSME-CC's 45k "reversal" was 0.0077→0.0076, one account
-across two 130-account cells whose Wilson intervals almost entirely overlap). A second,
-*reported-not-gated* diagnostic (`monotone_decile_step_fraction_ci`) counts a step-down against
-the model only when the two cells' 95% Wilson intervals are actually disjoint — i.e. only when
-the data can tell them apart. **Under that reading, every cell is 9/9 at both sizes: no
-statistically detectable decile reversal anywhere.** The gate itself stays on the literal
-pre-registered arithmetic (DM-2/3 explicitly declined to relax it unilaterally); this is recorded
-as an open ruling for the coordinator, not resolved by this card. See `export_demo.py::rank_order_violations`
-and `_decile_steps_ci` for the exact arithmetic and the reasoning comment beside it.
+reading** (5/9 pooled at 9k; **round 2's official 45k run: 5/9 pooled, 0.5556**) — not because the
+model doesn't rank risk, but because almost all realised risk concentrates in the top decile at
+this score's separation, leaving deciles 1–9 sitting at fractions of a percent where step-to-step
+ordering is statistical noise (one clear example from an earlier run: MSME-CC's 45k "reversal" was
+0.0077→0.0076, one account across two 130-account cells whose Wilson intervals almost entirely
+overlap). A second, *reported-not-gated* diagnostic (`monotone_decile_step_fraction_ci`) counts a
+step-down against the model only when the two cells' 95% Wilson intervals are actually disjoint —
+i.e. only when the data can tell them apart. **Under that reading, round 2's official run is 9/9 —
+literally 1.0000 — pooled AND in every one of the eight portfolios: no statistically detectable
+decile reversal anywhere.** The gate itself stays on the literal pre-registered arithmetic (DM-2/3
+explicitly declined to relax it unilaterally, and round 2 — the last tuning round — does not
+revisit that call either); this is recorded as an open ruling for the coordinator, not resolved by
+this card. See `export_demo.py::rank_order_violations` and `_decile_steps_ci` for the exact
+arithmetic and the reasoning comment beside it.
 
 ## 10. Cost-minimising thresholds
 
@@ -332,14 +357,28 @@ can and cannot be trusted to say:
   reached returns one canned response regardless of the request (`sandbox_fixture: true`,
   BR-6a) — nothing in this build has ever scored, thresholded, or banded a real bank record. See
   §16's provenance legend for exactly which numbers that flag touches and which it does not.
-- **DR-18 (cash-flow-family ablation ≥ 0.04 AUC) is unresolved.** SD-D4/D5's own quick diagnostic
-  measured **0.019** at a 7k-account sample — below the pre-registered floor, and flagged in
-  their report as "at risk". This card does not re-run the ablation; L8's `08_ablation` runner
-  owns the authoritative number, and until it reports, DR-18 should be treated as **not yet
-  demonstrated**, not as passing by omission.
-- **DR-12's literal-vs-CI-aware ruling (§9) is a recorded open question, not a resolution.** This
-  card states both readings and why the gap exists; it does not decide which one the submission
-  should lead with.
+- **DR-18 (cash-flow-family ablation ≥ 0.04 AUC) is measured and FAILS, deliberately not chased.**
+  Round 1's `08_ablation` measured 0.0099 [0.0043, 0.0156]; round 2's official rerun (same runner,
+  a freshly regenerated 9k×36 book) measured **0.001** [-0.0057, 0.0066] — both well below the
+  pre-registered 0.04 floor, confirming SD-D4/D5's own earlier quick diagnostic (~0.019, "at
+  risk"). Round 2 (the last tuning round) did not touch the generator or the label to move this
+  number: with nine feature families, the cash-flow signal is *shared* with "Demand vs collection"
+  (round 2's largest single-family driver, ΔAUC 0.018) and "Income & balance" (ΔAUC 0.0085) — all
+  three carry the same underlying "money stopped arriving" event from different angles — so
+  cash-flow's own marginal contribution, holding the other eight families fixed, is small even
+  though the *joint* early-warning families dominate the model's attribution (DR-15: the
+  days-past-due family, the leading alternative explanation, carries only 3.8% of attention at
+  10–12 months' lead this round — see §11). DR-18 stays a reported fail, honestly explained rather
+  than engineered around.
+- **DR-12's literal-vs-CI-aware ruling (§9) is a recorded open question, not a resolution — and
+  stays a reported fail both rounds.** Round 2's official 45k run: 5/9 pooled decile steps
+  non-decreasing (0.5556), in the same 5–7/9 range every earlier run has shown; every reversal
+  recorded is a same-magnitude, low-count cell whose two Wilson intervals overlap (§9's MSME-CC
+  example from an earlier run: 0.0077→0.0076, one account). Under the *reported, not gated*
+  CI-aware reading, round 2 clears **9/9 — literally 1.0000 — pooled and in every one of the eight
+  portfolios**: the reversals are within each pair's own confidence interval, not a real ranking
+  failure. The gate itself stays on the literal pre-registered arithmetic; this card states both
+  readings and does not decide which one the submission should lead with.
 - **No feature selection or hyperparameter search was run against the validation criteria.**
   `LGBMClassifier`'s parameters (§7) are the ones the generator/export lanes converged on during
   development; DR-01's ceiling exists specifically to make tuning-toward-separability visible as
@@ -395,3 +434,103 @@ contract's `provenance_source` enum has no fourth value. The full three-way deta
 parameter's own reasoning, survives in `thresholds.cost_params`/`thresholds.provenance` in the
 app-facing export (`app/public/demo_data.json`) — nothing is lost, only summarised for the
 contract.
+
+## 17. DM-8 round 2 — the last permitted tuning round
+
+The plan allows two model-tuning rounds. This is round 2. Everything below is what changed, what
+was tested and rejected, and the honest state of every criterion this round leaves it in — after
+this, per the plan, numbers are reported as they are, not chased further.
+
+**What changed (code):**
+
+1. **Elapsed-time feature banding (DR-14).** `months_since_moratorium_end` became DR-14's new
+   binding feature once round 1 (SD-D8) banded `vintage_months` into `vintage_band`. The same
+   fix — a bank-style bucket in place of the raw month counter, `vintage_band`'s precedent — is
+   applied via `export_demo.py::add_elapsed_time_bands` (mirrored in `rigor.py`, wired into
+   `validation/runners/_shared.py::prepare_features`), banding the raw column into `in
+   moratorium` / `0-6` / `7+` and moving the raw column to `DROP` (kept in the CSV). The cut is
+   `HUMAN`'s own existing reason-code threshold, not chosen to hit a CSI number.
+2. **Static-profile-subset ablation, tested and REJECTED (DR-19).** Dropping `constitution`,
+   `state`, `city_tier`, `nic_group`, `tenor_months`, `interest_rate_pa`, `secured` (`portfolio`
+   was never a candidate — it is the one-model-many-portfolios mandate's key) was measured on the
+   9k×36 book: pooled AUC **improved** (0.8568 → 0.8646, +0.0078) and pooled ECE improved
+   (0.0116 → 0.0092), and six of seven affected portfolios' AUC rose. But Retail-Unsecured's
+   per-portfolio AUC fell to **0.7375**, below the 0.78 guardrail (it was already marginal
+   pre-drop, at 0.7408, at this scale) — one floor breaking is enough per the brief's own rule.
+   The columns are **kept**; DR-19 is reported as a fail (§ below), unchanged in spirit from round
+   1, and the "fewer protected-attribute proxies" fairness argument this test hoped for does not
+   materialise this round.
+3. **DR-18 / DR-12 — no code change**, honest explanations only (§15, §9, §11).
+4. **Demo sample size.** `--demo-sample` default cut from 2,500 to **700** (`export_demo.py`).
+   Measured: 2,500 → 12.5 MB; the first candidate, 800, still landed at 4.08 MB because
+   stratified rounding samples slightly more than requested (810 accounts); 700 → 710 sampled →
+   **3.59 MB**, safely inside the app's 4 MB budget, stratified by portfolio × band exactly as
+   before.
+
+**A bug found in passing, and fixed as a precondition for an honest round-2 measurement.**
+`validation/runners/_shared.py::load_panel` caches its own 45k×48 panel under
+`data/validation_panel_cache/seed7_n45000_m48/` and never invalidates that cache when the
+generator changes underneath it. That cache was written **before** SD-D8's `vintage_band` commit
+— it carries `vintage_months` but not `vintage_band` at all — meaning round 1's official DR-01,
+DR-06, DR-08–DR-14 numbers (everything `01_holdout`/`06_stability` measure) were graded against a
+panel that predates the vintage fix, the msme_cc utilisation recalibration, the DPD-clip fix and
+the arrears-ladder cap. This explains the gap between round 1's validation-lane pooled AUC
+(0.8862) and the main pipeline's shipped 0.902 — they were never the same panel to begin with.
+Round 2 deletes `data/validation_panel_cache/` before running `validation.run` so every cache
+regenerates from the current generator; no generator or CAT/DROP code was touched to do this.
+
+**Round 2's honest DR-14 result.** Banding `months_since_moratorium_end` does not clear the 0.25
+floor: on a 9k×48 dev check (production OOT geometry, embargo gap = 12 months), the raw column's
+CSI (3.07) drops to **1.08** banded — a real ~65% reduction — but the pre-registered OOT split
+embargoes training to months ≤12 and tests on months ≥24, a structural 12-month gap that any
+account-age-correlated feature cannot survive at fine granularity. The same dev check found
+**`vintage_band` itself — round 1's supposed fix, unexercised in round 1's own measurement because
+of the stale-cache bug above — sitting at CSI ≈ 3.7,** far over the floor. Once the cache is
+fixed, round 2's official `validation.run` reports **DR-14 FAIL, max CSI 3.6344, binding feature
+`vintage_band`** (not `months_since_moratorium_end`, which no longer binds). This is reported
+as-is: a structural property of the pre-registered embargo-gap OOT split acting on any
+elapsed-time-correlated feature, not a defect in this round's fix, and not chased further.
+
+**The 26-criterion table, round 2 (`validation/report/report.json`, 2026-09-17):**
+
+16 pass, 6 report, **4 fail — the same four as round 1: DR-12, DR-14, DR-18, DR-19.**
+
+| ID | Status | Metric | Value |
+|---|---|---|---|
+| DR-01 | pass | grouped AUC | 0.8885 |
+| DR-02 | report | red-band precision @8m | 72.9% (n=11,657) |
+| DR-03 | pass | annual slippage | 3.31% |
+| DR-04 | report | label base rate (annual) | 3.63% |
+| DR-05 | pass | OOT/holdout AUC ratio | 1.0009 |
+| DR-06 | pass | per-portfolio AUC | worst Auto 0.8374, best Agri 0.9069 (§9) |
+| DR-07 | report | AUC by cut | 0.8724 |
+| DR-08 | pass | ECE | 0.0010 |
+| DR-09 | pass | per-cut ECE | all cells ≤ 0.04 |
+| DR-10 | pass | Δ Brier (cal − raw) | −0.000068 |
+| DR-11 | pass | band monotonicity | pooled + 8/8 portfolios |
+| **DR-12** | **fail** | monotone decile-step fraction | **0.5556** (literal); 1.0000 pooled + 8/8 CI-aware |
+| DR-13 | pass | score PSI | 0.0006 |
+| **DR-14** | **fail** | max feature CSI | **3.6344** (binding: `vintage_band`) |
+| DR-15 | pass | DPD-family attribution @10–12m | 3.81% (alt 20.92%) |
+| DR-16 | pass | permuted-label AUC | 0.5001 |
+| DR-17 | pass | availability-at-time manifest | complete, 62/62 |
+| **DR-18** | **fail** | ΔAUC, cash-flow family dropped | **0.0010** [-0.0057, 0.0066] vs 0.04 floor |
+| **DR-19** | **fail** | max ΔAUC gain from dropping any family | **0.0123** (family: Borrower profile, 18 cols) |
+| DR-20 | pass | seeds run | 5/5 |
+| DR-21 | pass | cross-seed AUC CI width | 0.0123 |
+| DR-22 | pass | \|ΔAUC\| at 2× base rate | 0.0019 |
+| DR-23 | pass | \|ΔAUC\| bureau missing | 0.0069 |
+| DR-24 | report | adverse-impact ratio (worst) | geography (region) 0.7198; constitution 0.7752, qualification 0.7772, promoter_age_group 0.9195 |
+| DR-25 | report | TPR gap (worst) | geography (region) 0.0992; constitution 0.0962, qualification 0.0215, promoter_age_group 0.0209 |
+| DR-26 | report | baseline ladder | DPD-only 0.6947 → scorecard 0.8569 → LightGBM 0.8885 (validation's own 45k panel); rigor.py's main-pipeline cross-check: logistic 0.873 → LightGBM 0.902 |
+
+**Runtimes (round 2, this machine):** `generate_data.py --n 45000 --months 48`: 9.3s ·
+`export_demo.py --demo-sample 700`: 10m35s (writes succeed, then exits 1 on its own DR-12
+assertion — expected, documented behaviour, not retried) · `rigor.py`: 12m00s ·
+`validation.run` (cache cleared first, so every panel regenerated from scratch): ~12m20s ·
+`pytest tests/ -q -m "not slow"`: 392 passed, 22 deselected, 76s ·
+`pytest validation/tests -q`: 65 passed, 17s.
+
+**Not chased, by design:** DR-12, DR-14, DR-18, DR-19 all stay reported fails. Every one has a
+pre-registered, honest explanation above and in §9/§11/§15 — none was moved by adjusting a
+threshold, the generator, or the label. This is the freeze point the plan calls for.

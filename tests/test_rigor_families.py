@@ -42,9 +42,19 @@ def test_no_column_is_left_unfamilied_against_the_written_panel():
 
 
 def test_every_familied_column_actually_exists_in_the_panel():
-    """The other direction: a typo in GROUPS would quietly contribute nothing."""
+    """The other direction: a typo in GROUPS would quietly contribute nothing.
+
+    DM-8 round 2: `months_since_moratorium_end_band` (and any future
+    `_ELAPSED_TIME_BANDS` entry) is not a generator column — `src/generator/**`
+    is frozen this round, so it is built post-hoc by
+    `rigor.add_elapsed_time_bands` from a real panel column instead. Those
+    derived names are the one allowed exception to "every familied column is a
+    real PANEL_COLUMN"; anything else is still a typo.
+    """
     familied = {f for feats in rigor.GROUPS.values() for f in feats}
-    assert familied <= set(PANEL_COLUMNS), sorted(familied - set(PANEL_COLUMNS))
+    derived = {f"{col}_band" for col in rigor._ELAPSED_TIME_BANDS}
+    unexplained = familied - set(PANEL_COLUMNS) - derived
+    assert not unexplained, sorted(unexplained)
 
 
 def test_no_column_belongs_to_two_families():
