@@ -1,0 +1,379 @@
+{
+ "channel_leads": {
+  "bounces": 4.0,
+  "cash_flow": 11.0,
+  "dpd": 3.0,
+  "utilisation": 10.0
+ },
+ "columns": [
+  "account_id",
+  "month_idx",
+  "date",
+  "sector",
+  "region",
+  "loan_type",
+  "segment",
+  "qualification",
+  "promoter_age_group",
+  "log_sanctioned",
+  "business_age_years",
+  "vintage_months",
+  "dpd",
+  "utilisation",
+  "inflow",
+  "gst_sales",
+  "txn_count",
+  "bounce",
+  "minbal_breach",
+  "adverse_remark",
+  "dpd_max_6m",
+  "times_late_6m",
+  "bounces_6m",
+  "minbal_breach_6m",
+  "util_avg_3m",
+  "util_max_6m",
+  "months_over_90pct_util_6m",
+  "inflow_trend_3m",
+  "inflow_vs_6m_avg",
+  "sales_trend_3m",
+  "txn_drop_flag",
+  "adverse_remark_6m",
+  "default_within_12m",
+  "labelable",
+  "months_to_npa"
+ ],
+ "default_rate": 0.031104773466680797,
+ "dtypes": {
+  "account_id": "str",
+  "adverse_remark": "int64",
+  "adverse_remark_6m": "int64",
+  "bounce": "int64",
+  "bounces_6m": "int64",
+  "business_age_years": "int64",
+  "date": "str",
+  "default_within_12m": "int64",
+  "dpd": "float64",
+  "dpd_max_6m": "float64",
+  "gst_sales": "float64",
+  "inflow": "float64",
+  "inflow_trend_3m": "float64",
+  "inflow_vs_6m_avg": "float64",
+  "labelable": "int64",
+  "loan_type": "str",
+  "log_sanctioned": "float64",
+  "minbal_breach": "int64",
+  "minbal_breach_6m": "int64",
+  "month_idx": "int64",
+  "months_over_90pct_util_6m": "int64",
+  "months_to_npa": "int64",
+  "promoter_age_group": "str",
+  "qualification": "str",
+  "region": "str",
+  "sales_trend_3m": "float64",
+  "sector": "str",
+  "segment": "str",
+  "times_late_6m": "int64",
+  "txn_count": "int64",
+  "txn_drop_flag": "int64",
+  "util_avg_3m": "float64",
+  "util_max_6m": "float64",
+  "utilisation": "float64",
+  "vintage_months": "int64"
+ },
+ "labelable_share": 0.6796352856918042,
+ "n_accounts": 9000,
+ "n_rows": 311367,
+ "numeric": {
+  "adverse_remark": {
+   "mean": 0.0032662420873117576,
+   "quantiles": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "std": 0.057057635334272584
+  },
+  "adverse_remark_6m": {
+   "mean": 0.013395767695356284,
+   "quantiles": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "std": 0.14443003201975682
+  },
+  "bounce": {
+   "mean": 0.04256070810329932,
+   "quantiles": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "std": 0.20186454425937475
+  },
+  "bounces_6m": {
+   "mean": 0.22001046995988657,
+   "quantiles": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "std": 0.52157492129094
+  },
+  "business_age_years": {
+   "mean": 6.041934437496588,
+   "quantiles": [
+    1.0,
+    3.0,
+    5.0,
+    8.0,
+    12.0
+   ],
+   "std": 4.38293583266344
+  },
+  "dpd": {
+   "mean": 0.33105274483166164,
+   "quantiles": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "std": 4.1721595952968
+  },
+  "dpd_max_6m": {
+   "mean": 0.33105563531138493,
+   "quantiles": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "std": 4.1721780215143776
+  },
+  "gst_sales": {
+   "mean": 186894.4738331294,
+   "quantiles": [
+    19432.600000000002,
+    40426.0,
+    92679.0,
+    209755.5,
+    433733.4
+   ],
+   "std": 303690.89185593225
+  },
+  "inflow": {
+   "mean": 162689.2713132734,
+   "quantiles": [
+    17421.0,
+    35938.5,
+    82262.0,
+    183961.5,
+    376882.8000000004
+   ],
+   "std": 258041.8806146579
+  },
+  "inflow_trend_3m": {
+   "mean": 0.0011246500110801722,
+   "quantiles": [
+    -0.1245,
+    -0.0579,
+    0.0,
+    0.0534,
+    0.1263
+   ],
+   "std": 0.11127966947222684
+  },
+  "inflow_vs_6m_avg": {
+   "mean": -0.003529426368240694,
+   "quantiles": [
+    -0.0866,
+    -0.0381,
+    0.0,
+    0.0341,
+    0.077
+   ],
+   "std": 0.07113067621881072
+  },
+  "log_sanctioned": {
+   "mean": 14.006913243339177,
+   "quantiles": [
+    12.599326245930362,
+    13.256647326060271,
+    14.01193673328311,
+    14.75887841167894,
+    15.40664918255557
+   ],
+   "std": 1.0964557686348841
+  },
+  "minbal_breach": {
+   "mean": 0.04697671879165101,
+   "quantiles": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "std": 0.21158900416425508
+  },
+  "minbal_breach_6m": {
+   "mean": 0.2462206977618052,
+   "quantiles": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "std": 0.520336043728919
+  },
+  "months_over_90pct_util_6m": {
+   "mean": 0.039349063966316274,
+   "quantiles": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "std": 0.3759576067957987
+  },
+  "sales_trend_3m": {
+   "mean": -0.0006172121644233333,
+   "quantiles": [
+    -0.1183,
+    -0.0561,
+    0.0,
+    0.0515,
+    0.1184
+   ],
+   "std": 0.1014449775928028
+  },
+  "times_late_6m": {
+   "mean": 0.016389020031024482,
+   "quantiles": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "std": 0.1948487194548782
+  },
+  "txn_count": {
+   "mean": 44.359010428208514,
+   "quantiles": [
+    18.0,
+    31.0,
+    44.0,
+    58.0,
+    70.0
+   ],
+   "std": 19.620018937846087
+  },
+  "txn_drop_flag": {
+   "mean": 0.0,
+   "quantiles": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "std": 0.0
+  },
+  "util_avg_3m": {
+   "mean": 0.45184791323422197,
+   "quantiles": [
+    0.2246,
+    0.3302,
+    0.4491,
+    0.5699,
+    0.6784400000000024
+   ],
+   "std": 0.17587121735134797
+  },
+  "util_max_6m": {
+   "mean": 0.4800219605802798,
+   "quantiles": [
+    0.2383,
+    0.351,
+    0.4765,
+    0.6053,
+    0.7203
+   ],
+   "std": 0.18710507994398376
+  },
+  "utilisation": {
+   "mean": 0.4526024334627626,
+   "quantiles": [
+    0.2241,
+    0.3296,
+    0.4489,
+    0.5708,
+    0.681
+   ],
+   "std": 0.17783504877594888
+  },
+  "vintage_months": {
+   "mean": 40.73506826349613,
+   "quantiles": [
+    17.0,
+    28.0,
+    41.0,
+    53.0,
+    64.0
+   ],
+   "std": 17.27882797994824
+  }
+ },
+ "shares": {
+  "loan_type": {
+   "CashCredit": 0.5448136764653929,
+   "TermLoan": 0.4551863235346071
+  },
+  "promoter_age_group": {
+   "30-40": 0.34177995741359873,
+   "40-50": 0.31388361643976403,
+   "50-60": 0.1621719706969589,
+   "60+": 0.07078463677910633,
+   "<30": 0.11137981867057202
+  },
+  "qualification": {
+   "Graduate": 0.4423847100045927,
+   "Professional": 0.15746691203627874,
+   "SchoolOnly": 0.0975376324401751,
+   "UnderGrad": 0.3026107455189535
+  },
+  "region": {
+   "Central": 0.07827740255068777,
+   "East": 0.14213773457045867,
+   "North": 0.24363211258739687,
+   "South": 0.25276281686883967,
+   "West": 0.28318993342261706
+  },
+  "sector": {
+   "Logistics": 0.07830630734792061,
+   "Manufacturing": 0.22315788121412994,
+   "Retail": 0.15817989703468896,
+   "Services": 0.24492319353046405,
+   "Trading": 0.29543272087279643
+  },
+  "segment": {
+   "Medium": 0.0277518169876705,
+   "Micro": 0.43393487428019023,
+   "Small": 0.5383133087321392
+  }
+ }
+}

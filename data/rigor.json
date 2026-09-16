@@ -1,57 +1,57 @@
 {
  "calibration": {
-  "brier_raw": 0.0102,
-  "brier_calibrated": 0.01,
+  "brier_raw": 0.0114,
+  "brier_calibrated": 0.0111,
   "reliability": [
+   {
+    "pred": 0.001,
+    "obs": 0.001,
+    "n": 9300
+   },
    {
     "pred": 0.002,
     "obs": 0.002,
-    "n": 9346
+    "n": 9299
    },
    {
-    "pred": 0.003,
-    "obs": 0.002,
-    "n": 9346
-   },
-   {
-    "pred": 0.003,
-    "obs": 0.003,
-    "n": 9346
-   },
-   {
-    "pred": 0.003,
-    "obs": 0.003,
-    "n": 9346
-   },
-   {
-    "pred": 0.003,
+    "pred": 0.002,
     "obs": 0.004,
-    "n": 9346
+    "n": 9299
    },
    {
     "pred": 0.004,
     "obs": 0.005,
-    "n": 9345
+    "n": 9300
+   },
+   {
+    "pred": 0.004,
+    "obs": 0.004,
+    "n": 9299
    },
    {
     "pred": 0.005,
-    "obs": 0.004,
-    "n": 9346
+    "obs": 0.006,
+    "n": 9299
    },
    {
-    "pred": 0.007,
+    "pred": 0.006,
     "obs": 0.007,
-    "n": 9346
+    "n": 9300
    },
    {
-    "pred": 0.011,
-    "obs": 0.013,
-    "n": 9346
+    "pred": 0.006,
+    "obs": 0.008,
+    "n": 9299
    },
    {
-    "pred": 0.273,
-    "obs": 0.273,
-    "n": 9346
+    "pred": 0.01,
+    "obs": 0.012,
+    "n": 9299
+   },
+   {
+    "pred": 0.282,
+    "obs": 0.289,
+    "n": 9300
    }
   ]
  },
@@ -59,59 +59,59 @@
   {
    "bucket": "1-3 mo",
    "shares": {
-    "Days-past-due / repayment": 42.8,
-    "Cash-flow (inflows / GST)": 15.1,
-    "Credit-limit utilisation": 13.8,
-    "Adverse filings": 23.7,
-    "Borrower profile": 4.6
+    "Days-past-due / repayment": 41.9,
+    "Cash-flow (inflows / GST)": 15.5,
+    "Credit-limit utilisation": 14.0,
+    "Adverse filings": 24.2,
+    "Borrower profile": 4.5
    }
   },
   {
    "bucket": "4-6 mo",
    "shares": {
-    "Days-past-due / repayment": 4.9,
-    "Cash-flow (inflows / GST)": 26.2,
+    "Days-past-due / repayment": 5.7,
+    "Cash-flow (inflows / GST)": 29.1,
     "Credit-limit utilisation": 22.6,
-    "Adverse filings": 38.0,
-    "Borrower profile": 8.2
+    "Adverse filings": 34.3,
+    "Borrower profile": 8.4
    }
   },
   {
    "bucket": "7-9 mo",
    "shares": {
-    "Days-past-due / repayment": 1.4,
-    "Cash-flow (inflows / GST)": 34.3,
-    "Credit-limit utilisation": 29.1,
-    "Adverse filings": 23.9,
-    "Borrower profile": 11.2
+    "Days-past-due / repayment": 1.7,
+    "Cash-flow (inflows / GST)": 38.2,
+    "Credit-limit utilisation": 29.8,
+    "Adverse filings": 18.4,
+    "Borrower profile": 11.9
    }
   },
   {
    "bucket": "10-12 mo",
    "shares": {
-    "Days-past-due / repayment": 1.8,
-    "Cash-flow (inflows / GST)": 43.2,
-    "Credit-limit utilisation": 38.1,
+    "Days-past-due / repayment": 2.1,
+    "Cash-flow (inflows / GST)": 44.7,
+    "Credit-limit utilisation": 36.2,
     "Adverse filings": 1.4,
-    "Borrower profile": 15.5
+    "Borrower profile": 15.7
    }
   }
  ],
  "out_of_time": {
   "train_window": "months 0-17",
   "test_window": "months 18+",
-  "auc": 0.968,
-  "ks": 0.87,
-  "grouped_auc": 0.947
+  "auc": 0.972,
+  "ks": 0.881,
+  "grouped_auc": 0.946
  },
  "baseline_ladder": [
   {
    "model": "Logistic regression (scorecard-style)",
-   "auc": 0.949
+   "auc": 0.945
   },
   {
    "model": "LightGBM (ours)",
-   "auc": 0.947
+   "auc": 0.946
   }
  ]
 }
