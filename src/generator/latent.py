@@ -114,6 +114,7 @@ class Population:
     npa_month: np.ndarray             # (N,) int, -1 when never
     severity: np.ndarray              # (N,) float, 0.0 when never
     onset: np.ndarray                 # (N,) int, 0 when never
+    silent: np.ndarray                # (N,) bool, SD-D4: defaults with no chain
 
     def __len__(self) -> int:
         return int(self.account_id.shape[0])
@@ -125,6 +126,7 @@ def draw_population(
     months: int,
     mix: PopulationMix,
     selected: dict[str, Portfolio] | None = None,
+    noise: bool = True,
 ) -> tuple[Population, list[Portfolio]]:
     """Draw the static book and decide who defaults, when and how steeply.
 
@@ -139,6 +141,11 @@ def draw_population(
         months: observation window ``M`` (bounds the NPA month).
         mix: shared category universes, scorecard and stress shape.
         selected: registry to draw from; ``None`` uses the full registry.
+        noise: SD-D4 master switch.  When True (the default, and what the
+            shipped panel uses) a per-portfolio share of the defenders of this
+            book go bad *silently*: no warning chain, the whole slide squeezed
+            into one or two months.  When False no account is silent and the
+            July 2026 fate draw is reproduced exactly.
 
     Returns:
         The population, and the portfolios in code order.
@@ -233,6 +240,24 @@ def draw_population(
     severity = np.where(is_defaulter, severity, 0.0)
     onset = np.where(is_defaulter, onset, 0)
 
+    # ---- SD-D4: the defaulters that arrive with no warning --------------- #
+    # Fraud, a death, a buyer who never paid, a job lost with no notice.  They
+    # are drawn from their OWN stream, so switching them off leaves every other
+    # stage bit-identical, and they change only the SHAPE of the slide — never
+    # who defaults, when, or the portfolio's realised rate.  This is the honest
+    # ceiling on how well any model can score this book.
+    silent = np.zeros(n_accounts, dtype=bool)
+    if noise:
+        silent_rng = stream(seed, "silent")
+        share = np.array([p.silent_share for p in portfolios])[portfolio_code]
+        silent = is_defaulter & (silent_rng.random(n_accounts) < share)
+        low, high = mix.silent_onset_bounds
+        compressed = silent_rng.integers(low, high + 1, size=n_accounts)
+        onset = np.where(silent, compressed, onset)
+        severity = np.where(
+            silent, np.maximum(severity, mix.silent_severity_floor), severity
+        )
+
     # ---- bureau file (7% of borrowers have none) ------------------------- #
     bureau = stream(seed, "bureau")
     score = np.clip(
@@ -267,6 +292,7 @@ def draw_population(
             npa_month=npa_month,
             severity=severity,
             onset=onset,
+            silent=silent,
         ),
         portfolios,
     )
@@ -382,6 +408,7 @@ def build_stress_path(
     severity: np.ndarray,
     months: int,
     mix: PopulationMix,
+    silent: np.ndarray | None = None,
 ) -> StressPath:
     """Expand each account's fate into a month-by-month stress intensity.
 
@@ -392,6 +419,10 @@ def build_stress_path(
         severity: ``(N,)`` steepness multiplier.
         months: observation window ``M``.
         mix: supplies the shared ``decline_*`` shape parameters.
+        silent: ``(N,)`` SD-D4 flag.  A silent defaulter does not ramp — it
+            stops.  Its one or two slide months sit at full stress instead of
+            at the foot of the ramp, so the account goes from clean to NPA with
+            nothing in between for an early-warning model to have seen.
 
     Returns:
         The ``(N, M)`` latent stress state.
@@ -405,6 +436,8 @@ def build_stress_path(
     in_slide = defaulting & (mtn > 0) & (mtn <= onset_col)
 
     progress = (onset_col - mtn) / onset_col           # 0 at onset -> ~1 at NPA
+    if silent is not None and silent.any():
+        progress = np.where(silent[:, None], 1.0, progress)
     decline = np.where(
         in_slide,
         np.minimum(

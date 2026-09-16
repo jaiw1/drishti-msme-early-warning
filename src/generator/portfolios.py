@@ -100,17 +100,50 @@ class ChannelParams:
     #: baseline operational-noise rates on a perfectly healthy account
     bounce_rate: float = 0.03
     minbal_rate: float = 0.04
+    #: SD-D4: a bounced instalment that is not cleared inside the month leaves
+    #: the account genuinely past due.  Decoupling `bounce` from `dpd`, as the
+    #: July build did, is what made "days past due > 0" a near-perfect
+    #: classifier on a synthetic book and a weak one in a real bank.
+    bounce_uncured_share: float = 0.55
+    bounce_dpd_ladder: tuple[float, ...] = (0.0, 16.0, 43.0, 68.0)
+
+    # ---- SD-D4: not every defaulter shows every link --------------------- #
+    #: probability that a given channel's stress response is visible at all on
+    #: a given defaulter.  A dark link is not a weaker signal — it is a
+    #: borrower whose trouble simply did not reach that instrument.
+    chain_link_visibility: float = 0.72
+    chain_link_strength_bounds: tuple[float, float] = (0.55, 1.50)
 
     # ---- transient stress on healthy accounts (hard negatives) ----------- #
-    transient_share: float = 0.18
+    #: share of NEVER-defaulting accounts given one recoverable episode.  It is
+    #: the single most important number in the file for how hard the book is:
+    #: an account that dips, part-pays, bounces once and recovers is
+    #: indistinguishable from an early-stage defaulter while it is happening.
+    transient_share: float = 0.22
     #: episode start is uniform on ``[start_lo, months + start_hi_offset)``
     transient_start_lo: int = 3
     transient_start_hi_offset: int = -6
-    transient_length_bounds: tuple[int, int] = (2, 5)
+    transient_length_bounds: tuple[int, int] = (2, 8)
     transient_util_mult: float = 1.25
     transient_util_bounds: tuple[float, float] = (0.0, 1.05)
     transient_inflow_mult: float = 0.75
     transient_bounce_rate: float = 0.3
+    # SD-D4: the episode also moves the portfolio's OWN first link, which is
+    # what makes it a hard negative rather than a wobble in a column nobody
+    # reads.  A share of episodes goes genuinely past due and then cures.
+    transient_collection_bounds: tuple[float, float] = (0.12, 0.65)
+    transient_arrears_share: float = 0.30
+    transient_arrears_ladder: tuple[float, ...] = (0.0, 22.0, 48.0, 71.0, 84.0)
+    transient_salary_miss_rate: float = 0.28
+    transient_income_mult: float = 0.70
+    transient_balance_mult: float = 0.55
+    transient_new_emi_rate: float = 0.16
+    #: the pre-SD-D4 episode population.  Used ONLY when the generator is run
+    #: with ``noise=False``, which exists so the equivalence suite can
+    #: reproduce the July 2026 MSME fingerprint exactly.  It is not a second
+    #: opinion about how many accounts wobble — the sourced numbers above are.
+    quiet_transient_share: float = 0.18
+    quiet_transient_length_bounds: tuple[int, int] = (2, 5)
 
     # ---- ordered deterioration (defaulters) ------------------------------ #
     # The *intensity* of the slide is the shared latent stress (see
@@ -164,7 +197,9 @@ class ChannelParams:
     collection_shortfall_gain: float = 0.62
     #: healthy-account collection noise (a late transfer, a part-payment)
     collection_noise_sd: float = 0.018
-    collection_short_rate: float = 0.03
+    collection_short_rate: float = 0.06
+    #: SD-D4: per-borrower depth of the shortfall, centred on 1
+    spine_strength_bounds: tuple[float, float] = (0.35, 1.65)
 
     # ---- balance (every portfolio) --------------------------------------- #
     balance_elasticity: float = 0.75
@@ -218,6 +253,8 @@ class ChannelParams:
     #: inside it and the signal would be structurally dead.
     renewal_lead_months: int = 18
     renewal_slip_gain: float = 0.85
+    #: SD-D4: renewals slip for reasons that are nothing to do with the crop
+    renewal_benign_slip_rate: float = 0.20
 
     # ---- moratorium (education) ------------------------------------------ #
     moratorium_end_bounds: tuple[int, int] = (-36, 30)
@@ -229,6 +266,45 @@ class ChannelParams:
     commute_share_of_emi: float = 0.30
     commute_share_sd: float = 0.12
     commute_stress_drop: float = 0.70
+
+    # ======================================================================= #
+    # SD-D4 — seasonal confounders and measurement noise
+    # ======================================================================= #
+    # The *shape* of each calendar effect is shared and lives in
+    # :func:`generator.channels.confounder_profile`; what a portfolio brings is
+    # how loudly it feels it.  Zero means the effect does not apply — a term
+    # loan has no revolving limit to draw down before Diwali.
+    season_inflow_amp: float = 0.12
+    season_util_amp: float = 0.0
+    season_salary_amp: float = 0.0
+    season_commute_amp: float = 0.0
+
+    #: months between the turnover month and the month the bank sees it
+    gst_lag_distribution: dict[int, float] = field(
+        default_factory=lambda: {0: 0.42, 1: 0.43, 2: 0.15})
+    #: rupees the demanded/collected amounts are rounded to
+    amount_rounding: float = 10.0
+    duplicate_batch_rate: float = 0.012
+    duplicate_batch_bounds: tuple[float, float] = (1.3, 1.9)
+    payment_reversal_rate: float = 0.015
+    dp_refresh_months: int = 3
+    dp_report_noise_sd: float = 0.07
+    inflow_idio_sd: float = 0.22
+    #: revolving limits only; a term loan has nothing to draw
+    utilisation_idio_sd: float = 0.17
+    salary_idio_sd: float = 0.11
+    salary_split_rate: float = 0.05
+    rental_idio_sd: float = 0.16
+    rental_late_rate: float = 0.12
+    harvest_yield_sd: float = 0.34
+    harvest_sale_slip_rate: float = 0.22
+    commute_idio_sd: float = 0.38
+    commute_zero_rate: float = 0.07
+    #: a carried collateral value is refreshed this often, and each refresh
+    #: carries an appraisal error.  Between refreshes the bank holds a STALE
+    #: number, so an LTV computed monthly is not a monthly measurement.
+    collateral_revaluation_months: int = 12
+    collateral_appraisal_error_sd: float = 0.09
 
 
 BASE_CHANNEL_PARAMS = ChannelParams()
@@ -243,6 +319,7 @@ CHANNEL_PARAM_SOURCES: dict[str, str] = {
     "rental_share_sd": "rental.share_sd",
     "rental_vacancy_rate": "rental.vacancy_rate",
     "harvest_miss_depth": "harvest.miss_depth",
+    "renewal_benign_slip_rate": "harvest.benign_slip_rate",
     "renewal_cycle_months": "harvest.renewal_month",
     "moratorium_end_bounds": "moratorium.end_month_bounds",
     "moratorium_post_end_months": "moratorium.post_end_stress_months",
@@ -259,6 +336,45 @@ CHANNEL_PARAM_SOURCES: dict[str, str] = {
     "salary_multiple_sd": "salary.multiple_sd",
     "salary_multiple_bounds": "salary.multiple_bounds",
     "salary_gap_threshold": "salary.gap_threshold",
+    # ---- SD-D4 ----------------------------------------------------------- #
+    "bounce_uncured_share": "arrears.bounce_uncured_share",
+    "collection_short_rate": "arrears.benign_part_payment_rate",
+    "spine_strength_bounds": "arrears.spine_strength_bounds",
+    "bounce_dpd_ladder": "arrears.bounce_dpd_ladder",
+    "chain_link_visibility": "chain_visibility.link_visibility",
+    "chain_link_strength_bounds": "chain_visibility.link_strength_bounds",
+    "transient_share": "noise.transient_stress_share",
+    "transient_length_bounds": "transient.length_months_bounds",
+    "transient_collection_bounds": "transient.collection_shortfall_bounds",
+    "transient_arrears_share": "transient.arrears_share",
+    "transient_arrears_ladder": "transient.arrears_ladder",
+    "transient_salary_miss_rate": "transient.salary_miss_rate",
+    "transient_income_mult": "transient.income_multiple",
+    "transient_balance_mult": "transient.balance_multiple",
+    "transient_new_emi_rate": "transient.new_emi_rate",
+    "season_inflow_amp": "noise.season_inflow_amplitude",
+    "season_util_amp": "noise.season_utilisation_amplitude",
+    "season_salary_amp": "noise.season_salary_amplitude",
+    "season_commute_amp": "noise.season_commute_amplitude",
+    "gst_lag_distribution": "measurement.gst_report_lag_distribution",
+    "amount_rounding": "measurement.amount_rounding_rupees",
+    "duplicate_batch_rate": "measurement.duplicate_batch_rate",
+    "duplicate_batch_bounds": "measurement.duplicate_batch_multiple_bounds",
+    "payment_reversal_rate": "measurement.payment_reversal_rate",
+    "dp_refresh_months": "measurement.drawing_power_refresh_months",
+    "dp_report_noise_sd": "measurement.drawing_power_noise_sd",
+    "inflow_idio_sd": "measurement.inflow_idiosyncratic_sd",
+    "utilisation_idio_sd": "measurement.utilisation_idiosyncratic_sd",
+    "salary_idio_sd": "measurement.salary_idiosyncratic_sd",
+    "salary_split_rate": "measurement.salary_split_credit_rate",
+    "rental_idio_sd": "measurement.rental_idiosyncratic_sd",
+    "rental_late_rate": "measurement.rental_late_rate",
+    "harvest_yield_sd": "measurement.harvest_yield_sd",
+    "harvest_sale_slip_rate": "measurement.harvest_sale_slip_rate",
+    "commute_idio_sd": "measurement.commute_idiosyncratic_sd",
+    "commute_zero_rate": "measurement.commute_zero_month_rate",
+    "collateral_revaluation_months": "measurement.collateral_revaluation_months",
+    "collateral_appraisal_error_sd": "measurement.collateral_appraisal_error_sd",
 }
 
 #: Every observation channel a portfolio can declare.  The first six are the
@@ -347,6 +463,10 @@ class Portfolio:
     risk_offset: float = 0.0
     #: the pre-registered plausibility band for this portfolio's annual rate
     default_rate_band: tuple[float, float] = (0.0, 1.0)
+    #: SD-D4: share of THIS portfolio's defaulters that arrive with no warning
+    #: chain at all — fraud, death, a sudden shock.  They are the honest
+    #: ceiling on how well any model can score this book.
+    silent_share: float = 0.0
 
     def __post_init__(self) -> None:
         unknown = set(self.channels) - set(ALL_CHANNELS)
@@ -403,7 +523,7 @@ _SHAPE_OVERRIDES: dict[str, dict[str, object]] = {
         "collection_shortfall_gain": 0.52,
         "bounce_slide_gain": 0.55,
         "inflow_elasticity": 0.45,
-        "transient_share": 0.16,
+        "quiet_transient_share": 0.16,
     },
     # Education: the moratorium end is the event; the borrower simply stops.
     "education": {
@@ -421,7 +541,7 @@ _SHAPE_OVERRIDES: dict[str, dict[str, object]] = {
         "collection_shortfall_gain": 0.70,
         "inflow_elasticity": 0.60,
         "util_lead_months": 11,
-        "transient_share": 0.24,
+        "quiet_transient_share": 0.24,
     },
     # Retail-unsecured: stacking starts early, the buffer is thin, and the
     # borrower walks away fastest of the eight.
@@ -431,7 +551,7 @@ _SHAPE_OVERRIDES: dict[str, dict[str, object]] = {
         "minbal_slide_gain": 0.55,
         "bounce_slide_gain": 0.60,
         "balance_elasticity": 0.95,
-        "transient_share": 0.22,
+        "quiet_transient_share": 0.22,
     },
     # LAP: secured and slow, but the rental dip and the LTV drift lead by a
     # long way because both are re-measured, not reported by the borrower.
@@ -480,6 +600,8 @@ def _build_registry() -> dict[str, Portfolio]:
             population=PortfolioPopulation.from_sources(key),
             risk_offset=float(sources.value(f"portfolios.{key}.risk_offset")),
             default_rate_band=(float(band[0]), float(band[1])),
+            silent_share=float(
+                sources.value(f"portfolios.{key}.noise.silent_default_share")),
         )
     return built
 
@@ -611,6 +733,12 @@ class PopulationMix:
         default_factory=lambda: float(sources.value("shared.bureau.stress_drop")))
     bureau_report_lag_months: int = field(
         default_factory=lambda: int(sources.value("shared.bureau.report_lag_months")))
+    #: SD-D4: a bureau pull is a paid enquiry run on a cycle, so between pulls
+    #: the bank carries the score it last saw
+    bureau_refresh_months: int = field(
+        default_factory=lambda: int(sources.value("shared.bureau.refresh_months")))
+    bureau_report_noise_sd: float = field(
+        default_factory=lambda: float(sources.value("shared.bureau.report_noise_sd")))
 
     kharif_harvest_months: tuple[int, ...] = field(
         default_factory=lambda: tuple(sources.value("shared.seasonality.kharif_harvest_months")))
@@ -623,6 +751,44 @@ class PopulationMix:
         default_factory=lambda: float(sources.value("shared.balance.months_of_emi_sd")))
     minimum_balance: float = field(
         default_factory=lambda: float(sources.value("shared.balance.minimum_balance")))
+
+    # ---- SD-D4: the shared half of the realism block ---------------------- #
+    #: a silent defaulter's whole slide is squeezed into this many months, so
+    #: the chain has no room to lead the arrears
+    silent_onset_bounds: tuple[int, int] = field(
+        default_factory=lambda: tuple(
+            sources.value("shared.silent_default.onset_months_bounds")))
+    silent_severity_floor: float = field(
+        default_factory=lambda: float(
+            sources.value("shared.silent_default.severity_floor")))
+    #: book-wide target the eight per-portfolio silent shares weight to
+    silent_book_share: float = field(
+        default_factory=lambda: float(sources.value("shared.silent_default.share")))
+
+    #: statement-feed gaps: MAR by construction, drawn from their own stream
+    statement_gap_share: float = field(
+        default_factory=lambda: float(
+            sources.value("shared.missingness.statement_gap_share")))
+    statement_gap_length_bounds: tuple[int, int] = field(
+        default_factory=lambda: tuple(
+            sources.value("shared.missingness.statement_gap_length_bounds")))
+
+    #: calendar months each confounder shape fires in
+    festival_months: tuple[int, ...] = field(
+        default_factory=lambda: tuple(sources.value("shared.confounders.festival_months")))
+    post_festival_months: tuple[int, ...] = field(
+        default_factory=lambda: tuple(
+            sources.value("shared.confounders.post_festival_months")))
+    quarter_end_months: tuple[int, ...] = field(
+        default_factory=lambda: tuple(
+            sources.value("shared.confounders.quarter_end_months")))
+    fiscal_year_start_months: tuple[int, ...] = field(
+        default_factory=lambda: tuple(
+            sources.value("shared.confounders.fiscal_year_start_months")))
+    monsoon_months: tuple[int, ...] = field(
+        default_factory=lambda: tuple(sources.value("shared.confounders.monsoon_months")))
+    bonus_months: tuple[int, ...] = field(
+        default_factory=lambda: tuple(sources.value("shared.confounders.bonus_months")))
 
     # ---- latent-risk scorecard (who eventually defaults) ----------------- #
     #: static profile only WEAKLY tilts the odds — the irreducible-randomness

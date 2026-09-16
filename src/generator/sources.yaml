@@ -150,6 +150,36 @@ book:
     retrieved_on: "2026-09-16"
     confidence: assumed
 
+  annual_slippage_band:
+    value: [0.03, 0.05]
+    source: >-
+      The whole book's 12-month label rate, pre-registered as criterion DR-03
+      in validation/criteria.yaml and as gate G2 in the build plan, both
+      committed before any result existed. It lives here so the generator can
+      ASSERT it in-script (plan SD-D5) against the same number the validation
+      pack gates on, instead of against a constant copied into a test.
+    url: "none"
+    retrieved_on: "2026-09-16"
+    confidence: assumed
+
+  sma2_to_npa_event_ratio_band:
+    value: [1.0, 8.0]
+    source: >-
+      Plausible range for how much more OFTEN an account enters SMA-2 than it
+      goes NPA, per unit of time. The two labels carry different windows (6
+      months and 12), so the raw rates are not comparable; the ratio asserted
+      is (sma2_within_6m / 6) divided by (default_within_12m / 12). The floor
+      is 1.0 because a book cannot reach NPA more often than it reaches the
+      61-90 bucket on the way — most SMA-2 cures. IDBI reported SMA-to-standard
+      advances of 1.20% at Mar-2026 (a STOCK, all of SMA-0/1/2) against a 0.63%
+      annual slippage ratio (a FLOW): with an SMA-2 dwell of one to two months,
+      that implies entries into SMA-2 several times more frequent than
+      slippages. The band is deliberately wide; it is a sanity check, not a
+      target, and the realised ratio is REPORTED rather than tuned to.
+    url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+    retrieved_on: "2026-09-16"
+    confidence: low
+
   mix_shrinkage_lambda:
     value: 0.60
     source: >-
@@ -384,6 +414,27 @@ shared:
       url: "none"
       retrieved_on: "2026-09-16"
       confidence: assumed
+    refresh_months:
+      value: 4
+      source: >-
+        SD-D4. A lender does not pull a bureau report every month on a
+        performing account — a portfolio-monitoring pull is a paid enquiry, run
+        on a cycle or on a trigger. Between pulls the bank carries the SCORE IT
+        LAST SAW, so a monthly `bureau_score` column is a step function, not a
+        monthly measurement. Modelling it as fresh every month is one of the
+        quiet ways a synthetic panel flatters a model.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    report_noise_sd:
+      value: 11.0
+      source: >-
+        SD-D4. Points of score movement between pulls that have nothing to do
+        with this lender's account: a new enquiry, a card utilisation swing, a
+        settled dispute, a different bureau's model version.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
 
   seasonality:
     kharif_harvest_months:
@@ -477,6 +528,548 @@ shared:
         Average-monthly-balance requirement on a public-sector savings account,
         typically 1,000 to 3,000 rupees outside premium variants; breaching it
         is the `minbal_breach` event for the salaried portfolios.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+
+  # ---------------------------------------------------------------------------
+  # SD-D4 — the population a real book has that a clean simulator does not.
+  #
+  # Four families, all switchable together by GeneratorConfig(noise=False):
+  #   silent_default  the defaulters who show no warning chain at all
+  #   transient       recoverable stress on healthy accounts (hard negatives)
+  #   confounders     calendar effects that are not stress
+  #   measurement     how the bank's instruments mis-report what is there
+  #   missingness     what the bank simply does not have that month
+  #
+  # Almost every number here is `assumed`: no bank publishes how often its
+  # borrowers part-pay by accident, and no regulator publishes the share of
+  # NPAs that arrive with no warning. The shares are set to the levels credit
+  # practitioners describe and are recorded as judgement, not as evidence.
+  # ---------------------------------------------------------------------------
+  silent_default:
+    definition:
+      value: "a defaulter whose observation channels stay healthy until 1-2 months before NPA"
+      source: >-
+        Fraud and fund diversion, the death or hospitalisation of the earning
+        member, the sudden loss of a single large buyer, a job loss with no
+        notice: events that end an account's ability to pay without a preceding
+        deterioration the bank could have watched. RBI's own early-warning
+        framework exists because a share of NPAs does NOT announce itself, and
+        a synthetic book where every defaulter shows every link of the chain is
+        a book on which any model looks superhuman.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    share:
+      value: 0.08
+      source: >-
+        Book-wide share of defaulters with no usable warning chain. Set at the
+        plan's 8%; the per-portfolio shares below are weighted to it. No public
+        figure exists for the "no prior warning" share of slippages — banks
+        publish SMA ageing, not the share of NPAs that never passed through
+        SMA-1 with a visible cash-flow cause.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    onset_months_bounds:
+      value: [1, 2]
+      source: >-
+        How long the compressed slide lasts. 1 month is a true silent default
+        (nothing moves before the payment stops); 2 is a fast one. Drawn
+        uniformly, so the median silent defaulter's chain leads days-past-due
+        by nothing at all.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    severity_floor:
+      value: 1.15
+      source: >-
+        A silent default is steep by construction — the borrower stops, rather
+        than slides — so its latent severity is floored above the population
+        mean. It changes how hard the last two months look, never whether the
+        account defaults.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+
+  arrears:
+    bounce_uncured_share:
+      value: 0.55
+      source: >-
+        Share of bounced instalments that are still unpaid at month end, and so
+        leave the account days past due in the bank's own books. NPCI's NACH
+        statistics show debit return rates of roughly a quarter to a third of
+        transactions by count; most are re-presented and many clear within
+        days, but the rest carry into the next cycle. This is the reason
+        "the account is late" is a WEAK signal in a real Indian retail book and
+        a near-perfect one in a clean simulator: RBI's SMA-0 bucket (1-30 DPD)
+        is heavily populated by accounts that are not deteriorating at all.
+      url: "https://www.npci.org.in/what-we-do/nach/product-statistics"
+      retrieved_on: "2026-09-16"
+      confidence: low
+      note: >-
+        The return statistics are published; the split between "cleared on
+        re-presentation inside the month" and "still short at month end" is our
+        judgement, hence `low`.
+    benign_part_payment_rate:
+      value: 0.06
+      source: >-
+        SD-D4. Probability that a healthy month's collection falls short for a
+        reason that is not distress: a part-payment, an insurance or fee debit
+        that ate the standing instruction, a transfer initiated on the due date
+        that settled the next working day. Together with
+        measurement.payment_reversal_rate this is why a bank's own
+        collection-ratio series is not a clean stress signal, and it was 3% in
+        the July 2026 build — half of what a book with a quarter of its NACH
+        debits returning at first presentation would show.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    spine_strength_bounds:
+      value: [0.35, 1.65]
+      source: >-
+        SD-D4. How deeply a GIVEN defaulter's shortfall bites, as a multiple of
+        the portfolio's collection elasticity — drawn per borrower and centred
+        on 1, so the median defaulter part-pays exactly as deeply as before and
+        the spread around them is real. The shared spine is never switched OFF
+        the way a product channel can be (shared.chain_visibility), because
+        money not arriving is the definition of the event; but a borrower who
+        pays in full until the month they stop, and one who pays 60% for a
+        year, are both real and the panel had only the second kind.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    bounce_dpd_ladder:
+      value: [0.0, 16.0, 43.0, 68.0]
+      source: >-
+        Days past due at month end after a run of one, two or three
+        consecutive uncured instalment failures — SMA-0, SMA-1, SMA-2. The
+        ladder is clipped at three: a performing account that has missed four
+        consecutive instalments is not a performing account, and the panel's
+        row filter would drop it at 90 days anyway.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+
+  chain_visibility:
+    link_visibility:
+      value: 0.72
+      source: >-
+        Probability that a GIVEN link of a given defaulter's chain moves at all.
+        The July 2026 panel — and SD-D3's eight-portfolio extension of it — had
+        every defaulter showing EVERY link: turnover fell AND the limit crept up
+        AND the collateral slipped AND the salary gapped, all coherently, all
+        driven by one number. Real deterioration is not like that. A trader's
+        turnover collapses while the promoter's salary account keeps ticking; a
+        landlord's rent keeps arriving while the business behind the LAP dies; a
+        farmer's KCC renewal slips while the crop receipt is fine because the
+        problem was a medical bill. Coherence across ten instruments is what
+        makes a synthetic book separable at 0.97 when published bank
+        early-warning models land near 0.81.
+        This is the graded version of the silent-defaulter bucket: 8% of
+        defaulters show NO link, and of the rest, each individual link is dark
+        for about a fifth of them.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    link_strength_bounds:
+      value: [0.55, 1.50]
+      source: >-
+        How hard a VISIBLE link responds, as a multiple of the portfolio's own
+        elasticity. Drawn per account per channel, so two defaulters under the
+        same latent stress deteriorate at different depths in different
+        instruments. Centred slightly above 1 so the median visible link is
+        about as deep as it was before this heterogeneity existed.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    unloaded_channels:
+      value: ["repayment", "moratorium"]
+      source: >-
+        Channels the visibility draw does NOT touch. Days-past-due, bounces and
+        min-balance breaches are arithmetic consequences of money not arriving,
+        not a separate instrument that can be dark; the education moratorium is
+        a contractual fact, not an observation of stress. The shared spine
+        (collection ratio, balance, bureau score) is likewise always visible —
+        it is what a single model leans on when a product's own instrument is
+        quiet, and the whole "one holistic model" argument rests on it.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+
+  transient:
+    length_months_bounds:
+      value: [2, 8]
+      source: >-
+        Length of a recoverable stress episode on a healthy account: a delayed
+        receivable, a hospital bill, a customer who paid two months late, a
+        month between jobs. Drawn uniformly on [lo, hi).
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    collection_shortfall_bounds:
+      value: [0.12, 0.65]
+      source: >-
+        How much of the demand an account in a transient episode fails to pay.
+        It overlaps the range a real defaulter's shortfall passes through,
+        which is the point: a part-paid month does not tell you which of the
+        two you are looking at.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    arrears_share:
+      value: 0.30
+      source: >-
+        Share of transient episodes that go past due rather than merely thin.
+        These are the accounts that cure: they reach SMA-1 or SMA-2 and come
+        back. IDBI reported SMA-to-standard-advances of 1.20% at Mar-2026
+        against a 0.63% slippage ratio, i.e. roughly half of the stock visible
+        in SMA does not become NPA within the year.
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: low
+      note: >-
+        The IDBI figures are real; reading a cure rate off a stock ratio and a
+        flow ratio is our inference, so this is `low`, not `medium`.
+    arrears_ladder:
+      value: [0.0, 22.0, 48.0, 71.0, 84.0]
+      source: >-
+        Days past due by month inside an episode that goes into arrears. The
+        account cures the month the episode ends — which is what makes these
+        rows hard negatives rather than mislabelled positives. Capped below 90
+        so a cured account is never silently dropped from the panel by the
+        still-standard row filter.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    salary_miss_rate:
+      value: 0.28
+      source: "Probability a salaried borrower's credit is missed in a month of transient stress."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    income_multiple:
+      value: 0.70
+      source: >-
+        Multiplier on the portfolio's income instrument (salary, rent, crop
+        receipt, commute spend) during an episode: the same direction a real
+        slide moves, at a depth a real slide passes through.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    balance_multiple:
+      value: 0.55
+      source: "Multiplier on the CASA balance during an episode — the buffer is spent, then rebuilt."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    new_emi_rate:
+      value: 0.16
+      source: >-
+        Probability per episode-month that a borrower under transient stress
+        takes another lender's instalment — the same behaviour a sliding
+        borrower shows, on an account that recovers.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+
+  confounders:
+    festival_months:
+      value: [10, 11]
+      source: >-
+        Navratri-Dussehra-Diwali fall in the October-November window and carry
+        the retail and trading year: sales, bonuses and household spending all
+        peak, and none of it is stress.
+      url: "https://www.rbi.org.in/Scripts/AnnualReportPublications.aspx"
+      retrieved_on: "2026-09-16"
+      confidence: low
+      note: >-
+        The festival window is not in dispute; we cite RBI's annual report
+        series because its seasonality commentary is where a reviewer would go
+        to check it, but we could not open a specific page, so `low`.
+    post_festival_months:
+      value: [12, 1]
+      source: >-
+        The lull after the festival build-up: inventories are run down, the
+        trade credit extended in October comes due, and turnover falls below
+        its own six-month average without anything having gone wrong.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    quarter_end_months:
+      value: [3, 6, 9, 12]
+      source: >-
+        Indian financial quarters end in June, September, December and March.
+        Collections are pushed and limits are dressed down at quarter end,
+        March above all.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    fiscal_year_start_months:
+      value: [4]
+      source: >-
+        The Indian financial year starts in April; the quarter-end push
+        reverses and turnover drops back.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    monsoon_months:
+      value: [7, 8]
+      source: >-
+        The south-west monsoon slows construction, logistics and discretionary
+        travel across most of the country.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    bonus_months:
+      value: [4, 10]
+      source: >-
+        Annual increments and arrears land with the April payroll; the
+        statutory bonus is customarily paid before Diwali. Both make a salary
+        credit spike and then fall back, which reads as a salary gap two months
+        later and is not one.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+
+  measurement:
+    gst_report_lag_distribution:
+      value: {0: 0.42, 1: 0.43, 2: 0.15}
+      source: >-
+        Months between a turnover month and the bank seeing it. GSTR-3B for a
+        month is due the following month, and taxpayers under the QRMP scheme
+        (turnover up to 5 crore, which is most of an MSME book) file quarterly
+        and so surface up to two months late.
+      url: "https://www.gst.gov.in/help/returns"
+      retrieved_on: "2026-09-16"
+      confidence: low
+      note: >-
+        The filing calendar is factual; the split across 0/1/2 months is our
+        judgement about when a lender actually pulls the return.
+    amount_rounding_rupees:
+      value: 10.0
+      source: >-
+        Demanded and collected amounts are reported to the rupee in core
+        banking but reach a downstream mart rounded; rounding to the nearest
+        ten removes the last digit of a signal that no analyst would trust.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    duplicate_batch_rate:
+      value: 0.012
+      source: >-
+        Probability that a month's transaction count is inflated by a
+        re-posted or double-counted batch. Duplicate postings are routine in
+        statement feeds and are exactly the artefact a `txn_drop_flag` style
+        rule mistakes for behaviour.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    duplicate_batch_multiple_bounds:
+      value: [1.3, 1.9]
+      source: "How much a duplicated batch inflates that month's transaction count."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    payment_reversal_rate:
+      value: 0.045
+      source: >-
+        Probability that a month's collection is reversed and re-presented: an
+        NACH mandate that failed on the due date, a cheque returned and cleared
+        next month, a transfer that landed after the cut-off. NPCI's own
+        monthly NACH statistics show debit RETURN rates on the order of a
+        quarter to a third of transactions by count — most of which are
+        re-presented and cleared within days, so only a minority crosses a
+        month boundary and reaches the panel. The account was never in trouble;
+        the month looks like a part-payment anyway, and this is the reason
+        `collection_ratio` cannot be read as a clean stress signal.
+      url: "https://www.npci.org.in/what-we-do/nach/product-statistics"
+      retrieved_on: "2026-09-16"
+      confidence: low
+      note: >-
+        The NACH return statistics are published and real; the step from
+        "returned at first presentation" to "still short at month end" is our
+        judgement, which is why this is `low` and not `medium`.
+    inflow_idiosyncratic_sd:
+      value: 0.22
+      source: >-
+        SD-D4. Log-scale month-to-month dispersion of a borrower's BANKED
+        INFLOW that has nothing to do with distress. The July 2026 simulator
+        gave a healthy account an AR(1) conduct wobble of about five percent,
+        which describes a business whose monthly turnover never moves — no MSME
+        is like that. Receivables land in clumps, one large invoice shifts a
+        month, a customer pays by cheque instead of NEFT, a partner's current
+        account takes the collection instead. A quarter of a log point is a
+        conservative reading of what a real current-account turnover series
+        does, and it is the reason `inflow_vs_6m_avg` cannot be read as a
+        stress signal on its own.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    utilisation_idiosyncratic_sd:
+      value: 0.17
+      source: >-
+        SD-D4. Log-scale month-to-month dispersion of drawn balance on a
+        REVOLVING limit — cash credit, overdraft, KCC — outside any stress. A
+        limit is drawn and swept as the operating cycle demands: a stock
+        purchase takes it to the drawing power, a receivable clears it down.
+        The July build let healthy utilisation move about five percent a month,
+        which is a term loan's behaviour, not a working-capital limit's.
+        Portfolios with no revolving limit carry 0.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    drawing_power_refresh_months:
+      value: 3
+      source: >-
+        SD-D4. A drawing power is recomputed from the borrower's stock and
+        book-debt statement, which is submitted monthly in the sanction letter
+        and quarterly in practice; between submissions the bank carries the
+        last computed figure, and many branches simply hold a flat margin on
+        the limit. The July build recomputed it every month from the true
+        latent stress, which made it an instrument no bank actually has.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    drawing_power_noise_sd:
+      value: 0.07
+      source: >-
+        SD-D4. Dispersion of a computed drawing power around the value the
+        stock actually supports: valuations of inventory and of book debts are
+        the borrower's own numbers, filed on the borrower's own schedule.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    salary_idiosyncratic_sd:
+      value: 0.11
+      source: >-
+        Month-to-month variation in a salary credit that is nothing to do with
+        distress: variable pay, overtime, reimbursements, a 31-day payroll.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    salary_split_credit_rate:
+      value: 0.05
+      source: >-
+        Probability a month's pay arrives in two parts, or lands on the 1st of
+        the next month — the credit the bank sees is short and the next one is
+        long, with nothing wrong.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    rental_idiosyncratic_sd:
+      value: 0.16
+      source: "Rent paid partly in cash, revised mid-tenancy, or netted against a repair."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    rental_late_rate:
+      value: 0.12
+      source: >-
+        Probability a tenant pays late enough to land in the next month, so the
+        landlord's account shows a blank month and then a double one.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    harvest_yield_sd:
+      value: 0.34
+      source: >-
+        Log-scale dispersion of a farmer's crop-year receipt around their own
+        norm: yield varies with rainfall and pests, and price varies with the
+        mandi. Indian crop yields routinely move 20-40% year on year without a
+        loan going bad, which is why an unadjusted crop receipt is a poor
+        warning signal and why `crop_receipt_vs_norm` must be read against a
+        noisy norm rather than a clean one.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    harvest_sale_slip_rate:
+      value: 0.22
+      source: >-
+        Probability that a crop year's sale, and the credit it raises, lands a
+        month later than the calendar says — a delayed mandi arrival, a
+        procurement queue, or produce held back for a better price.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    commute_idiosyncratic_sd:
+      value: 0.38
+      source: >-
+        Fuel and toll spend on a card is one of the noisiest series a bank
+        holds: it moves with travel, with paying cash at the pump, and with who
+        in the household filled the tank.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    commute_zero_month_rate:
+      value: 0.07
+      source: "Probability a month shows no card-visible fuel spend at all."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    collateral_revaluation_months:
+      value: 12
+      source: >-
+        How often the carried collateral value is refreshed. RBI's IRAC norms
+        require immovable property held as security to be valued at least once
+        every three years for non-NPA accounts; lenders in practice refresh
+        more often on a live retail book, but never monthly. Between
+        revaluations the bank carries a STALE number, which is why an LTV
+        computed monthly is not a monthly measurement.
+      url: "https://www.rbi.org.in/Scripts/BS_ViewMasCirculardetails.aspx"
+      retrieved_on: "2026-09-16"
+      confidence: low
+      note: >-
+        The three-year IRAC floor is real; 12 months is our reading of retail
+        practice and is the number the generator uses.
+    collateral_appraisal_error_sd:
+      value: 0.09
+      source: >-
+        Dispersion of a property or vehicle valuation around the value that
+        would actually be realised. Two empanelled valuers on the same asset
+        routinely differ by a tenth.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+
+  missingness:
+    statement_gap_share:
+      value: 0.08
+      source: >-
+        Share of accounts with a gap in the statement feed somewhere in the
+        window: a consent lapse on the account-aggregator side, a failed
+        overnight pull, a customer who banks elsewhere for a while. The gap is
+        drawn independently of the borrower's condition — it is
+        missing-at-random by construction, and a test asserts it stays that way.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    statement_gap_length_bounds:
+      value: [1, 3]
+      source: "Length of one gap, in months; drawn uniformly on [lo, hi)."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    salary_channel_rule:
+      value: "self-employed"
+      source: >-
+        Inside a portfolio that carries a salary channel, a borrower whose
+        occupation is not Salaried has no salary credit to observe: a
+        self-employed home-loan borrower is underwritten on ITRs and business
+        banking, not on payroll. This is MAR, not MCAR — it depends on the
+        observed `sector` column, which the model can see — and it is the
+        realistic reason a channel goes dark for a whole borrower rather than
+        for a month.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    gst_channel_rule:
+      value: "individual"
+      source: >-
+        Inside a portfolio that carries a GST channel, an Individual borrower
+        files no return (see constitutions.CONSTITUTION_WITHOUT_GST). LAP is
+        where this bites: about two in five LAP borrowers are individuals.
       url: "none"
       retrieved_on: "2026-09-16"
       confidence: assumed
@@ -598,6 +1191,87 @@ portfolios:
       url: "none"
       retrieved_on: "2026-09-16"
       confidence: assumed
+    measurement:
+      inflow_idiosyncratic_sd:
+        value: 0.26
+        source: >-
+          SD-D4, portfolio override of
+          shared.measurement.inflow_idiosyncratic_sd. A trading or manufacturing
+          current account's turnover lands in clumps: one large invoice, a
+          cheque instead of an NEFT, a partner's account taking the collection.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      utilisation_idiosyncratic_sd:
+        value: 0.17
+        source: >-
+          SD-D4, portfolio override. A cash-credit limit is drawn to the drawing
+          power for a stock purchase and swept when the receivable clears; a
+          fifth of the limit a month is normal.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    noise:
+      silent_default_share:
+        value: 0.07
+        source: >-
+          Share of THIS portfolio's defaulters that arrive with no warning
+          chain. Fund diversion and the sudden loss of a single large buyer are
+          the classic no-warning cash-credit failures: the operating account
+          looks normal right up to the month the interest is not serviced. The
+          eight shares are weighted by account_share to the book-wide
+          shared.silent_default.share.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      transient_stress_share:
+        value: 0.24
+        source: >-
+          Share of this portfolio's never-defaulting accounts that pass through
+          one recoverable stress episode inside the observation window. A
+          working-capital account under a delayed receivable looks exactly like
+          one under a failing business for two or three months, and usually is
+          not. The eight weight to roughly 22% of the book.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_inflow_amplitude:
+        value: 0.17
+        source: >-
+          Amplitude of the calendar effect on this portfolio's banked inflow, as
+          a fraction of the healthy level at the peak of the shape (festival up,
+          post-festival lull down, quarter-end push up, April drop, monsoon
+          soft; for the KCC book the shape follows the crop calendar instead).
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_utilisation_amplitude:
+        value: 0.11
+        source: >-
+          Amplitude of the calendar effect on credit-limit utilisation: limits
+          are drawn ahead of the festival season and dressed down at quarter
+          end. A portfolio with no revolving limit carries 0.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_salary_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the bonus/increment effect on the salary credit. It
+          matters out of proportion to its size, because a spike in April or
+          October makes the trailing six-month average high and every later
+          month read short.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_commute_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the calendar effect on card-visible fuel and toll spend:
+          festival travel up, monsoon down.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
     channels:
       value: ["utilisation", "cash_flow", "gst", "transactions", "repayment",
               "adverse", "drawing_power"]
@@ -697,6 +1371,84 @@ portfolios:
       url: "none"
       retrieved_on: "2026-09-16"
       confidence: assumed
+    measurement:
+      inflow_idiosyncratic_sd:
+        value: 0.26
+        source: >-
+          SD-D4, portfolio override of
+          shared.measurement.inflow_idiosyncratic_sd. Same borrowers as the
+          cash-credit book, same lumpy turnover.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      utilisation_idiosyncratic_sd:
+        value: 0.06
+        source: >-
+          SD-D4, portfolio override. A term loan has nothing to draw: its
+          'utilisation' is outstanding over sanction, which moves with
+          amortisation and arrears, not with the operating cycle. Almost all of
+          the July build's stability was correct here.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    noise:
+      silent_default_share:
+        value: 0.07
+        source: >-
+          Share of THIS portfolio's defaulters that arrive with no warning
+          chain. Same causes as the cash-credit book; a term loan simply shows
+          them one link later. The eight shares are weighted by account_share to
+          the book-wide shared.silent_default.share.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      transient_stress_share:
+        value: 0.22
+        source: >-
+          Share of this portfolio's never-defaulting accounts that pass through
+          one recoverable stress episode inside the observation window. A
+          part-paid instalment on a term loan is a common and usually
+          recoverable event. The eight weight to roughly 22% of the book.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_inflow_amplitude:
+        value: 0.16
+        source: >-
+          Amplitude of the calendar effect on this portfolio's banked inflow, as
+          a fraction of the healthy level at the peak of the shape (festival up,
+          post-festival lull down, quarter-end push up, April drop, monsoon
+          soft; for the KCC book the shape follows the crop calendar instead).
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_utilisation_amplitude:
+        value: 0.08
+        source: >-
+          Amplitude of the calendar effect on credit-limit utilisation: limits
+          are drawn ahead of the festival season and dressed down at quarter
+          end. A portfolio with no revolving limit carries 0.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_salary_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the bonus/increment effect on the salary credit. It
+          matters out of proportion to its size, because a spike in April or
+          October makes the trailing six-month average high and every later
+          month read short.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_commute_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the calendar effect on card-visible fuel and toll spend:
+          festival travel up, monsoon down.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
     channels:
       value: ["utilisation", "cash_flow", "gst", "transactions", "repayment", "adverse"]
       source: >-
@@ -841,6 +1593,86 @@ portfolios:
       url: "none"
       retrieved_on: "2026-09-16"
       confidence: assumed
+    measurement:
+      inflow_idiosyncratic_sd:
+        value: 0.15
+        source: >-
+          SD-D4, portfolio override of
+          shared.measurement.inflow_idiosyncratic_sd. A salaried household's
+          account turnover is steadier than a business's, but not steady: rent,
+          school fees, a festival month, a medical bill.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      utilisation_idiosyncratic_sd:
+        value: 0.0
+        source: >-
+          SD-D4, portfolio override: this portfolio has no revolving limit, so
+          there is nothing to draw and nothing to sweep.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    noise:
+      silent_default_share:
+        value: 0.06
+        source: >-
+          Share of THIS portfolio's defaulters that arrive with no warning
+          chain. The lowest of the eight. A mortgage borrower defends the roof
+          over their head longest, so a housing default almost always has a
+          visible run-up; what is left is death, a medical catastrophe and a job
+          loss with no notice period. The eight shares are weighted by
+          account_share to the book-wide shared.silent_default.share.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      transient_stress_share:
+        value: 0.16
+        source: >-
+          Share of this portfolio's never-defaulting accounts that pass through
+          one recoverable stress episode inside the observation window. A month
+          between jobs, or a single missed payroll, on a book where the borrower
+          then catches up. Housing is the most disciplined of the eight, so the
+          lowest share. The eight weight to roughly 22% of the book.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_inflow_amplitude:
+        value: 0.07
+        source: >-
+          Amplitude of the calendar effect on this portfolio's banked inflow, as
+          a fraction of the healthy level at the peak of the shape (festival up,
+          post-festival lull down, quarter-end push up, April drop, monsoon
+          soft; for the KCC book the shape follows the crop calendar instead).
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_utilisation_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the calendar effect on credit-limit utilisation: limits
+          are drawn ahead of the festival season and dressed down at quarter
+          end. A portfolio with no revolving limit carries 0.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_salary_amplitude:
+        value: 0.22
+        source: >-
+          Amplitude of the bonus/increment effect on the salary credit. It
+          matters out of proportion to its size, because a spike in April or
+          October makes the trailing six-month average high and every later
+          month read short.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_commute_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the calendar effect on card-visible fuel and toll spend:
+          festival travel up, monsoon down.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
     channels:
       value: ["cash_flow", "transactions", "repayment", "salary", "ltv"]
       source: >-
@@ -1010,6 +1842,85 @@ portfolios:
       url: "none"
       retrieved_on: "2026-09-16"
       confidence: assumed
+    measurement:
+      inflow_idiosyncratic_sd:
+        value: 0.15
+        source: >-
+          SD-D4, portfolio override of
+          shared.measurement.inflow_idiosyncratic_sd. A household account, often
+          the parent's, during and after the course.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      utilisation_idiosyncratic_sd:
+        value: 0.0
+        source: >-
+          SD-D4, portfolio override: this portfolio has no revolving limit, so
+          there is nothing to draw and nothing to sweep.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    noise:
+      silent_default_share:
+        value: 0.1
+        source: >-
+          Share of THIS portfolio's defaulters that arrive with no warning
+          chain. High: the borrower's income starts only at the end of the
+          moratorium and the bank often has no salary account for a graduate who
+          has moved city or country. There is frequently nothing at all to watch
+          before the first instalment fails. The eight shares are weighted by
+          account_share to the book-wide shared.silent_default.share.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      transient_stress_share:
+        value: 0.2
+        source: >-
+          Share of this portfolio's never-defaulting accounts that pass through
+          one recoverable stress episode inside the observation window. A
+          graduate between the first two jobs, or a family bridging the first
+          few instalments, recovering once the salary account settles. The eight
+          weight to roughly 22% of the book.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_inflow_amplitude:
+        value: 0.06
+        source: >-
+          Amplitude of the calendar effect on this portfolio's banked inflow, as
+          a fraction of the healthy level at the peak of the shape (festival up,
+          post-festival lull down, quarter-end push up, April drop, monsoon
+          soft; for the KCC book the shape follows the crop calendar instead).
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_utilisation_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the calendar effect on credit-limit utilisation: limits
+          are drawn ahead of the festival season and dressed down at quarter
+          end. A portfolio with no revolving limit carries 0.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_salary_amplitude:
+        value: 0.2
+        source: >-
+          Amplitude of the bonus/increment effect on the salary credit. It
+          matters out of proportion to its size, because a spike in April or
+          October makes the trailing six-month average high and every later
+          month read short.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_commute_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the calendar effect on card-visible fuel and toll spend:
+          festival travel up, monsoon down.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
     channels:
       value: ["cash_flow", "transactions", "repayment", "salary", "moratorium"]
       source: >-
@@ -1184,6 +2095,87 @@ portfolios:
       url: "none"
       retrieved_on: "2026-09-16"
       confidence: assumed
+    measurement:
+      inflow_idiosyncratic_sd:
+        value: 0.16
+        source: >-
+          SD-D4, portfolio override of
+          shared.measurement.inflow_idiosyncratic_sd. On top of the crop-year
+          yield factor, which already carries most of a farmer's year-to-year
+          swing.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      utilisation_idiosyncratic_sd:
+        value: 0.2
+        source: >-
+          SD-D4, portfolio override. A KCC limit is drawn at sowing and repaid
+          out of the harvest, so the drawn balance swings with the crop calendar
+          as well as with the borrower.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    noise:
+      silent_default_share:
+        value: 0.07
+        source: >-
+          Share of THIS portfolio's defaulters that arrive with no warning
+          chain. A crop failure is visible; a death in the family, a medical
+          emergency or an uninsured livestock loss is not. The eight shares are
+          weighted by account_share to the book-wide
+          shared.silent_default.share.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      transient_stress_share:
+        value: 0.26
+        source: >-
+          Share of this portfolio's never-defaulting accounts that pass through
+          one recoverable stress episode inside the observation window. The
+          highest of the eight: a single weak season, a delayed procurement
+          payment or a late mandi arrival puts a KCC account under real strain
+          that the next harvest clears. The eight weight to roughly 22% of the
+          book.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_inflow_amplitude:
+        value: 0.35
+        source: >-
+          Amplitude of the calendar effect on this portfolio's banked inflow, as
+          a fraction of the healthy level at the peak of the shape (festival up,
+          post-festival lull down, quarter-end push up, April drop, monsoon
+          soft; for the KCC book the shape follows the crop calendar instead).
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_utilisation_amplitude:
+        value: 0.1
+        source: >-
+          Amplitude of the calendar effect on credit-limit utilisation: limits
+          are drawn ahead of the festival season and dressed down at quarter
+          end. A portfolio with no revolving limit carries 0.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_salary_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the bonus/increment effect on the salary credit. It
+          matters out of proportion to its size, because a spike in April or
+          October makes the trailing six-month average high and every later
+          month read short.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_commute_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the calendar effect on card-visible fuel and toll spend:
+          festival travel up, monsoon down.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
     channels:
       value: ["utilisation", "cash_flow", "transactions", "repayment",
               "drawing_power", "harvest"]
@@ -1198,6 +2190,26 @@ portfolios:
       renewal_month:
         value: 12
         source: "Months between KCC reviews."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      benign_slip_rate:
+        value: 0.07
+        source: >-
+          SD-D4. Probability that a KCC renewal that falls due is not completed
+          on time for reasons that have nothing to do with the borrower's
+          repayment capacity: documentation, a land-record or no-dues
+          certificate that has not come through, branch workload at the peak of
+          the season, or a farmer who is in the field rather than at the
+          counter. Delayed KCC renewals are a standing operational complaint in
+          Indian agricultural banking, and the July 2026 build put the benign
+          rate at 2% — which made "the renewal has slipped" a near-certain sign
+          of distress rather than the ambiguous signal it is.
+          NOTE for DATA_CARD.md: a slipped renewal stays overdue until the NEXT
+          annual due date, so 7% of renewals slipping leaves roughly 6% of agri
+          account-months carrying an overdue renewal. Real benign slips are
+          cleared in a month or two, so this OVERSTATES how long a benign slip
+          lasts and understates how many borrowers have one.
         url: "none"
         retrieved_on: "2026-09-16"
         confidence: assumed
@@ -1338,6 +2350,85 @@ portfolios:
       url: "none"
       retrieved_on: "2026-09-16"
       confidence: assumed
+    measurement:
+      inflow_idiosyncratic_sd:
+        value: 0.15
+        source: >-
+          SD-D4, portfolio override of
+          shared.measurement.inflow_idiosyncratic_sd. A salaried household
+          account.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      utilisation_idiosyncratic_sd:
+        value: 0.0
+        source: >-
+          SD-D4, portfolio override: this portfolio has no revolving limit, so
+          there is nothing to draw and nothing to sweep.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    noise:
+      silent_default_share:
+        value: 0.12
+        source: >-
+          Share of THIS portfolio's defaulters that arrive with no warning
+          chain. The highest of the eight. There is no collateral to defend and
+          no operating account to watch: a borrower who loses a job or decides
+          to walk away from an unsecured instalment gives the bank no notice at
+          all. The eight shares are weighted by account_share to the book-wide
+          shared.silent_default.share.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      transient_stress_share:
+        value: 0.26
+        source: >-
+          Share of this portfolio's never-defaulting accounts that pass through
+          one recoverable stress episode inside the observation window. Thin
+          buffers and stacked instalments mean a large share of this book passes
+          through real strain without ever going bad. The eight weight to
+          roughly 22% of the book.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_inflow_amplitude:
+        value: 0.08
+        source: >-
+          Amplitude of the calendar effect on this portfolio's banked inflow, as
+          a fraction of the healthy level at the peak of the shape (festival up,
+          post-festival lull down, quarter-end push up, April drop, monsoon
+          soft; for the KCC book the shape follows the crop calendar instead).
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_utilisation_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the calendar effect on credit-limit utilisation: limits
+          are drawn ahead of the festival season and dressed down at quarter
+          end. A portfolio with no revolving limit carries 0.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_salary_amplitude:
+        value: 0.22
+        source: >-
+          Amplitude of the bonus/increment effect on the salary credit. It
+          matters out of proportion to its size, because a spike in April or
+          October makes the trailing six-month average high and every later
+          month read short.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_commute_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the calendar effect on card-visible fuel and toll spend:
+          festival travel up, monsoon down.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
     channels:
       value: ["cash_flow", "transactions", "repayment", "salary", "emi_stacking"]
       source: >-
@@ -1507,6 +2598,83 @@ portfolios:
       url: "none"
       retrieved_on: "2026-09-16"
       confidence: assumed
+    measurement:
+      inflow_idiosyncratic_sd:
+        value: 0.24
+        source: >-
+          SD-D4, portfolio override of
+          shared.measurement.inflow_idiosyncratic_sd. A business-owner
+          borrower's account, with rent on top of trading receipts.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      utilisation_idiosyncratic_sd:
+        value: 0.0
+        source: >-
+          SD-D4, portfolio override: this portfolio has no revolving limit, so
+          there is nothing to draw and nothing to sweep.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    noise:
+      silent_default_share:
+        value: 0.07
+        source: >-
+          Share of THIS portfolio's defaulters that arrive with no warning
+          chain. Between the MSME and housing books: business-owner borrowers
+          with a property at stake, so mostly visible failures, with fraud and
+          death the remainder. The eight shares are weighted by account_share to
+          the book-wide shared.silent_default.share.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      transient_stress_share:
+        value: 0.2
+        source: >-
+          Share of this portfolio's never-defaulting accounts that pass through
+          one recoverable stress episode inside the observation window. A vacant
+          tenancy or a slow business quarter, cleared once the property is
+          re-let. The eight weight to roughly 22% of the book.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_inflow_amplitude:
+        value: 0.13
+        source: >-
+          Amplitude of the calendar effect on this portfolio's banked inflow, as
+          a fraction of the healthy level at the peak of the shape (festival up,
+          post-festival lull down, quarter-end push up, April drop, monsoon
+          soft; for the KCC book the shape follows the crop calendar instead).
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_utilisation_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the calendar effect on credit-limit utilisation: limits
+          are drawn ahead of the festival season and dressed down at quarter
+          end. A portfolio with no revolving limit carries 0.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_salary_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the bonus/increment effect on the salary credit. It
+          matters out of proportion to its size, because a spike in April or
+          October makes the trailing six-month average high and every later
+          month read short.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_commute_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the calendar effect on card-visible fuel and toll spend:
+          festival travel up, monsoon down.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
     channels:
       value: ["cash_flow", "gst", "transactions", "repayment", "adverse",
               "ltv", "rental"]
@@ -1677,6 +2845,83 @@ portfolios:
       url: "none"
       retrieved_on: "2026-09-16"
       confidence: assumed
+    measurement:
+      inflow_idiosyncratic_sd:
+        value: 0.15
+        source: >-
+          SD-D4, portfolio override of
+          shared.measurement.inflow_idiosyncratic_sd. A salaried household
+          account.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      utilisation_idiosyncratic_sd:
+        value: 0.0
+        source: >-
+          SD-D4, portfolio override: this portfolio has no revolving limit, so
+          there is nothing to draw and nothing to sweep.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    noise:
+      silent_default_share:
+        value: 0.09
+        source: >-
+          Share of THIS portfolio's defaulters that arrive with no warning
+          chain. A vehicle is stolen, written off, or the driver-owner loses the
+          contract that paid for it — all of which stop the instalment in the
+          same month they happen. The eight shares are weighted by account_share
+          to the book-wide shared.silent_default.share.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      transient_stress_share:
+        value: 0.22
+        source: >-
+          Share of this portfolio's never-defaulting accounts that pass through
+          one recoverable stress episode inside the observation window. A
+          vehicle off the road for a month, or a gap between driving contracts.
+          The eight weight to roughly 22% of the book.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_inflow_amplitude:
+        value: 0.07
+        source: >-
+          Amplitude of the calendar effect on this portfolio's banked inflow, as
+          a fraction of the healthy level at the peak of the shape (festival up,
+          post-festival lull down, quarter-end push up, April drop, monsoon
+          soft; for the KCC book the shape follows the crop calendar instead).
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_utilisation_amplitude:
+        value: 0.0
+        source: >-
+          Amplitude of the calendar effect on credit-limit utilisation: limits
+          are drawn ahead of the festival season and dressed down at quarter
+          end. A portfolio with no revolving limit carries 0.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_salary_amplitude:
+        value: 0.21
+        source: >-
+          Amplitude of the bonus/increment effect on the salary credit. It
+          matters out of proportion to its size, because a spike in April or
+          October makes the trailing six-month average high and every later
+          month read short.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      season_commute_amplitude:
+        value: 0.26
+        source: >-
+          Amplitude of the calendar effect on card-visible fuel and toll spend:
+          festival travel up, monsoon down.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
     channels:
       value: ["cash_flow", "transactions", "repayment", "salary", "commute", "ltv"]
       source: >-
