@@ -348,6 +348,16 @@ def test_nothing_impossible_is_emitted(panel) -> None:
     both = panel[panel.balance.notna() & panel.min_balance_6m.notna()]
     assert (both.min_balance_6m <= both.balance + 1).all()
     assert panel.dpd.max() < 90.0
+    # SD-D8: an account cannot be more days past due than it has existed.
+    # `generator.channels.simulate_channels` clips the final `dpd` to
+    # `vintage_months * 30` — without it, a handful of very-young accounts
+    # (low `vintage_months_0`) reached the panel already "past due" before
+    # their first instalment could have fallen due (17 of 2,039,678 rows at
+    # 45k, seed 20260709; 12 of them at `vintage_months == 0` itself). See
+    # `src/realism.py`'s `impossible_dpd_exceeds_days_on_book`, and
+    # `tests/test_realism.py` for the same invariant re-derived independently
+    # from the written CSVs.
+    assert (panel.dpd <= panel.vintage_months * 30.0).all()
     for column in ("ltv", "salary_credit", "rental_income", "crop_receipt",
                    "commute_spend", "other_bank_emi", "drawing_power"):
         values = panel[column].dropna()

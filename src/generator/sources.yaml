@@ -733,13 +733,23 @@ shared:
         The IDBI figures are real; reading a cure rate off a stock ratio and a
         flow ratio is our inference, so this is `low`, not `medium`.
     arrears_ladder:
-      value: [0.0, 22.0, 48.0, 71.0, 84.0]
+      value: [0.0, 22.0, 48.0, 58.0]
       source: >-
         Days past due by month inside an episode that goes into arrears. The
         account cures the month the episode ends — which is what makes these
         rows hard negatives rather than mislabelled positives. Capped below 90
         so a cured account is never silently dropped from the panel by the
         still-standard row filter.
+        SD-D8: the top rung was lowered from 84 to 58 (dropping the fifth,
+        84-day rung entirely). At 71/84 a large share of these never-defaulting
+        episodes sat in the 61-90 DPD (SMA-2) band, which is what made
+        `monotone_default_by_dpd_band` (src/realism.py) reverse: the 31-60
+        bucket carried a HIGHER forward 12-month default rate than 61-90,
+        because 61-90 was diluted by cured hard negatives. A cured 61-90 DPD
+        borrower is genuinely rare in practice — SMA-2 mostly slips onward to
+        NPA rather than curing, per RBI's SMA ageing framework — so capping
+        transient episodes at SMA-1 depth (<=60 DPD) is the more realistic
+        reading, not merely the one that fixes the check.
       url: "none"
       retrieved_on: "2026-09-16"
       confidence: assumed
@@ -1191,6 +1201,27 @@ portfolios:
       url: "none"
       retrieved_on: "2026-09-16"
       confidence: assumed
+    utilisation:
+      base_mean:
+        value: 0.85
+        source: >-
+          SD-D8. The plan's own SD-D6 acceptance criterion for this portfolio
+          is "CC util mode ~0.85"; without this override the generator ran
+          MSME-CC on the shared book-wide default (0.52), which is a five-
+          product average, not a call about cash-credit behaviour. RBI's
+          fraud/early-warning circular framework treats a cash-credit or
+          overdraft account running persistently under about a fifth of its
+          sanctioned limit, or over about nine-tenths, as a monitoring red
+          flag — implying a genuinely active, healthy limit is conventionally
+          expected to sit in the upper-middle of that band, which is our
+          reading of common IDBI/PSU-bank practice of running a working-
+          capital limit close to sanction between annual renewals. Our own
+          reading of a monitoring convention, not a quoted statistic — hence
+          `assumed`, matching src/realism.py's `check_cc_utilisation_mode`
+          docstring.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
     measurement:
       inflow_idiosyncratic_sd:
         value: 0.26

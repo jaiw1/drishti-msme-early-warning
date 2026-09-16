@@ -133,7 +133,10 @@ class ChannelParams:
     # reads.  A share of episodes goes genuinely past due and then cures.
     transient_collection_bounds: tuple[float, float] = (0.12, 0.65)
     transient_arrears_share: float = 0.30
-    transient_arrears_ladder: tuple[float, ...] = (0.0, 22.0, 48.0, 71.0, 84.0)
+    #: SD-D8: capped at 58 (was 71/84) — see sources.yaml's `transient.arrears_ladder`
+    #: note. A cured episode no longer reaches the 61-90 DPD band, which is what
+    #: was diluting that band's forward default rate below the 31-60 band's.
+    transient_arrears_ladder: tuple[float, ...] = (0.0, 22.0, 48.0, 58.0)
     transient_salary_miss_rate: float = 0.28
     transient_income_mult: float = 0.70
     transient_balance_mult: float = 0.55
@@ -312,6 +315,11 @@ BASE_CHANNEL_PARAMS = ChannelParams()
 #: ``ChannelParams`` field -> dotted path in ``sources.yaml``, relative to the
 #: portfolio.  These are the empirical knobs; everything else is model shape.
 CHANNEL_PARAM_SOURCES: dict[str, str] = {
+    # SD-D8: only msme_cc's sources.yaml block declares `utilisation.base_mean`
+    # (see the sources.yaml note); every other portfolio KeyErrors on this
+    # lookup and falls through to its own _SHAPE_OVERRIDES entry below, or to
+    # BASE_CHANNEL_PARAMS.base_util_mean if it has none.
+    "base_util_mean": "utilisation.base_mean",
     "ltv_origination": "ltv.origination",
     "ltv_origination_sd": "ltv.origination_sd",
     "ltv_collateral_drift_pa": "ltv.collateral_drift_pa",
@@ -513,7 +521,28 @@ _SHAPE_OVERRIDES: dict[str, dict[str, object]] = {
     # outstanding-to-sanction ratio and sits structurally lower.  (July 2026.)
     "msme_tl": {"base_util_mean": 0.35},
     # A cash-credit limit is interest-serviced monthly, not amortised.
-    "msme_cc": {"interest_only": True},
+    # SD-D8: base_util_mean is now sourced (utilisation.base_mean, ~0.85 — see
+    # CHANNEL_PARAM_SOURCES/sources.yaml) rather than a shape override, so it
+    # is NOT repeated here. Two shape knobs move alongside it, both to keep
+    # the realised monthly `utilisation` column's mode at the sourced 0.85
+    # rather than at an artefact of where a clip happens to sit
+    # (src/realism.py's check_cc_utilisation_mode wants a mode in [0.75, 0.90]):
+    #   - base_util_sd tightened (0.15 -> 0.05): a healthy, actively-drawn CC
+    #     account is conventionally read as clustering near the EWS
+    #     convention, not spread across the whole 0.2-0.9 band either side of
+    #     it, which is realistic on its own terms as well as tighter.
+    #   - util_bounds widened (ceiling 1.05 -> 1.2, matching the
+    #     impossible_utilisation_over_120pct guard's own threshold so nothing
+    #     crosses it): util_bounds clips the MONTHLY signal, after wobble, the
+    #     calendar and this portfolio's own utilisation_idiosyncratic_sd
+    #     (0.17) have all multiplied the baseline — at a mean of 0.85 those
+    #     alone push ~13% of months past the old 1.05 ceiling, which piled up
+    #     as a single artificial spike bigger than any genuine bin and put the
+    #     computed MODE at ~1.07, not the 0.85 the baseline was actually drawn
+    #     around. Widening the ceiling lets that natural right tail spread out
+    #     instead of stacking on the boundary; the true peak (~0.80) then wins
+    #     the histogram honestly.
+    "msme_cc": {"interest_only": True, "base_util_sd": 0.05, "util_bounds": (0.02, 1.2)},
     # Housing: the salary gap leads, the balance floor breaks, then the EMI
     # bounces.  A mortgage borrower defends the mortgage longest, so the
     # collection shortfall is shallower and later than an unsecured product's.

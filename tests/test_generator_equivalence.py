@@ -56,6 +56,28 @@ REL_TOLERANCE = 0.05
 SPREAD_TOLERANCE = 0.08
 ABS_FLOOR = 1e-4
 
+#: SD-D8 fix 1 deliberately moves MSME-CC's healthy-state utilisation
+#: baseline from the shared 0.52 default to a sourced ~0.85
+#: (portfolios.msme_cc's utilisation.base_mean, plus a widened util_bounds
+#: ceiling so that draw isn't clipped into an artificial second mode) — the
+#: whole point being to close realism.py's cc_utilisation_mode FAIL.  That is
+#: a deliberate, understood shift in the pooled MSME-CC+MSME-TL distribution
+#: this suite fingerprints, not a regression, so these four utilisation-
+#: derived columns get their own explicitly-widened absolute tolerance
+#: instead of silently drifting past the shared one above.  Calibrated with
+#: headroom over the actual 2026-09-16 delta (deterministic, same seed both
+#: sides): utilisation/util_avg_3m/util_max_6m move by ~0.18 in the mean and
+#: up to ~0.33 at the median/upper quantiles (0.45->0.63 pooled mean);
+#: months_over_90pct_util_6m — a 0-6 count — moves by ~0.70 in the mean and
+#: up to 3.0 at its 90th percentile, because MSME-CC now spends much more of
+#: a healthy month above 90% utilisation by design.
+WIDENED_TOLERANCE_COLUMNS: dict[str, float] = {
+    "utilisation": 0.40,
+    "util_avg_3m": 0.40,
+    "util_max_6m": 0.40,
+    "months_over_90pct_util_6m": 4.0,
+}
+
 #: category shares are compared in percentage points
 SHARE_TOLERANCE_PP = 2.0
 
@@ -165,7 +187,10 @@ def test_population_shape_matches(fingerprint: dict, reference: dict) -> None:
 # --------------------------------------------------------------------------- #
 # (c) distributional equivalence
 # --------------------------------------------------------------------------- #
-def _tolerance(value: float, spread: float) -> float:
+def _tolerance(value: float, spread: float, column: str | None = None) -> float:
+    widened = WIDENED_TOLERANCE_COLUMNS.get(column) if column else None
+    if widened is not None:
+        return max(widened, ABS_FLOOR)
     return max(REL_TOLERANCE * abs(value), SPREAD_TOLERANCE * abs(spread), ABS_FLOOR)
 
 
@@ -175,13 +200,13 @@ def test_numeric_distribution_matches(column: str, fingerprint: dict, reference:
     old, new = reference["numeric"][column], fingerprint["numeric"][column]
     spread = old["std"]
     for statistic in ("mean", "std"):
-        tolerance = _tolerance(old[statistic], spread)
+        tolerance = _tolerance(old[statistic], spread, column)
         assert abs(new[statistic] - old[statistic]) <= tolerance, (
             f"{column}.{statistic}: {new[statistic]:.6g} vs {old[statistic]:.6g} "
             f"(tolerance {tolerance:.6g})"
         )
     for quantile, old_q, new_q in zip(QUANTILES, old["quantiles"], new["quantiles"]):
-        tolerance = _tolerance(old_q, spread)
+        tolerance = _tolerance(old_q, spread, column)
         assert abs(new_q - old_q) <= tolerance, (
             f"{column} q{quantile}: {new_q:.6g} vs {old_q:.6g} (tolerance {tolerance:.6g})"
         )

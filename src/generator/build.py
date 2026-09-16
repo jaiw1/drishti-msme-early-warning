@@ -127,13 +127,46 @@ CHANNEL_PANEL_COLUMNS: tuple[str, ...] = tuple(
 _LABEL_COLUMNS: tuple[str, ...] = (
     "default_within_12m", "sma2_within_6m", "labelable", "months_to_npa",
 )
+#: SD-D8 — a bank-style bucketing of `vintage_months`, added as its own column
+#: rather than folded into POPULATION_COLUMNS: it is DERIVED and dynamic (it
+#: moves every month, like `vintage_months` itself), not a static attribute
+#: drawn once at panel start. `vintage_months` drifts by construction under a
+#: time-split OOT (it is account-age + elapsed months, so a later test window
+#: is mechanically older than train) — this is DR-14's binding CSI feature.
+#: Bucketing it the way a bank actually reads vintage — a relationship-age
+#: band, not a raw month counter — is a legitimate modelling choice: see
+#: DATA_CARD.md's "known unrealisms" and MODEL_CARD.md. `vintage_months`
+#: itself stays in the panel (validation cuts use it); only the MODEL's own
+#: feature set drops it in favour of `vintage_band` (`export_demo.py` /
+#: `rigor.py` CAT/DROP).
+VINTAGE_DERIVED_COLUMNS: tuple[str, ...] = ("vintage_band",)
+#: bank-style relationship-age bands for `vintage_band`, in ascending order
+VINTAGE_BANDS: tuple[str, ...] = ("0-6", "7-12", "13-18", "19-30", "31-48", "49+")
+#: inclusive upper bound (months on book) of each band except the last
+_VINTAGE_BAND_UPPER_BOUNDS: tuple[int, ...] = (6, 12, 18, 30, 48)
 PANEL_COLUMNS: tuple[str, ...] = (
     tuple(c for c in LEGACY_PANEL_COLUMNS if c not in _LABEL_COLUMNS)
     + POPULATION_COLUMNS
+    + VINTAGE_DERIVED_COLUMNS
     + SHARED_COLUMNS
     + CHANNEL_PANEL_COLUMNS
     + _LABEL_COLUMNS
 )
+
+
+def _vintage_band_codes(vintage_months: np.ndarray) -> np.ndarray:
+    """Map months-on-book to indices into :data:`VINTAGE_BANDS`.
+
+    Args:
+        vintage_months: ``vintage_months_0 + month_idx``, any shape.
+
+    Returns:
+        Same-shape int codes, one per :data:`VINTAGE_BANDS` level.
+    """
+    codes = np.zeros(vintage_months.shape, dtype=np.int64)
+    for bound in _VINTAGE_BAND_UPPER_BOUNDS:
+        codes += (vintage_months > bound).astype(np.int64)
+    return codes
 
 #: accounts_static.csv column order
 ACCOUNT_COLUMNS: tuple[str, ...] = (
@@ -356,6 +389,9 @@ def generate(config: GeneratorConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
         name for name in (mix.nic_groups.get(level) for level in mix.sector_levels)
         if name is not None
     )
+    vintage_months_row = (
+        _by_account(population.vintage_months_0, keep) + _by_month(month_index, keep)
+    )
 
     panel: dict[str, object] = {
         "account_id": _categorical(
@@ -379,8 +415,9 @@ def generate(config: GeneratorConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
         ),
         "log_sanctioned": _by_account(np.log(population.sanctioned), keep),
         "business_age_years": _by_account(population.business_age_years, keep),
-        "vintage_months": (
-            _by_account(population.vintage_months_0, keep) + _by_month(month_index, keep)
+        "vintage_months": vintage_months_row,
+        "vintage_band": _categorical(
+            _vintage_band_codes(vintage_months_row), VINTAGE_BANDS
         ),
         "portfolio": _categorical(
             _by_account(population.portfolio_code, keep), tuple(p.code for p in portfolios)

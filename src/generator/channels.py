@@ -642,6 +642,20 @@ def simulate_channels(
     )
     minbal = extra.pop("_minbal")
 
+    # SD-D8: DPD cannot exceed how long the account has actually been on book.
+    # The main dpd_ladder is timed off months-to-NPA, the bounce ladder off a
+    # consecutive-uncured-bounce run length, and the transient arrears ladder
+    # off an episode's own position — none of which know the account's own
+    # vintage, so a very young account (low `vintage_months_0`) could reach the
+    # panel already "past due" before its first instalment could have fallen
+    # due. Clipping the FINAL dpd to `months_on_book * 30` closes every path at
+    # once (17 of 2,039,678 rows at 45k, 12 of them at `vintage_months == 0`,
+    # per realism.py's `impossible_dpd_exceeds_days_on_book`), without touching
+    # the utilisation/bounce/adverse channels that legitimately still lead a
+    # young account's own eventual slide.
+    months_on_book = inputs.vintage_months_0[:, None] + np.arange(months)[None, :]
+    dpd = np.minimum(dpd, months_on_book * 30.0)
+
     return Channels(
         utilisation=util,
         inflow=inflow,

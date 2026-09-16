@@ -6,29 +6,30 @@ two reference panels are generated once by hand and cached under
 clear message if a checkout has not produced them yet, the same pattern
 ``tests/test_rigor_families.py`` already uses for the same reason.
 
-Two things are tested, deliberately kept apart:
+The **solid invariants** — referential integrity, MAR missingness, the
+impossible-state guards, the sourced base-rate bands, and (as of SD-D8) every
+one of the checks this audit's own report used to catch as genuine findings —
+must all PASS. If one of these ever fails, that is a real regression in the
+generator or its output.
 
-1. The **solid invariants** — referential integrity, MAR missingness, the
-   impossible-state guards, the sourced base-rate bands, the two clean
-   monotonicities (utilisation, bounces) — must all PASS. If one of these
-   ever fails, that is a real regression in the generator or its output.
-2. The **known findings** — properties this audit independently discovered
-   do NOT hold on the shipped panel (CC utilisation runs nowhere near the
-   assumed 0.85 "healthy" mode; the DPD-band default rate is not monotone,
-   because the 61-90 DPD bucket is diluted by curing hard negatives; a
-   handful of brand-new accounts show a nonzero DPD in their very first
-   month on book) — are asserted to be caught, by name, with the
-   corroborating numbers. Deleting one of these assertions should mean the
-   underlying issue was fixed, not that the check went quiet.
+SD-D8 closed the three FAILs SD-D6's original audit reported at both sizes:
+`cc_utilisation_mode` (MSME-CC's utilisation baseline now sources
+~0.85 — ``portfolios.msme_cc``'s ``utilisation.base_mean``), and
+`monotone_default_by_dpd_band` / `impossible_dpd_exceeds_days_on_book` (the
+transient arrears ladder is capped at 58 DPD instead of 84, and the final
+`dpd` is clipped to ``vintage_months * 30`` in
+``generator.channels.simulate_channels``). What were dedicated "known
+finding" tests below are now ordinary solid-invariant assertions — the
+history is kept in ``DATA_CARD.md``'s "known unrealisms", not here.
 
 Fast path: the 9,000 x 36 population (``data/small9k36/``). Slow path: the
 45,000 x 48 population (``data/``), marked ``slow`` and run against the same
-assertions plus one 45k-only finding that does not surface reliably at the
-smaller sample size.
+assertions.
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -123,6 +124,8 @@ SOLID_INVARIANTS = (
     "sma2_to_npa_event_ratio_band",
     "silent_defaulter_share",
     "transient_stress_share",
+    "cc_utilisation_mode",
+    "monotone_default_by_dpd_band",
     "monotone_default_by_utilisation_band",
     "monotone_default_by_bounce_band",
     "mar_no_gst_for_individuals",
@@ -151,20 +154,20 @@ def test_every_portfolio_default_rate_is_inside_its_sourced_band(
     assert not failed, "\n".join(failed)
 
 
-def test_impossible_state_checks_all_pass_at_9k_except_the_one_known_bug(
+def test_impossible_state_checks_all_pass_at_9k(
     small_results: list[realism.Result],
 ) -> None:
-    """Every impossible-state guard must be clean, with one documented exception.
+    """Every impossible-state guard must be clean.
 
-    ``impossible_dpd_exceeds_days_on_book`` does not reliably surface at 9k
-    (too few brand-new accounts draw a nonzero first-month DPD to show up in
-    a 9,000-account sample) — see the 45k-only test below, where it does.
+    SD-D8: ``impossible_dpd_exceeds_days_on_book`` used to be a documented
+    exception here — 12 of 17 violating rows at 45k were already delinquent
+    at ``vintage_months == 0``, too rare to reliably surface in a 9,000-
+    account sample, but genuinely present. `generator.channels.
+    simulate_channels` now clips the final ``dpd`` to
+    ``vintage_months * 30`` (months on book), which makes the guard clean at
+    every population size, not just less likely to trip.
     """
-    known_flaky_at_small_n = {"impossible_dpd_exceeds_days_on_book"}
-    failed = [
-        r.line() for r in small_results
-        if r.name.startswith("impossible_") and not r.passed and r.name not in known_flaky_at_small_n
-    ]
+    failed = [r.line() for r in small_results if r.name.startswith("impossible_") and not r.passed]
     assert not failed, "\n".join(failed)
 
 
@@ -176,43 +179,47 @@ def test_channel_absent_columns_are_clean_at_9k(small_results: list[realism.Resu
 
 
 # --------------------------------------------------------------------------- #
-# Known findings — this audit must catch them, not quietly agree with them
+# SD-D8 fixes — these used to be dedicated "known finding" tests, asserting
+# NOT result.passed. Deleting that inversion (rather than deleting the test)
+# is the point: a future regression on either fix must fail here again.
 # --------------------------------------------------------------------------- #
-def test_cc_utilisation_mode_is_not_the_assumed_healthy_0_85(
+def test_cc_utilisation_mode_is_now_the_assumed_healthy_0_85(
     small_results: list[realism.Result],
 ) -> None:
-    """MSME-CC's utilisation centres near 0.5, not the assumed ~0.85 'healthy' mode.
+    """MSME-CC's utilisation centres near the sourced ~0.85 'healthy' mode.
 
-    ``portfolios.msme_cc`` carries no ``base_util_mean`` override in
-    ``src/generator/portfolios.py`` (only ``msme_tl`` and ``agri`` do), so it
-    runs on the shared default of 0.52 — this is exactly what shows up here.
-    A known unrealism, not a bug in this audit.
+    ``portfolios.msme_cc``'s ``base_util_mean`` now sources
+    ``utilisation.base_mean`` (~0.85) from ``sources.yaml`` instead of
+    inheriting the shared 0.52 default — see the "SD-D8" note on
+    ``_SHAPE_OVERRIDES["msme_cc"]`` in ``src/generator/portfolios.py`` for
+    the widened ``util_bounds`` that keeps this a real mode and not a clip
+    artefact.
     """
     result = _by_name(small_results)["cc_utilisation_mode"]
-    assert not result.passed
-    assert "mode=0." in result.observed  # a sub-0.6 mode, nowhere near 0.85
+    assert result.passed, result.line()
 
 
-def test_dpd_band_default_rate_reverses_at_61_90(small_results: list[realism.Result]) -> None:
-    """31-60 DPD carries a HIGHER forward default rate than 61-90 DPD.
+def test_dpd_band_default_rate_no_longer_reverses_at_61_90(
+    small_results: list[realism.Result],
+) -> None:
+    """31-60 DPD no longer carries a HIGHER forward default rate than 61-90 DPD.
 
-    The 61-90 bucket is diluted by the hard-negative population (transient
-    episodes reach up to 84 DPD per ``arrears.arrears_ladder`` and then cure,
-    per the "known unrealisms" note), so days-past-due alone is not a
-    strictly monotone risk signal on this panel even though the two other
-    band checks (utilisation, bounces) are clean.
+    ``transient.arrears_ladder`` is capped at 58 DPD (was 71/84), so a cured
+    hard-negative episode no longer dilutes the 61-90 (SMA-2) bucket with
+    never-defaulting rows — days-past-due is a strictly non-decreasing risk
+    signal again, same as the utilisation and bounce bands.
     """
     result = _by_name(small_results)["monotone_default_by_dpd_band"]
-    assert not result.passed
+    assert result.passed, result.line()
     values = {}
     for token in result.observed.split(", "):
         label, value = token.split("=")
         values[label] = float(value)
-    assert values["31-60"] > values["61-90"], result.observed
+    assert values["31-60"] <= values["61-90"], result.observed
 
 
 def test_dpd_sma_shares_still_follow_a_funnel_shape(small_results: list[realism.Result]) -> None:
-    """Unlike the DPD-band reversal above, the raw SMA-0/1/2 SHARE is well-behaved."""
+    """The raw SMA-0/1/2 SHARE is well-behaved, as it always was."""
     result = _by_name(small_results)["dpd_distribution_vs_sma_shares"]
     assert result.passed, result.line()
 
@@ -238,31 +245,29 @@ def test_every_portfolio_default_rate_is_inside_its_sourced_band_at_45k(
 
 
 @pytest.mark.slow
-def test_impossible_dpd_exceeds_days_on_book_surfaces_at_45k(
+def test_impossible_dpd_exceeds_days_on_book_is_clean_at_45k(
     large_results: list[realism.Result],
 ) -> None:
-    """The one impossible-state guard that genuinely fires: NPA-week-old accounts already past due.
+    """The one impossible-state guard that used to genuinely fire, at 45k specifically.
 
-    17 of 45,000 accounts (seed 20260709) show a nonzero DPD in their very
-    first observed month (``vintage_months == 0``) — an account cannot be
-    late on an instalment before its first one is even due. A small,
-    previously unflagged generator edge case, found independently by this
-    audit rather than assumed away.
+    17 of 45,000 accounts (seed 20260709) used to show a nonzero DPD in
+    their very first observed month (``vintage_months == 0``) — an account
+    cannot be late on an instalment before its first one is even due. SD-D8
+    clips the final ``dpd`` to ``vintage_months * 30`` in
+    ``generator.channels.simulate_channels``, which is a population-wide fix
+    (not size-dependent), so this must read clean at 45k too, not just less
+    likely to trip.
     """
     result = _by_name(large_results)["impossible_dpd_exceeds_days_on_book"]
-    assert not result.passed
-    assert "0 violating" not in result.observed
+    assert result.passed, result.line()
+    assert "0 violating" in result.observed
 
 
 @pytest.mark.slow
-def test_impossible_state_checks_all_pass_at_45k_except_the_one_known_bug(
+def test_impossible_state_checks_all_pass_at_45k(
     large_results: list[realism.Result],
 ) -> None:
-    known_bug = {"impossible_dpd_exceeds_days_on_book"}
-    failed = [
-        r.line() for r in large_results
-        if r.name.startswith("impossible_") and not r.passed and r.name not in known_bug
-    ]
+    failed = [r.line() for r in large_results if r.name.startswith("impossible_") and not r.passed]
     assert not failed, "\n".join(failed)
 
 
@@ -276,7 +281,15 @@ def test_seed_reproducibility_check_runs_clean() -> None:
 # --------------------------------------------------------------------------- #
 # CLI smoke test
 # --------------------------------------------------------------------------- #
-def test_cli_writes_a_report_and_exits_nonzero_on_a_known_failure(tmp_path: Path) -> None:
+def test_cli_writes_a_report_and_exits_zero_when_everything_passes(tmp_path: Path) -> None:
+    """SD-D8: the shipped 9k panel is clean end to end, so the CLI must exit 0.
+
+    Before SD-D8 this same panel tripped ``cc_utilisation_mode`` and
+    ``monotone_default_by_dpd_band`` by design, and the CLI's nonzero-exit
+    contract was exercised here as a side effect. That contract is now
+    tested directly (below, against a synthetic failing report) instead of
+    depending on the shipped panel staying broken.
+    """
     if not (SMALL_PANEL.exists() and SMALL_ACCOUNTS.exists()):
         pytest.skip("9k panel not generated in this checkout")
     out = tmp_path / "report.json"
@@ -287,5 +300,31 @@ def test_cli_writes_a_report_and_exits_nonzero_on_a_known_failure(tmp_path: Path
         capture_output=True, text=True, cwd=REPO,
     )
     assert out.exists()
-    assert proc.returncode == 1  # cc_utilisation_mode / monotone_default_by_dpd_band are known FAILs
-    assert "PASS" in proc.stdout and "FAIL" in proc.stdout
+    assert proc.returncode == 0, proc.stdout[-2000:]
+    assert "PASS" in proc.stdout and "0 failed" in proc.stdout
+
+
+def test_main_exits_nonzero_when_a_check_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The exit-code contract, tested directly against a synthetic failing report.
+
+    Independent of whether any real panel currently fails anything: swaps in
+    a fake ``run_all`` with one failing ``Result`` and asserts ``main()``
+    still exits 1 and still writes the report.
+    """
+    fake_results = [
+        realism.Result("synthetic_check", True, "ok", "ok", "always passes"),
+        realism.Result("synthetic_broken_check", False, "bad", "good", "deliberately fails"),
+    ]
+    monkeypatch.setattr(realism, "run_all", lambda *a, **k: fake_results)
+    monkeypatch.setattr(
+        realism, "load_data", lambda *a, **k: (pd.DataFrame({"month_idx": [0]}), pd.DataFrame())
+    )
+    out = tmp_path / "report.json"
+    with pytest.raises(SystemExit) as excinfo:
+        realism.main(["--panel", "unused.csv", "--accounts", "unused.csv", "--out", str(out)])
+    assert excinfo.value.code == 1
+    assert out.exists()
+    payload = json.loads(out.read_text())
+    assert payload["n_failed"] == 1

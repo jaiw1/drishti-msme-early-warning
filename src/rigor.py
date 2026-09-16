@@ -38,11 +38,17 @@ OUT = f"{ROOT}/data/rigor.json"
 # ("pandas dtypes must be int, float or bool").  Kept identical to export_demo.py's list.
 CAT = ["sector", "region", "loan_type", "segment", "qualification", "promoter_age_group"]
 CAT += ["portfolio", "constitution", "state", "city_tier", "nic_group"]
+# SD-D8: a bank-style vintage bucket, scored in place of the raw month counter
+# below — see export_demo.py's matching CAT/DROP note (kept identical, always).
+CAT += ["vintage_band"]
 # Every FORWARD-LOOKING column is dropped here or the model trains on the answer.
 # `sma2_within_6m` (SD-D5) is a label, not a feature: it says whether the account
 # reaches 61-90 DPD in the NEXT six months. A test pins this list against the
 # generator's own declaration, so a label added later cannot slip into training.
-DROP = ["account_id", "month_idx", "date",
+# SD-D8: `vintage_months` also drops out of the feature set (not the CSV) — it
+# drifts by construction under any time-split OOT (DR-14's binding max-CSI
+# feature); `vintage_band` above is the model's replacement.
+DROP = ["account_id", "month_idx", "date", "vintage_months",
         "default_within_12m", "sma2_within_6m", "labelable", "months_to_npa"]
 
 # --------------------------------------------------------------------------- #
@@ -75,7 +81,9 @@ GROUPS = {
                               "renewal_overdue_months", "moratorium_active", "months_since_moratorium_end"],
     "Bureau": ["bureau_score"],
     "Adverse filings": ["adverse_remark", "adverse_remark_6m"],
-    "Borrower profile": ["log_sanctioned", "vintage_months", "business_age_years", "sector", "region",
+    # SD-D8: `vintage_months` moved to DROP (not scored) in favour of the
+    # `vintage_band` categorical, which is scored and familied here instead.
+    "Borrower profile": ["log_sanctioned", "vintage_band", "business_age_years", "sector", "region",
                          "loan_type", "segment", "qualification", "promoter_age_group",
                          "portfolio", "constitution", "state", "city_tier", "nic_group",
                          "secured", "tenor_months", "interest_rate_pa"],

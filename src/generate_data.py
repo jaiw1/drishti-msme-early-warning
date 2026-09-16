@@ -1,5 +1,5 @@
-"""Synthetic MSME loan-performance PANEL generator — IDBI Innovate 2026, Track 4
-(MSME loan Early-Warning System)
+"""Synthetic eight-portfolio retail loan-performance PANEL generator — IDBI
+Innovate 2026, Track 4 (MSME + retail Early-Warning System)
 
 One row = one loan account observed in one month.
 Goal: let a model predict "will this account go bad (NPA, 90+ DPD) within the next
@@ -23,7 +23,10 @@ Design principles baked in (see :mod:`generator` for the full statement):
     healthy accounts (hard negatives), variable ramp lengths.
   * Leakage-safe — features use only the account's own past/present; the
     forward label is only fully observable where ``labelable`` is 1.
-  * Calibrated to reality — ~2.7%/year slippage, Indian ₹ ticket sizes and sectors.
+  * Calibrated to reality — 3-5%/year slippage (sectoral GNPA, not IDBI's own
+    0.63% flow — a deliberate, disclosed departure; see DATA_CARD.md), Indian
+    ₹ ticket sizes, across all eight DRISHTi portfolios: MSME-CC, MSME-TL,
+    Housing, Education, Agri/KCC, Retail-Unsecured, LAP and Auto.
 
 Output:
   data/msme_loan_panel.csv          full account-month panel (raw signals + trailing features + label)
