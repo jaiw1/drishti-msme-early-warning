@@ -33,3 +33,4 @@ data/bank/provenance.json
 scratch/
 state-*.json
 validation/report/
+data/bank/pulled.json
