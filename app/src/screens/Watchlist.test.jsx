@@ -132,3 +132,25 @@ describe('Watch-list', () => {
     expect(screen.getAllByRole('button', { name: 'Simulated' }).length).toBeGreaterThan(0)
   })
 })
+
+describe('Watch-list — counting honestly', () => {
+  it('describes the server’s page when no client filter is on', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    await settled()
+    expect(screen.getByText(/Showing 1–2 of 2/)).toBeInTheDocument()
+  })
+
+  it('says what it is counting once a client-side filter narrows the page', async () => {
+    mockApi(apiRoutes({
+      [`${B}/drishti/portfolio`]: ok(portfolio(undefined, { total: 160 })),
+    }), { vi })
+    render()
+    await settled()
+    // The search box filters the page the server already sent; the book is still 160.
+    await userEvent.type(screen.getByLabelText('Search this page'), 'HOUS')
+    const line = await screen.findByText(/match the/)
+    expect(line).toHaveTextContent('160 accounts in the book')
+    expect(line).not.toHaveTextContent('Showing 1–')
+  })
+})

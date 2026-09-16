@@ -45,14 +45,23 @@ export default function PortfolioRiskScreen() {
       ) : (book.data || []).length === 0 ? (
         <Empty title="No accounts in this model run" hint="Nothing has been published for you to see yet." />
       ) : (
-        <PortfolioRisk
+        <>
+          {book.meta?.truncated && (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-rag-ambertx">
+              These exhibits were computed over the first {book.meta.loaded?.toLocaleString('en-IN')} of
+              {' '}{book.meta.total?.toLocaleString('en-IN')} accounts, because the browser stops paging at 20,000.
+              Read them as a sample of the book, not the whole of it.
+            </p>
+          )}
+          <PortfolioRisk
           rows={book.data}
           summary={metrics.data?.summary}
           ecosystem={metrics.data?.ecosystem ?? book.meta?.ecosystem}
           rankOrder={metrics.data?.metrics?.rank_order}
           thresholds={book.meta?.thresholds}
           onSelect={setSelected}
-        />
+          />
+        </>
       )}
 
       {selected && (

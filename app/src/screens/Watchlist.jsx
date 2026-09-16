@@ -121,6 +121,9 @@ export default function Watchlist() {
   const total = listing.meta?.total ?? rows.length
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const anyMoved = rows.some((r) => r.bucket_moved)
+  // DPD, ticket band and the search box filter the page the server already sent. Saying
+  // "showing 1–12 of 160" while three client filters are on would describe neither.
+  const clientFiltered = rows.length !== (listing.data?.length ?? 0)
   const badge = badgeForMode(listing.meta?.provenance_mode, listing.source)
   const scopeNote = listing.meta?.scope
 
@@ -289,7 +292,10 @@ export default function Watchlist() {
 
                 <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 px-3 py-2.5 text-sm">
                   <p className="text-slate-600" role="status" aria-live="polite">
-                    Showing {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + rows.length} of {total.toLocaleString('en-IN')}
+                    {clientFiltered
+                      ? <>Showing <b>{rows.length}</b> of the {listing.data.length} accounts on this page that match the
+                        DPD, ticket-band and search filters — {total.toLocaleString('en-IN')} accounts in the book.</>
+                      : <>Showing {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + rows.length} of {total.toLocaleString('en-IN')}</>}
                     {thresholds && (
                       <> · Red ≥ {pct(thresholds.red_thr, 1)}, Amber ≥ {pct(thresholds.amber_thr, 1)}</>
                     )}
