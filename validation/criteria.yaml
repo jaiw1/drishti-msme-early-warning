@@ -1,0 +1,684 @@
+# =============================================================================
+# DRISHTi — PRE-REGISTERED VALIDATION CRITERIA
+# =============================================================================
+# This file is the acceptance contract for the DRISHTi early-warning model.
+#
+# It is committed BEFORE the first model result exists. The git timestamp of the
+# commit that introduces this file is the evidence of pre-registration: every
+# band below was fixed while the outcome was still unknown, so no threshold here
+# can have been chosen to fit a number we had already seen.
+#
+# Every band is transcribed from the approved build plan (§B lane L8, plus the
+# §D G2 gate). Where the plan's wording admitted more than one reading, the
+# reading we adopted is written down in the criterion's `note:` field rather
+# than resolved silently.
+#
+# AFTER REGISTRATION: criteria may be ADDED, never LOOSENED. Any change to an
+# existing criterion requires a dated entry in `amendments:` at the foot of this
+# file, stating what changed and why. See validation/README.md.
+# =============================================================================
+
+product: DRISHTi
+schema_version: "1.0.0"
+registered_at: "2026-09-16T10:47:14+05:30"
+registered_by: "RR Squad"
+repo: msme-ews
+plan_reference: >-
+  IDBI Innovate 2026 final build & submission plan (v2) — §B lane L8
+  (Validation), §D gate G2 (DRISHTi model gate) and §D gate G7 (Validation
+  gate). Bands transcribed verbatim; no band was widened or narrowed.
+
+# Clarifications issued DURING pre-registration, i.e. still before any model
+# result existed. These are not amendments — nothing here loosens a band.
+rulings:
+  - at: "2026-09-16T02:00:00+05:30"
+    ruling: >-
+      DRISHTi has EIGHT portfolios — MSME-CC, MSME-TL, Housing, Education, Agri,
+      Retail-Unsecured, LAP, Auto. The "7 portfolios" figure in plan §B L4 SD-D2
+      and in the §D G2 gate was stale from plan v1 and has been patched.
+    affects: ["cuts.portfolio", "DR-06", "DR-09", "DR-11", "DR-12"]
+    effect: >-
+      Every per-portfolio criterion applies to all eight portfolios. No threshold
+      changed; only the number of cells each per-portfolio criterion must clear.
+
+# -----------------------------------------------------------------------------
+# What is being predicted
+# -----------------------------------------------------------------------------
+label_definition:
+  observation_unit: >-
+    One (account_id, month_idx) row of data/msme_loan_panel.csv. The model scores
+    a borrower account as at an observation month m using only information
+    available at or before m.
+  eligibility: >-
+    Rows with labelable == 1 only — i.e. rows for which a full forward label
+    window exists inside the panel. Rows without a complete window are scored for
+    the cockpit but never enter a metric.
+  primary:
+    name: default_within_12m
+    source_column: default_within_12m
+    horizon_months: 12
+    description: >-
+      1 if the account is classified NPA at any point in the 12 calendar months
+      strictly after the observation month m; 0 otherwise. This is the label all
+      numeric bands below are computed against unless a criterion says otherwise.
+  secondary:
+    name: sma2_within_6m
+    horizon_months: 6
+    description: >-
+      1 if the account reaches SMA-2 (61–90 DPD) within 6 months of the
+      observation month. Produced by the generator (plan §B L4 SD-D5); reported
+      alongside the primary label, carries no pre-registered band of its own.
+  positive_class_note: >-
+    Missed NPA costs more than a false positive (mentor mandate). Thresholding is
+    therefore cost-asymmetric (plan §B L5 DM-5); the bands below constrain
+    discrimination and calibration, not the operating point.
+
+# -----------------------------------------------------------------------------
+# How the data is split. Fixed here so no split can be re-drawn to rescue a band.
+# -----------------------------------------------------------------------------
+splits:
+  holdout:
+    kind: grouped
+    group_key: account_id
+    test_fraction: 0.30
+    description: >-
+      Account-grouped split: every month of a given account_id falls wholly on
+      one side. No account appears in both train and test, so the repeated-
+      measures structure of the panel cannot inflate the score.
+    reported_metric: >-
+      "grouped AUC" throughout this file means ROC-AUC on the account-grouped
+      holdout, pooled across all eligible months of the holdout accounts.
+  oot:
+    kind: out_of_time
+    time_key: month_idx
+    description: >-
+      Train on early calendar months, test on later ones. The cut month is
+      chosen so the test window carries at least 12 months of realised label
+      horizon, and training rows whose 12-month label window would reach past the
+      cut are embargoed — a model may not learn from an outcome that had not yet
+      happened at the cut.
+    embargo_months: 12
+
+# -----------------------------------------------------------------------------
+# The cuts every per-cut criterion is evaluated over (plan §B L8: portfolio,
+# constitution, segment, secured, ticket, vintage, sector, geography, month).
+# Source columns name today's pipeline; the L4 generator lane is actively
+# renaming/adding columns, so a runner resolves a cut by id first and by
+# source_column second.
+# -----------------------------------------------------------------------------
+cuts:
+  - id: portfolio
+    source_column: portfolio
+    expected_levels: 8
+    levels:
+      ["MSME-CC", "MSME-TL", "Housing", "Education", "Agri", "Retail-Unsecured",
+       "LAP", "Auto"]
+    min_n: 0
+    note: >-
+      EIGHT portfolios, not seven. The plan text this file was transcribed from
+      said "7 portfolios" in §B L4 SD-D2 and in the §D G2 gate; that figure was
+      stale from plan v1 and was patched on 16 Sep 2026 ~02:00 IST, before any
+      model result existed. The ruling, recorded here as part of the
+      pre-registration: the portfolio cut has the eight levels listed above, and
+      EVERY per-portfolio criterion — the AUC floor (DR-06), strict band
+      monotonicity (DR-11), the decile-step fraction (DR-12) and per-cut
+      calibration (DR-09) — applies to all eight. The count discrepancy visible
+      in §B L4 SD-D3 (which already named eight observation channels) is resolved
+      in favour of eight. min_n stays 0 so a thin portfolio is a generator
+      problem to fix, never a cell to exempt.
+  - id: constitution
+    source_column: constitution
+    expected_levels: 5
+    min_n: 500
+    note: "Proprietorship / Partnership / LLP / Pvt Ltd / Individual, per §B L4 SD-D2 (5 constitutions)."
+  - id: segment
+    source_column: segment
+    expected_levels: null
+    min_n: 500
+  - id: secured
+    source_column: secured
+    expected_levels: 2
+    min_n: 500
+    note: "Boolean secured / unsecured exposure."
+  - id: ticket_band
+    source_column: sanctioned_amount
+    binning: "global quintiles of sanctioned_amount over the evaluated population"
+    expected_levels: 5
+    min_n: 500
+    note: >-
+      The plan says "ticket" without naming bin edges. We pre-register
+      quantile bins (self-computing, cannot be nudged after the fact) rather than
+      invent rupee cut-offs we would then be tempted to move.
+  - id: vintage_band
+    source_column: vintage_months
+    binning: "fixed months-on-book bands: [0,12), [12,18), [18,30), [30,48), [48,inf)"
+    expected_levels: 5
+    min_n: 500
+    note: >-
+      Fixed edges, chosen to straddle the 18–30 MOB hazard hump the generator is
+      required to reproduce (§B L4 SD-D6), so a failure of the hump shows up as a
+      cut result rather than being averaged away.
+  - id: sector
+    source_column: sector
+    expected_levels: null
+    min_n: 500
+  - id: geography
+    source_column: region
+    expected_levels: null
+    min_n: 500
+    note: "Named 'geography' in the plan; today's panel column is `region`."
+  - id: calendar_month
+    source_column: month_idx
+    expected_levels: null
+    min_n: 500
+    note: >-
+      Named "month" in the plan. Evaluated as observation calendar month, which
+      is also the axis the 8-month rank-order exhibit runs along.
+
+# -----------------------------------------------------------------------------
+# Seeds and confidence intervals
+# -----------------------------------------------------------------------------
+seeds:
+  n_min: 5
+  list: [7, 8, 9, 10, 11]
+  policy: >-
+    Consecutive integers from 7 (the value already used in today's pipelines).
+    Seeds may be ADDED. A seed may never be dropped or cherry-picked from a
+    reported aggregate; every seed that was run appears in report.json.
+
+confidence:
+  level: 0.95
+  method: >-
+    Percentile bootstrap, 1000 resamples, resampled at the group level
+    (account_id) so the panel's repeated measures are respected.
+  cross_seed: >-
+    Where a criterion is about spread across seeds (D-19), the interval is the
+    2.5th–97.5th percentile of the per-seed point estimates, and "CI width" means
+    upper minus lower on the AUC scale.
+
+# -----------------------------------------------------------------------------
+# Decision rule
+# -----------------------------------------------------------------------------
+decision_rule:
+  pass: "Zero criteria with severity `fail` evaluate to fail."
+  exit_code: "`python3 -m validation.run` exits non-zero if any `fail` criterion fails."
+  pending: >-
+    A criterion whose runner is not yet implemented is reported `pending`, never
+    `pass`. `--strict` (the G7 form) treats pending and warn as failures too.
+  low_n: >-
+    A cut cell with n below the criterion's min_n is reported `skipped_low_n`
+    with its n, never silently dropped.
+  publication: >-
+    Per plan §A batch stage 6: a model run that fails verification stays
+    `candidate`; the active run is untouched. Validation failure never promotes.
+
+# -----------------------------------------------------------------------------
+# THE BANDS
+# -----------------------------------------------------------------------------
+criteria:
+
+  # -- 01 holdout ------------------------------------------------------------
+  - id: DR-01
+    runner: "01_holdout"
+    metric: grouped_auc
+    scope: overall
+    op: between
+    threshold: [0.82, 0.92]
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands; §D gate G2"
+    rationale: >-
+      Discrimination must be good enough to be useful and low enough to be
+      believable. An upper bound is as important as a floor: a synthetic panel
+      that scores above 0.92 has leaked its own generative structure.
+    note: >-
+      THE FLOOR IS 0.82, LOWERED FROM 0.85, AND THIS IS DELIBERATE. The plan's
+      rationale, transcribed: "a floor of 0.85 would tempt tuning toward
+      separability; 0.82 sits credibly beside real 0.81." Published bank
+      early-warning models land around 0.81, so a floor above that would have
+      created pressure to make the synthetic data easier than reality. Registered
+      at 0.82 before any result was produced.
+
+  - id: DR-02
+    runner: "01_holdout"
+    metric: red_band_precision_at_8_months
+    scope: overall
+    op: report
+    threshold: null
+    min_n: 0
+    severity: report
+    source: "plan §B L8 bands; §B L5 DM-4"
+    rationale: >-
+      This is the honest replacement for the "90% accuracy" claim the mentors
+      rejected. Precision of the Red band, measured at 8 months before NPA
+      onset, reported with a 95% CI beside raw accuracy and the base rate.
+    note: >-
+      REPORTED, NO PRE-REGISTERED TARGET — explicitly so. Putting a target on the
+      headline number is exactly the failure mode the mentors called out. The
+      number goes in the deck as whatever it turns out to be.
+
+  - id: DR-03
+    runner: "01_holdout"
+    metric: annual_slippage_ratio
+    scope: overall
+    op: between
+    threshold: [0.03, 0.05]
+    min_n: 0
+    severity: fail
+    source: "plan §D gate G2 (\"slippage 3–5%\")"
+    rationale: >-
+      The synthetic book must slip into NPA at a rate a bank reviewer recognises.
+      A book that slips at 12% a year would make any AUC meaningless.
+    note: >-
+      INTERPRETATION. G2 states "slippage 3–5%" while §B L4 SD-D5 asserts a label
+      base rate of 3.0 ± 0.5%/yr, which is a narrower and not identical quantity.
+      We read them as two different measurements: slippage = fresh NPA during the
+      year ÷ standard advances at the start of the year (the RBI-style ratio,
+      gated here at 3–5%), and base rate = the mean of default_within_12m over
+      eligible rows (asserted inside the generator, reported here as DR-04).
+      Both are reported; only the G2 band gates.
+
+  - id: DR-04
+    runner: "01_holdout"
+    metric: label_base_rate_annual
+    scope: overall
+    op: report
+    threshold: null
+    min_n: 0
+    severity: report
+    source: "plan §B L4 SD-D5 (asserted in-script at 3.0 ± 0.5%/yr)"
+    rationale: >-
+      Reported here so the validation report and the generator's in-script
+      assertion can be reconciled by a reviewer without reading the generator.
+    note: "No gate here — the gate lives in the generator (§B L4 SD-D5) and in DR-03."
+
+  # -- 02 out-of-time --------------------------------------------------------
+  - id: DR-05
+    runner: "02_oot"
+    metric: oot_auc_ratio_to_holdout
+    scope: overall
+    op: ge
+    threshold: 0.95
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"OOT ≥ 0.95×\")"
+    rationale: >-
+      Temporal generalisation. A model that only works on the months it was
+      trained on is worthless to a bank that will run it next quarter.
+    note: >-
+      Ratio form: AUC(out-of-time test) ÷ AUC(grouped holdout) ≥ 0.95. Read as a
+      relative degradation limit of 5%, not an absolute AUC floor.
+
+  # -- 03 by cut -------------------------------------------------------------
+  - id: DR-06
+    runner: "03_by_cut"
+    metric: auc
+    scope: per_portfolio
+    op: ge
+    threshold: 0.78
+    min_n: 0
+    severity: fail
+    source: >-
+      plan §B L8 bands; §D gate G2 ("per-portfolio ≥ 0.78 all 7 w/ CI"), with the
+      count corrected to 8 by the 16 Sep 2026 ~02:00 IST ruling recorded on the
+      `portfolio` cut above.
+    rationale: >-
+      This is the mandate that ONE holistic model across all borrower types is
+      legitimate. If the single model only works on MSME term loans, the claim
+      collapses. Every portfolio must clear the floor on its own, with a CI.
+    note: >-
+      APPLIES TO ALL EIGHT PORTFOLIOS (MSME-CC, MSME-TL, Housing, Education,
+      Agri, Retail-Unsecured, LAP, Auto) — see the ruling on the `portfolio` cut.
+      The plan text said "all 7"; the correct count is 8 and the floor is
+      pre-registered against every one of them. min_n is 0 deliberately: the
+      floor applies regardless of cell size, so a thin portfolio is a generator
+      problem to fix, not a cell to exempt. The point estimate gates; the CI is
+      reported beside it.
+
+  - id: DR-07
+    runner: "03_by_cut"
+    metric: auc
+    scope: per_cut
+    cut: all
+    op: report
+    threshold: null
+    min_n: 500
+    severity: report
+    source: "plan §B L8 (12 runners, cut list); owner direction 7 (\"validated across every cut\")"
+    rationale: >-
+      AUC with CI and n for every level of every one of the nine cuts. No band
+      beyond the portfolio floor was pre-registered, so this is reported in full
+      and read by a human — including the cells that look bad.
+    note: >-
+      min_n of 500 is carried over from the plan's only stated cell-size floor
+      (the per-cut ECE clause, DR-10) rather than inventing a second number.
+      Cells below 500 are listed with their n and marked skipped_low_n.
+
+  # -- 04 calibration --------------------------------------------------------
+  - id: DR-08
+    runner: "04_calibration"
+    metric: ece
+    scope: overall
+    op: le
+    threshold: 0.02
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"ECE ≤ 0.02 overall\")"
+    rationale: >-
+      "PD = 40%" has to mean an observed 40% default frequency, or the cockpit's
+      numbers cannot be used for provisioning conversations.
+
+  - id: DR-09
+    runner: "04_calibration"
+    metric: ece
+    scope: per_cut
+    cut: all
+    op: le
+    threshold: 0.04
+    min_n: 500
+    severity: fail
+    source: "plan §B L8 bands (\"≤ 0.04 per cut (n≥500)\")"
+    rationale: >-
+      Overall calibration can hide a portfolio the model is systematically
+      over-confident about. The looser per-cut band acknowledges smaller cells.
+    note: "min_n = 500 is the plan's own number and gates this criterion."
+
+  - id: DR-10
+    runner: "04_calibration"
+    metric: brier_calibrated_minus_brier_raw
+    scope: overall
+    op: lt
+    threshold: 0.0
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"Brier(cal) < Brier(raw)\")"
+    rationale: >-
+      Isotonic calibration must actually improve the score, not merely re-shape
+      it. If it does not, the calibration step is decoration and should be cut.
+
+  # -- 05 rank order ---------------------------------------------------------
+  - id: DR-11
+    runner: "05_rank_order"
+    metric: risk_band_default_rate_monotonicity
+    scope: per_portfolio
+    op: monotone_increasing
+    threshold: null
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"bands strictly monotone within every portfolio\"); §D gate G2"
+    rationale: >-
+      Observed default rate must rise strictly from Green to Amber to Red inside
+      every portfolio. A relationship manager reads the band, not the score, so
+      this is the property the product actually rests on.
+    note: >-
+      Asserted on the 8-month rank-order exhibit (branch 0914ac6, §B L5 DM-3),
+      i.e. the ordering must hold in each of the exhibit's months, not only
+      pooled. Strict monotonicity — ties fail.
+
+  - id: DR-12
+    runner: "05_rank_order"
+    metric: monotone_decile_step_fraction
+    scope: per_portfolio
+    op: ge
+    threshold: 0.9
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"≥9/10 decile steps\")"
+    rationale: >-
+      A finer-grained rank-order check than the three bands: at decile
+      resolution, at least 9 of the 10 step-ups in observed default rate must be
+      non-decreasing.
+    note: >-
+      INTERPRETATION. The plan's clause reads "bands strictly monotone within
+      every portfolio, ≥9/10 decile steps" as one sentence. We split it into two
+      criteria because it states two different tests at two resolutions
+      (three bands, strict; ten deciles, 9-of-10). Both are pre-registered at the
+      plan's own numbers, and both are scoped per portfolio, which is the scope
+      the sentence carries.
+
+  # -- 06 stability ----------------------------------------------------------
+  - id: DR-13
+    runner: "06_stability"
+    metric: psi_score_distribution
+    scope: overall
+    op: le
+    threshold: 0.10
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"PSI ≤ 0.10\")"
+    rationale: >-
+      Population Stability Index of the score distribution between the training
+      window and the most recent window. 0.10 is the conventional "no meaningful
+      shift" line in bank model-risk practice.
+
+  - id: DR-14
+    runner: "06_stability"
+    metric: max_feature_csi
+    scope: overall
+    op: le
+    threshold: 0.25
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"no CSI > 0.25\")"
+    rationale: >-
+      Characteristic Stability Index per input feature. Reported for every
+      feature; the maximum across features gates.
+    note: >-
+      Expressed as a maximum so a single number gates, which is what "no CSI >
+      0.25" says. The full per-feature table goes in the report.
+
+  # -- 07 leakage ------------------------------------------------------------
+  - id: DR-15
+    runner: "07_leakage"
+    metric: dpd_family_attribution_share_at_10_12m
+    scope: overall
+    op: le
+    threshold: 0.05
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"DPD share ≤ 5% at 10–12 mo\")"
+    rationale: >-
+      This is what makes the "we see it a year early" claim honest. For
+      predictions made 10–12 months before NPA onset, the days-past-due family
+      must contribute at most 5% of total absolute attribution — the warning has
+      to come from cash flow and utilisation, not from an account that is
+      already visibly late.
+    note: >-
+      Attribution = share of summed absolute SHAP-style contribution over the
+      DPD family as listed in src/rigor.py GROUPS["Days-past-due / repayment"].
+
+  - id: DR-16
+    runner: "07_leakage"
+    metric: permuted_label_auc
+    scope: overall
+    op: between
+    threshold: [0.48, 0.52]
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"permutation AUC ∈ [0.48,0.52]\")"
+    rationale: >-
+      Retrain the full pipeline on randomly permuted labels. Anything outside
+      chance means the evaluation harness itself leaks — the strongest single
+      check that the reported AUC is real.
+    note: >-
+      INTERPRETATION: the permutation is of the LABEL (the standard
+      permutation-test form), with the split, features and hyper-parameters left
+      untouched. Averaged over the registered seeds.
+
+  - id: DR-17
+    runner: "07_leakage"
+    metric: availability_at_time_manifest
+    scope: overall
+    op: exists
+    threshold: null
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"availability-at-time manifest\")"
+    rationale: >-
+      A per-feature manifest stating, for every model input, when that value
+      would actually have been knowable in a bank's systems relative to the
+      observation month. A feature that a bank only learns after the fact is
+      leakage no statistical test will catch.
+    note: >-
+      INTERPRETATION. The plan lists this among the leakage bands without saying
+      "reported", so we registered it as a gating artefact: the manifest must
+      exist and cover every feature the model consumes. A feature missing from
+      the manifest fails the criterion.
+
+  # -- 08 ablation -----------------------------------------------------------
+  - id: DR-18
+    runner: "08_ablation"
+    metric: auc_drop_when_cashflow_family_removed
+    scope: overall
+    op: ge
+    threshold: 0.04
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"cash-flow family ≥ 0.04\")"
+    rationale: >-
+      The product's whole thesis is that current-account cash flow sees trouble
+      before the loan account does. If removing the cash-flow family costs less
+      than 0.04 AUC, the thesis is not supported by our own model.
+    note: "Family as listed in src/rigor.py GROUPS[\"Cash-flow (inflows / GST)\"]."
+
+  - id: DR-19
+    runner: "08_ablation"
+    metric: max_auc_gain_from_dropping_any_family
+    scope: overall
+    op: le
+    threshold: 0.0
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"no family raises AUC when dropped\")"
+    rationale: >-
+      No feature family may be actively harmful. A family whose removal improves
+      the model is either noise the model is over-fitting or a bug.
+    note: >-
+      Registered exactly as written, on the point estimate, with no noise
+      allowance. A small positive delta inside its own CI would still be recorded
+      as a failure and explained in the report rather than waved through — that
+      decision is being made now, not after seeing the number.
+
+  # -- 09 seeds --------------------------------------------------------------
+  - id: DR-20
+    runner: "09_seeds"
+    metric: n_seeds_run
+    scope: overall
+    op: ge
+    threshold: 5
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"≥5 seeds\"); §D gate G7"
+    rationale: >-
+      One seed is an anecdote. Five is the minimum at which the CI below means
+      anything.
+
+  - id: DR-21
+    runner: "09_seeds"
+    metric: cross_seed_auc_ci_width
+    scope: overall
+    op: le
+    threshold: 0.02
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"CI width ≤ 0.02\")"
+    rationale: >-
+      The headline AUC must be a property of the model, not of the seed. A
+      cross-seed interval wider than 0.02 means the number we would print is
+      within noise of a materially different number.
+
+  # -- 10 stress -------------------------------------------------------------
+  - id: DR-22
+    runner: "10_stress"
+    metric: abs_auc_delta_under_2x_base_rate
+    scope: overall
+    op: le
+    threshold: 0.03
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"2× base rate ΔAUC ≤ 0.03\")"
+    rationale: >-
+      A downturn doubles slippage. The model has to keep ranking under it, or it
+      is exactly the wrong tool at exactly the wrong time.
+    note: "Absolute delta against the base scenario; direction is reported."
+
+  - id: DR-23
+    runner: "10_stress"
+    metric: abs_auc_delta_under_bureau_missing
+    scope: overall
+    op: le
+    threshold: 0.02
+    min_n: 0
+    severity: fail
+    source: "plan §B L8 bands (\"bureau-missing ≤ 0.02\")"
+    rationale: >-
+      Bureau data is the input most likely to be unavailable, delayed or
+      consent-blocked in production. The model must degrade gracefully without it.
+    note: >-
+      INTERPRETATION: the stress is the bureau family fully masked at score time
+      (100% missing), not the ~7% MAR missingness the generator already builds in
+      (§B L4 SD-D4). The generator's baseline missingness is part of the base
+      scenario, not the stress.
+
+  # -- 11 fairness -----------------------------------------------------------
+  - id: DR-24
+    runner: "11_fairness"
+    metric: adverse_impact_ratio
+    scope: per_cut
+    cut: "protected_proxies"
+    op: ge
+    threshold: 0.80
+    min_n: 500
+    severity: report
+    source: "plan §B L8 bands (\"fairness 80% rule ... reported honestly\")"
+    rationale: >-
+      Four-fifths rule on the flag rate: least-flagged group ÷ most-flagged group
+      within each protected-proxy attribute, at the live operating threshold.
+    note: >-
+      REPORTED, NOT GATED — the plan says "reported honestly". The 0.80 reference
+      line is recorded so the report can state how far each attribute sits from
+      it, and any breach is written into the README's "what we did not build, and
+      why" rather than being tuned away. DRISHTi holds no gender, caste,
+      religion or marital-status field at all; the protected-proxy attributes
+      evaluated are promoter_age_group, qualification, geography (region) and
+      constitution.
+
+  - id: DR-25
+    runner: "11_fairness"
+    metric: tpr_gap
+    scope: per_cut
+    cut: "protected_proxies"
+    op: le
+    threshold: 0.15
+    min_n: 500
+    severity: report
+    source: "plan §B L8 bands (\"TPR gap ≤ 0.15 reported honestly\")"
+    rationale: >-
+      Maximum minus minimum true-positive rate across the groups of each
+      protected-proxy attribute at the operating threshold — i.e. whether the
+      early warning actually reaches every group equally.
+    note: "Same treatment as DR-24: 0.15 is a reference line that is reported, not a gate."
+
+  # -- 12 baseline ladder ----------------------------------------------------
+  - id: DR-26
+    runner: "12_baseline_ladder"
+    metric: auc_by_baseline_rung
+    scope: overall
+    op: report
+    threshold: null
+    min_n: 0
+    severity: report
+    source: "plan §B L8 (runner 12); src/rigor.py baseline ladder"
+    rationale: >-
+      Contextualises the gain: DPD-only rule, logistic-regression scorecard, then
+      the LightGBM model, each with CI. If the scorecard is within noise of the
+      model, that is the honest finding and the deck says so.
+    note: >-
+      The plan specifies runner 12 but pre-registers no band for it, so no
+      threshold was invented. Reported with CIs; a human reads it.
+
+# -----------------------------------------------------------------------------
+# Amendments — append only. Loosening a registered band requires an entry here
+# with a date and a reason, and the reason has to survive a bank reviewer.
+# -----------------------------------------------------------------------------
+amendments: []
