@@ -8,6 +8,10 @@ data/msme_loan_panel.csv
 data/accounts_static.csv
 data/demo_data.json
 
+# SD-D6 realism audit: cached 9k x 36 reference panel + the report src/realism.py writes
+data/small9k36/
+data/realism_report.json
+
 # NEVER commit the licensed raw financial data (it lives outside this repo, but guard anyway)
 **/msme_fin_data.csv
 **/msme_ratings_movement.csv
