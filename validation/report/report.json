@@ -1,0 +1,3547 @@
+{
+  "product": "DRISHTi",
+  "schema_version": "1.0.0",
+  "registered_at": "2026-09-16T10:47:14+05:30",
+  "registered_by": "RR Squad",
+  "provenance": {
+    "generated_at": "2026-09-17T02:36:16+05:30",
+    "python": "3.12.4",
+    "git_commit": "0c92bf980c39b32c3d221b107ca65816022d30e5",
+    "git_dirty": true,
+    "criteria_registered_at": "2026-09-16T10:47:14+05:30",
+    "criteria_first_committed_at": "2026-09-16T11:05:49+05:30"
+  },
+  "verdict": "FAIL",
+  "strict": false,
+  "counts": {
+    "fail": 4,
+    "error": 0,
+    "warn": 0,
+    "pending": 0,
+    "skipped_low_n": 0,
+    "report": 6,
+    "pass": 16
+  },
+  "criteria": [
+    {
+      "id": "DR-01",
+      "runner": "01_holdout",
+      "metric": "grouped_auc",
+      "scope": "overall",
+      "cut": null,
+      "op": "between",
+      "threshold": [
+        0.82,
+        0.92
+      ],
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "Discrimination must be good enough to be useful and low enough to be believable. An upper bound is as important as a floor: a synthetic panel that scores above 0.92 has leaked its own generative structure.",
+      "source": "plan §B L8 bands; §D gate G2",
+      "note": "THE FLOOR IS 0.82, LOWERED FROM 0.85, AND THIS IS DELIBERATE. The plan's rationale, transcribed: \"a floor of 0.85 would tempt tuning toward separability; 0.82 sits credibly beside real 0.81.\" Published bank early-warning models land around 0.81, so a floor above that would have created pressure to make the synthetic data easier than reality. Registered at 0.82 before any result was produced.",
+      "result": {
+        "criterion_id": "DR-01",
+        "value": 0.8885,
+        "ci": [
+          0.8814,
+          0.8949
+        ],
+        "n": 467471,
+        "status": "pass",
+        "detail": "pooled ROC-AUC over every eligible holdout row (n_accounts=13500)",
+        "breakdown": [],
+        "figures": [
+          "holdout_roc.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-02",
+      "runner": "01_holdout",
+      "metric": "red_band_precision_at_8_months",
+      "scope": "overall",
+      "cut": null,
+      "op": "report",
+      "threshold": null,
+      "min_n": 0,
+      "severity": "report",
+      "rationale": "This is the honest replacement for the \"90% accuracy\" claim the mentors rejected. Precision of the Red band, measured at 8 months before NPA onset, reported with a 95% CI beside raw accuracy and the base rate.",
+      "source": "plan §B L8 bands; §B L5 DM-4",
+      "note": "REPORTED, NO PRE-REGISTERED TARGET — explicitly so. Putting a target on the headline number is exactly the failure mode the mentors called out. The number goes in the deck as whatever it turns out to be.",
+      "result": {
+        "criterion_id": "DR-02",
+        "value": 0.729,
+        "ci": [
+          0.7209,
+          0.737
+        ],
+        "n": 11657,
+        "status": "report",
+        "detail": "Red-band precision at 8 months before NPA onset, pooled over every eligible holdout row (not a single snapshot month); 8498/11657 hits, 95% Wilson CI. Reported alongside base rate (DR-04) and raw accuracy is not computed — that is the number this criterion exists to replace. Operating thresholds: amber=0.074653, red=0.271968 (live cost-minimising, from data/demo_data.json).",
+        "breakdown": [],
+        "figures": [
+          "red_band_precision.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-03",
+      "runner": "01_holdout",
+      "metric": "annual_slippage_ratio",
+      "scope": "overall",
+      "cut": null,
+      "op": "between",
+      "threshold": [
+        0.03,
+        0.05
+      ],
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "The synthetic book must slip into NPA at a rate a bank reviewer recognises. A book that slips at 12% a year would make any AUC meaningless.",
+      "source": "plan §D gate G2 (\"slippage 3–5%\")",
+      "note": "INTERPRETATION. G2 states \"slippage 3–5%\" while §B L4 SD-D5 asserts a label base rate of 3.0 ± 0.5%/yr, which is a narrower and not identical quantity. We read them as two different measurements: slippage = fresh NPA during the year ÷ standard advances at the start of the year (the RBI-style ratio, gated here at 3–5%), and base rate = the mean of default_within_12m over eligible rows (asserted inside the generator, reported here as DR-04). Both are reported; only the G2 band gates.",
+      "result": {
+        "criterion_id": "DR-03",
+        "value": 0.0331,
+        "ci": [
+          0.0324,
+          0.0339
+        ],
+        "n": 45000,
+        "status": "pass",
+        "detail": "RBI-style ratio (fresh NPA / standard advances at window start), mean over 4 disjoint 12-month windows [(0, 11), (12, 23), (24, 35), (36, 47)]. See this runner's module docstring for why this reading differs from what src/generator/labels.py's assert_base_rates actually checks.",
+        "breakdown": [],
+        "figures": []
+      }
+    },
+    {
+      "id": "DR-04",
+      "runner": "01_holdout",
+      "metric": "label_base_rate_annual",
+      "scope": "overall",
+      "cut": null,
+      "op": "report",
+      "threshold": null,
+      "min_n": 0,
+      "severity": "report",
+      "rationale": "Reported here so the validation report and the generator's in-script assertion can be reconciled by a reviewer without reading the generator.",
+      "source": "plan §B L4 SD-D5 (asserted in-script at 3.0 ± 0.5%/yr)",
+      "note": "No gate here — the gate lives in the generator (§B L4 SD-D5) and in DR-03.",
+      "result": {
+        "criterion_id": "DR-04",
+        "value": 0.0363,
+        "ci": [
+          0.0354,
+          0.0371
+        ],
+        "n": 1557251,
+        "status": "report",
+        "detail": "mean(default_within_12m) over labelable rows, via generator.labels.measure_base_rates (the same call the generator's own in-script assertion uses). SMA-2/12m-NPA event ratio = 1.35.",
+        "breakdown": [],
+        "figures": []
+      }
+    },
+    {
+      "id": "DR-05",
+      "runner": "02_oot",
+      "metric": "oot_auc_ratio_to_holdout",
+      "scope": "overall",
+      "cut": null,
+      "op": "ge",
+      "threshold": 0.95,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "Temporal generalisation. A model that only works on the months it was trained on is worthless to a bank that will run it next quarter.",
+      "source": "plan §B L8 bands (\"OOT ≥ 0.95×\")",
+      "note": "Ratio form: AUC(out-of-time test) ÷ AUC(grouped holdout) ≥ 0.95. Read as a relative degradation limit of 5%, not an absolute AUC floor.",
+      "result": {
+        "criterion_id": "DR-05",
+        "value": 1.0009,
+        "ci": [
+          0.9914,
+          1.0132
+        ],
+        "n": 500168,
+        "status": "pass",
+        "detail": "OOT AUC 0.8892 (n=500168, cut=month 24, train n=581245) / grouped holdout AUC 0.8885 (n=467471)",
+        "breakdown": [],
+        "figures": [
+          "oot_auc_by_month.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-06",
+      "runner": "03_by_cut",
+      "metric": "auc",
+      "scope": "per_portfolio",
+      "cut": null,
+      "op": "ge",
+      "threshold": 0.78,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "This is the mandate that ONE holistic model across all borrower types is legitimate. If the single model only works on MSME term loans, the claim collapses. Every portfolio must clear the floor on its own, with a CI.",
+      "source": "plan §B L8 bands; §D gate G2 (\"per-portfolio ≥ 0.78 all 7 w/ CI\"), with the count corrected to 8 by the 16 Sep 2026 ~02:00 IST ruling recorded on the `portfolio` cut above.",
+      "note": "APPLIES TO ALL EIGHT PORTFOLIOS (MSME-CC, MSME-TL, Housing, Education, Agri, Retail-Unsecured, LAP, Auto) — see the ruling on the `portfolio` cut. The plan text said \"all 7\"; the correct count is 8 and the floor is pre-registered against every one of them. min_n is 0 deliberately: the floor applies regardless of cell size, so a thin portfolio is a generator problem to fix, not a cell to exempt. The point estimate gates; the CI is reported beside it.",
+      "result": {
+        "criterion_id": "DR-06",
+        "value": null,
+        "ci": null,
+        "n": null,
+        "status": "pass",
+        "detail": "AUC per portfolio, grouped-holdout test set, 95% group-bootstrap CI",
+        "breakdown": [
+          {
+            "level": "MSME-CC",
+            "value": 0.8724,
+            "ci": [
+              0.8538,
+              0.8923
+            ],
+            "n": 46557,
+            "status": "pass"
+          },
+          {
+            "level": "MSME-TL",
+            "value": 0.8605,
+            "ci": [
+              0.8419,
+              0.8849
+            ],
+            "n": 39920,
+            "status": "pass"
+          },
+          {
+            "level": "Housing",
+            "value": 0.8659,
+            "ci": [
+              0.8406,
+              0.8887
+            ],
+            "n": 71404,
+            "status": "pass"
+          },
+          {
+            "level": "Education",
+            "value": 0.8752,
+            "ci": [
+              0.852,
+              0.899
+            ],
+            "n": 37559,
+            "status": "pass"
+          },
+          {
+            "level": "Agri",
+            "value": 0.9069,
+            "ci": [
+              0.8984,
+              0.9171
+            ],
+            "n": 135043,
+            "status": "pass"
+          },
+          {
+            "level": "Retail-Unsecured",
+            "value": 0.8388,
+            "ci": [
+              0.8097,
+              0.8623
+            ],
+            "n": 45385,
+            "status": "pass"
+          },
+          {
+            "level": "LAP",
+            "value": 0.85,
+            "ci": [
+              0.8259,
+              0.8744
+            ],
+            "n": 48651,
+            "status": "pass"
+          },
+          {
+            "level": "Auto",
+            "value": 0.8374,
+            "ci": [
+              0.7962,
+              0.8666
+            ],
+            "n": 42952,
+            "status": "pass"
+          }
+        ],
+        "figures": [
+          "auc_by_portfolio.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-07",
+      "runner": "03_by_cut",
+      "metric": "auc",
+      "scope": "per_cut",
+      "cut": "all",
+      "op": "report",
+      "threshold": null,
+      "min_n": 500,
+      "severity": "report",
+      "rationale": "AUC with CI and n for every level of every one of the nine cuts. No band beyond the portfolio floor was pre-registered, so this is reported in full and read by a human — including the cells that look bad.",
+      "source": "plan §B L8 (12 runners, cut list); owner direction 7 (\"validated across every cut\")",
+      "note": "min_n of 500 is carried over from the plan's only stated cell-size floor (the per-cut ECE clause, DR-10) rather than inventing a second number. Cells below 500 are listed with their n and marked skipped_low_n.",
+      "result": {
+        "criterion_id": "DR-07",
+        "value": 0.8724,
+        "ci": [
+          0.8538,
+          0.8923
+        ],
+        "n": 46557,
+        "status": "report",
+        "detail": "76 cells across 9 cuts",
+        "breakdown": [
+          {
+            "level": "portfolio=MSME-CC",
+            "value": 0.8724,
+            "ci": [
+              0.8538,
+              0.8923
+            ],
+            "n": 46557,
+            "status": "report"
+          },
+          {
+            "level": "portfolio=MSME-TL",
+            "value": 0.8605,
+            "ci": [
+              0.8419,
+              0.8849
+            ],
+            "n": 39920,
+            "status": "report"
+          },
+          {
+            "level": "portfolio=Housing",
+            "value": 0.8659,
+            "ci": [
+              0.8406,
+              0.8887
+            ],
+            "n": 71404,
+            "status": "report"
+          },
+          {
+            "level": "portfolio=Education",
+            "value": 0.8752,
+            "ci": [
+              0.852,
+              0.899
+            ],
+            "n": 37559,
+            "status": "report"
+          },
+          {
+            "level": "portfolio=Agri",
+            "value": 0.9069,
+            "ci": [
+              0.8984,
+              0.9171
+            ],
+            "n": 135043,
+            "status": "report"
+          },
+          {
+            "level": "portfolio=Retail-Unsecured",
+            "value": 0.8388,
+            "ci": [
+              0.8097,
+              0.8623
+            ],
+            "n": 45385,
+            "status": "report"
+          },
+          {
+            "level": "portfolio=LAP",
+            "value": 0.85,
+            "ci": [
+              0.8259,
+              0.8744
+            ],
+            "n": 48651,
+            "status": "report"
+          },
+          {
+            "level": "portfolio=Auto",
+            "value": 0.8374,
+            "ci": [
+              0.7962,
+              0.8666
+            ],
+            "n": 42952,
+            "status": "report"
+          },
+          {
+            "level": "constitution=Individual",
+            "value": 0.8959,
+            "ci": [
+              0.8894,
+              0.9029
+            ],
+            "n": 335677,
+            "status": "report"
+          },
+          {
+            "level": "constitution=LLP",
+            "value": 0.8578,
+            "ci": [
+              0.816,
+              0.9
+            ],
+            "n": 7152,
+            "status": "report"
+          },
+          {
+            "level": "constitution=Partnership",
+            "value": 0.8813,
+            "ci": [
+              0.8481,
+              0.9098
+            ],
+            "n": 14945,
+            "status": "report"
+          },
+          {
+            "level": "constitution=Proprietorship",
+            "value": 0.8667,
+            "ci": [
+              0.8504,
+              0.8808
+            ],
+            "n": 93442,
+            "status": "report"
+          },
+          {
+            "level": "constitution=PvtLtd",
+            "value": 0.8727,
+            "ci": [
+              0.8437,
+              0.9032
+            ],
+            "n": 16255,
+            "status": "report"
+          },
+          {
+            "level": "segment=Medium",
+            "value": 0.9018,
+            "ci": [
+              0.8525,
+              0.9318
+            ],
+            "n": 5696,
+            "status": "report"
+          },
+          {
+            "level": "segment=Micro",
+            "value": 0.8918,
+            "ci": [
+              0.8848,
+              0.899
+            ],
+            "n": 288755,
+            "status": "report"
+          },
+          {
+            "level": "segment=Small",
+            "value": 0.8721,
+            "ci": [
+              0.8572,
+              0.8848
+            ],
+            "n": 173020,
+            "status": "report"
+          },
+          {
+            "level": "secured=0",
+            "value": 0.8893,
+            "ci": [
+              0.8801,
+              0.8973
+            ],
+            "n": 190866,
+            "status": "report"
+          },
+          {
+            "level": "secured=1",
+            "value": 0.885,
+            "ci": [
+              0.876,
+              0.8961
+            ],
+            "n": 276605,
+            "status": "report"
+          },
+          {
+            "level": "ticket_band=(147174.015, 361060.349]",
+            "value": 0.8974,
+            "ci": [
+              0.8833,
+              0.9107
+            ],
+            "n": 93492,
+            "status": "report"
+          },
+          {
+            "level": "ticket_band=(2289618.96, 50000000.0]",
+            "value": 0.8702,
+            "ci": [
+              0.8529,
+              0.8881
+            ],
+            "n": 93471,
+            "status": "report"
+          },
+          {
+            "level": "ticket_band=(361060.349, 916711.962]",
+            "value": 0.8704,
+            "ci": [
+              0.8559,
+              0.886
+            ],
+            "n": 93519,
+            "status": "report"
+          },
+          {
+            "level": "ticket_band=(916711.962, 2289618.96]",
+            "value": 0.8781,
+            "ci": [
+              0.8599,
+              0.891
+            ],
+            "n": 93483,
+            "status": "report"
+          },
+          {
+            "level": "ticket_band=(9999.999, 147174.015]",
+            "value": 0.8997,
+            "ci": [
+              0.8867,
+              0.9106
+            ],
+            "n": 93506,
+            "status": "report"
+          },
+          {
+            "level": "vintage_band=[0,12)",
+            "value": 0.8641,
+            "ci": [
+              0.8367,
+              0.8912
+            ],
+            "n": 21103,
+            "status": "report"
+          },
+          {
+            "level": "vintage_band=[12,18)",
+            "value": 0.8673,
+            "ci": [
+              0.8408,
+              0.8946
+            ],
+            "n": 24818,
+            "status": "report"
+          },
+          {
+            "level": "vintage_band=[18,30)",
+            "value": 0.8806,
+            "ci": [
+              0.8654,
+              0.8972
+            ],
+            "n": 76921,
+            "status": "report"
+          },
+          {
+            "level": "vintage_band=[30,48)",
+            "value": 0.8916,
+            "ci": [
+              0.8801,
+              0.9006
+            ],
+            "n": 150174,
+            "status": "report"
+          },
+          {
+            "level": "vintage_band=[48,inf)",
+            "value": 0.8912,
+            "ci": [
+              0.8809,
+              0.9014
+            ],
+            "n": 194455,
+            "status": "report"
+          },
+          {
+            "level": "sector=Agriculture",
+            "value": 0.9069,
+            "ci": [
+              0.8984,
+              0.9171
+            ],
+            "n": 135043,
+            "status": "report"
+          },
+          {
+            "level": "sector=Logistics",
+            "value": 0.8483,
+            "ci": [
+              0.8157,
+              0.8764
+            ],
+            "n": 11568,
+            "status": "report"
+          },
+          {
+            "level": "sector=Manufacturing",
+            "value": 0.8666,
+            "ci": [
+              0.8417,
+              0.8917
+            ],
+            "n": 30059,
+            "status": "report"
+          },
+          {
+            "level": "sector=Retail",
+            "value": 0.8506,
+            "ci": [
+              0.8205,
+              0.8835
+            ],
+            "n": 28180,
+            "status": "report"
+          },
+          {
+            "level": "sector=Salaried",
+            "value": 0.8591,
+            "ci": [
+              0.8438,
+              0.8713
+            ],
+            "n": 161247,
+            "status": "report"
+          },
+          {
+            "level": "sector=Services",
+            "value": 0.8707,
+            "ci": [
+              0.8479,
+              0.8898
+            ],
+            "n": 49981,
+            "status": "report"
+          },
+          {
+            "level": "sector=Trading",
+            "value": 0.8724,
+            "ci": [
+              0.8492,
+              0.8927
+            ],
+            "n": 51393,
+            "status": "report"
+          },
+          {
+            "level": "geography=Central",
+            "value": 0.9061,
+            "ci": [
+              0.8877,
+              0.9221
+            ],
+            "n": 41283,
+            "status": "report"
+          },
+          {
+            "level": "geography=East",
+            "value": 0.9057,
+            "ci": [
+              0.8925,
+              0.9175
+            ],
+            "n": 69421,
+            "status": "report"
+          },
+          {
+            "level": "geography=North",
+            "value": 0.8868,
+            "ci": [
+              0.8723,
+              0.9006
+            ],
+            "n": 109699,
+            "status": "report"
+          },
+          {
+            "level": "geography=South",
+            "value": 0.8887,
+            "ci": [
+              0.8784,
+              0.9002
+            ],
+            "n": 127315,
+            "status": "report"
+          },
+          {
+            "level": "geography=West",
+            "value": 0.8698,
+            "ci": [
+              0.8534,
+              0.8847
+            ],
+            "n": 119753,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=0",
+            "value": 0.7889,
+            "ci": [
+              0.76,
+              0.8214
+            ],
+            "n": 13500,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=1",
+            "value": 0.8283,
+            "ci": [
+              0.7988,
+              0.8564
+            ],
+            "n": 13500,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=2",
+            "value": 0.8506,
+            "ci": [
+              0.8262,
+              0.8745
+            ],
+            "n": 13500,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=3",
+            "value": 0.8846,
+            "ci": [
+              0.8627,
+              0.9027
+            ],
+            "n": 13500,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=4",
+            "value": 0.8926,
+            "ci": [
+              0.8702,
+              0.913
+            ],
+            "n": 13500,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=5",
+            "value": 0.9079,
+            "ci": [
+              0.8889,
+              0.9228
+            ],
+            "n": 13500,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=6",
+            "value": 0.901,
+            "ci": [
+              0.881,
+              0.9204
+            ],
+            "n": 13463,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=7",
+            "value": 0.8887,
+            "ci": [
+              0.87,
+              0.9069
+            ],
+            "n": 13429,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=8",
+            "value": 0.8849,
+            "ci": [
+              0.8653,
+              0.9032
+            ],
+            "n": 13383,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=9",
+            "value": 0.8797,
+            "ci": [
+              0.8612,
+              0.8972
+            ],
+            "n": 13344,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=10",
+            "value": 0.8651,
+            "ci": [
+              0.8467,
+              0.8868
+            ],
+            "n": 13302,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=11",
+            "value": 0.8701,
+            "ci": [
+              0.8521,
+              0.8911
+            ],
+            "n": 13269,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=12",
+            "value": 0.8817,
+            "ci": [
+              0.8618,
+              0.9013
+            ],
+            "n": 13231,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=13",
+            "value": 0.8806,
+            "ci": [
+              0.8593,
+              0.8967
+            ],
+            "n": 13187,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=14",
+            "value": 0.8703,
+            "ci": [
+              0.8477,
+              0.8898
+            ],
+            "n": 13149,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=15",
+            "value": 0.8683,
+            "ci": [
+              0.8488,
+              0.8877
+            ],
+            "n": 13112,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=16",
+            "value": 0.8754,
+            "ci": [
+              0.8522,
+              0.8918
+            ],
+            "n": 13078,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=17",
+            "value": 0.8855,
+            "ci": [
+              0.8686,
+              0.9048
+            ],
+            "n": 13051,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=18",
+            "value": 0.8935,
+            "ci": [
+              0.8743,
+              0.9102
+            ],
+            "n": 13000,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=19",
+            "value": 0.8892,
+            "ci": [
+              0.8667,
+              0.9088
+            ],
+            "n": 12952,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=20",
+            "value": 0.8936,
+            "ci": [
+              0.8762,
+              0.9132
+            ],
+            "n": 12914,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=21",
+            "value": 0.8884,
+            "ci": [
+              0.8658,
+              0.9065
+            ],
+            "n": 12863,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=22",
+            "value": 0.9002,
+            "ci": [
+              0.8818,
+              0.917
+            ],
+            "n": 12810,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=23",
+            "value": 0.8949,
+            "ci": [
+              0.8761,
+              0.9137
+            ],
+            "n": 12773,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=24",
+            "value": 0.8953,
+            "ci": [
+              0.8746,
+              0.9115
+            ],
+            "n": 12730,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=25",
+            "value": 0.9062,
+            "ci": [
+              0.8907,
+              0.9224
+            ],
+            "n": 12695,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=26",
+            "value": 0.901,
+            "ci": [
+              0.8839,
+              0.9198
+            ],
+            "n": 12649,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=27",
+            "value": 0.9041,
+            "ci": [
+              0.885,
+              0.9194
+            ],
+            "n": 12613,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=28",
+            "value": 0.9022,
+            "ci": [
+              0.8856,
+              0.9198
+            ],
+            "n": 12573,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=29",
+            "value": 0.903,
+            "ci": [
+              0.8844,
+              0.9209
+            ],
+            "n": 12530,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=30",
+            "value": 0.9043,
+            "ci": [
+              0.888,
+              0.9209
+            ],
+            "n": 12499,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=31",
+            "value": 0.9022,
+            "ci": [
+              0.8863,
+              0.9177
+            ],
+            "n": 12458,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=32",
+            "value": 0.9044,
+            "ci": [
+              0.8862,
+              0.9181
+            ],
+            "n": 12416,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=33",
+            "value": 0.9031,
+            "ci": [
+              0.8878,
+              0.9217
+            ],
+            "n": 12373,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=34",
+            "value": 0.9053,
+            "ci": [
+              0.8899,
+              0.9232
+            ],
+            "n": 12334,
+            "status": "report"
+          },
+          {
+            "level": "calendar_month=35",
+            "value": 0.9141,
+            "ci": [
+              0.8971,
+              0.9283
+            ],
+            "n": 12291,
+            "status": "report"
+          }
+        ],
+        "figures": [
+          "auc_by_cut_grid.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-08",
+      "runner": "04_calibration",
+      "metric": "ece",
+      "scope": "overall",
+      "cut": null,
+      "op": "le",
+      "threshold": 0.02,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "\"PD = 40%\" has to mean an observed 40% default frequency, or the cockpit's numbers cannot be used for provisioning conversations.",
+      "source": "plan §B L8 bands (\"ECE ≤ 0.02 overall\")",
+      "note": null,
+      "result": {
+        "criterion_id": "DR-08",
+        "value": 0.001,
+        "ci": [
+          0.0005,
+          0.0019
+        ],
+        "n": 467471,
+        "status": "pass",
+        "detail": "10 equal-width bins, calibrated score, held-out fold isotonic",
+        "breakdown": [],
+        "figures": [
+          "reliability_overall.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-09",
+      "runner": "04_calibration",
+      "metric": "ece",
+      "scope": "per_cut",
+      "cut": "all",
+      "op": "le",
+      "threshold": 0.04,
+      "min_n": 500,
+      "severity": "fail",
+      "rationale": "Overall calibration can hide a portfolio the model is systematically over-confident about. The looser per-cut band acknowledges smaller cells.",
+      "source": "plan §B L8 bands (\"≤ 0.04 per cut (n≥500)\")",
+      "note": "min_n = 500 is the plan's own number and gates this criterion.",
+      "result": {
+        "criterion_id": "DR-09",
+        "value": null,
+        "ci": null,
+        "n": null,
+        "status": "pass",
+        "detail": "76 cells across 9 cuts, calibrated score",
+        "breakdown": [
+          {
+            "level": "portfolio=MSME-CC",
+            "value": 0.0031,
+            "ci": [
+              0.0009,
+              0.0059
+            ],
+            "n": 46557,
+            "status": "pass"
+          },
+          {
+            "level": "portfolio=MSME-TL",
+            "value": 0.002,
+            "ci": [
+              0.001,
+              0.0051
+            ],
+            "n": 39920,
+            "status": "pass"
+          },
+          {
+            "level": "portfolio=Housing",
+            "value": 0.0022,
+            "ci": [
+              0.0008,
+              0.0043
+            ],
+            "n": 71404,
+            "status": "pass"
+          },
+          {
+            "level": "portfolio=Education",
+            "value": 0.0045,
+            "ci": [
+              0.0018,
+              0.0091
+            ],
+            "n": 37559,
+            "status": "pass"
+          },
+          {
+            "level": "portfolio=Agri",
+            "value": 0.002,
+            "ci": [
+              0.001,
+              0.0037
+            ],
+            "n": 135043,
+            "status": "pass"
+          },
+          {
+            "level": "portfolio=Retail-Unsecured",
+            "value": 0.0033,
+            "ci": [
+              0.0011,
+              0.0066
+            ],
+            "n": 45385,
+            "status": "pass"
+          },
+          {
+            "level": "portfolio=LAP",
+            "value": 0.0011,
+            "ci": [
+              0.0008,
+              0.0041
+            ],
+            "n": 48651,
+            "status": "pass"
+          },
+          {
+            "level": "portfolio=Auto",
+            "value": 0.0032,
+            "ci": [
+              0.001,
+              0.006
+            ],
+            "n": 42952,
+            "status": "pass"
+          },
+          {
+            "level": "constitution=Individual",
+            "value": 0.0011,
+            "ci": [
+              0.0005,
+              0.0022
+            ],
+            "n": 335677,
+            "status": "pass"
+          },
+          {
+            "level": "constitution=LLP",
+            "value": 0.0039,
+            "ci": [
+              0.0025,
+              0.0127
+            ],
+            "n": 7152,
+            "status": "pass"
+          },
+          {
+            "level": "constitution=Partnership",
+            "value": 0.0033,
+            "ci": [
+              0.0014,
+              0.008
+            ],
+            "n": 14945,
+            "status": "pass"
+          },
+          {
+            "level": "constitution=Proprietorship",
+            "value": 0.0013,
+            "ci": [
+              0.0008,
+              0.0031
+            ],
+            "n": 93442,
+            "status": "pass"
+          },
+          {
+            "level": "constitution=PvtLtd",
+            "value": 0.0034,
+            "ci": [
+              0.0012,
+              0.0085
+            ],
+            "n": 16255,
+            "status": "pass"
+          },
+          {
+            "level": "segment=Medium",
+            "value": 0.003,
+            "ci": [
+              0.0015,
+              0.0099
+            ],
+            "n": 5696,
+            "status": "pass"
+          },
+          {
+            "level": "segment=Micro",
+            "value": 0.0007,
+            "ci": [
+              0.0005,
+              0.0023
+            ],
+            "n": 288755,
+            "status": "pass"
+          },
+          {
+            "level": "segment=Small",
+            "value": 0.0014,
+            "ci": [
+              0.0005,
+              0.0031
+            ],
+            "n": 173020,
+            "status": "pass"
+          },
+          {
+            "level": "secured=0",
+            "value": 0.0013,
+            "ci": [
+              0.0006,
+              0.003
+            ],
+            "n": 190866,
+            "status": "pass"
+          },
+          {
+            "level": "secured=1",
+            "value": 0.0009,
+            "ci": [
+              0.0005,
+              0.002
+            ],
+            "n": 276605,
+            "status": "pass"
+          },
+          {
+            "level": "ticket_band=(147174.015, 361060.349]",
+            "value": 0.0016,
+            "ci": [
+              0.0008,
+              0.0036
+            ],
+            "n": 93492,
+            "status": "pass"
+          },
+          {
+            "level": "ticket_band=(2289618.96, 50000000.0]",
+            "value": 0.0016,
+            "ci": [
+              0.0006,
+              0.0037
+            ],
+            "n": 93471,
+            "status": "pass"
+          },
+          {
+            "level": "ticket_band=(361060.349, 916711.962]",
+            "value": 0.0014,
+            "ci": [
+              0.0007,
+              0.0035
+            ],
+            "n": 93519,
+            "status": "pass"
+          },
+          {
+            "level": "ticket_band=(916711.962, 2289618.96]",
+            "value": 0.0011,
+            "ci": [
+              0.0006,
+              0.0033
+            ],
+            "n": 93483,
+            "status": "pass"
+          },
+          {
+            "level": "ticket_band=(9999.999, 147174.015]",
+            "value": 0.0018,
+            "ci": [
+              0.0009,
+              0.0044
+            ],
+            "n": 93506,
+            "status": "pass"
+          },
+          {
+            "level": "vintage_band=[0,12)",
+            "value": 0.0017,
+            "ci": [
+              0.0012,
+              0.0064
+            ],
+            "n": 21103,
+            "status": "pass"
+          },
+          {
+            "level": "vintage_band=[12,18)",
+            "value": 0.0022,
+            "ci": [
+              0.0014,
+              0.0056
+            ],
+            "n": 24818,
+            "status": "pass"
+          },
+          {
+            "level": "vintage_band=[18,30)",
+            "value": 0.001,
+            "ci": [
+              0.0007,
+              0.0035
+            ],
+            "n": 76921,
+            "status": "pass"
+          },
+          {
+            "level": "vintage_band=[30,48)",
+            "value": 0.0007,
+            "ci": [
+              0.0006,
+              0.0025
+            ],
+            "n": 150174,
+            "status": "pass"
+          },
+          {
+            "level": "vintage_band=[48,inf)",
+            "value": 0.0012,
+            "ci": [
+              0.0007,
+              0.0028
+            ],
+            "n": 194455,
+            "status": "pass"
+          },
+          {
+            "level": "sector=Agriculture",
+            "value": 0.002,
+            "ci": [
+              0.001,
+              0.0037
+            ],
+            "n": 135043,
+            "status": "pass"
+          },
+          {
+            "level": "sector=Logistics",
+            "value": 0.0036,
+            "ci": [
+              0.0016,
+              0.0107
+            ],
+            "n": 11568,
+            "status": "pass"
+          },
+          {
+            "level": "sector=Manufacturing",
+            "value": 0.0041,
+            "ci": [
+              0.0015,
+              0.0084
+            ],
+            "n": 30059,
+            "status": "pass"
+          },
+          {
+            "level": "sector=Retail",
+            "value": 0.0037,
+            "ci": [
+              0.0018,
+              0.007
+            ],
+            "n": 28180,
+            "status": "pass"
+          },
+          {
+            "level": "sector=Salaried",
+            "value": 0.0017,
+            "ci": [
+              0.0006,
+              0.0033
+            ],
+            "n": 161247,
+            "status": "pass"
+          },
+          {
+            "level": "sector=Services",
+            "value": 0.0019,
+            "ci": [
+              0.0008,
+              0.0048
+            ],
+            "n": 49981,
+            "status": "pass"
+          },
+          {
+            "level": "sector=Trading",
+            "value": 0.0007,
+            "ci": [
+              0.0008,
+              0.0035
+            ],
+            "n": 51393,
+            "status": "pass"
+          },
+          {
+            "level": "geography=Central",
+            "value": 0.0023,
+            "ci": [
+              0.0014,
+              0.0058
+            ],
+            "n": 41283,
+            "status": "pass"
+          },
+          {
+            "level": "geography=East",
+            "value": 0.0024,
+            "ci": [
+              0.0014,
+              0.0042
+            ],
+            "n": 69421,
+            "status": "pass"
+          },
+          {
+            "level": "geography=North",
+            "value": 0.0015,
+            "ci": [
+              0.0007,
+              0.0032
+            ],
+            "n": 109699,
+            "status": "pass"
+          },
+          {
+            "level": "geography=South",
+            "value": 0.0026,
+            "ci": [
+              0.0008,
+              0.0044
+            ],
+            "n": 127315,
+            "status": "pass"
+          },
+          {
+            "level": "geography=West",
+            "value": 0.0009,
+            "ci": [
+              0.0006,
+              0.0028
+            ],
+            "n": 119753,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=0",
+            "value": 0.003,
+            "ci": [
+              0.0025,
+              0.0054
+            ],
+            "n": 13500,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=1",
+            "value": 0.0016,
+            "ci": [
+              0.001,
+              0.004
+            ],
+            "n": 13500,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=2",
+            "value": 0.0033,
+            "ci": [
+              0.002,
+              0.0053
+            ],
+            "n": 13500,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=3",
+            "value": 0.0018,
+            "ci": [
+              0.0016,
+              0.0043
+            ],
+            "n": 13500,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=4",
+            "value": 0.0033,
+            "ci": [
+              0.0021,
+              0.0055
+            ],
+            "n": 13500,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=5",
+            "value": 0.0026,
+            "ci": [
+              0.0016,
+              0.0049
+            ],
+            "n": 13500,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=6",
+            "value": 0.0032,
+            "ci": [
+              0.0018,
+              0.0057
+            ],
+            "n": 13463,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=7",
+            "value": 0.0023,
+            "ci": [
+              0.0015,
+              0.005
+            ],
+            "n": 13429,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=8",
+            "value": 0.001,
+            "ci": [
+              0.0013,
+              0.0039
+            ],
+            "n": 13383,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=9",
+            "value": 0.0026,
+            "ci": [
+              0.0015,
+              0.0053
+            ],
+            "n": 13344,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=10",
+            "value": 0.0047,
+            "ci": [
+              0.0029,
+              0.0078
+            ],
+            "n": 13302,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=11",
+            "value": 0.0033,
+            "ci": [
+              0.0017,
+              0.0059
+            ],
+            "n": 13269,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=12",
+            "value": 0.0017,
+            "ci": [
+              0.0013,
+              0.0043
+            ],
+            "n": 13231,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=13",
+            "value": 0.0013,
+            "ci": [
+              0.0013,
+              0.0043
+            ],
+            "n": 13187,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=14",
+            "value": 0.0033,
+            "ci": [
+              0.0021,
+              0.0059
+            ],
+            "n": 13149,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=15",
+            "value": 0.003,
+            "ci": [
+              0.0018,
+              0.0058
+            ],
+            "n": 13112,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=16",
+            "value": 0.0037,
+            "ci": [
+              0.0023,
+              0.0066
+            ],
+            "n": 13078,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=17",
+            "value": 0.0036,
+            "ci": [
+              0.0023,
+              0.0065
+            ],
+            "n": 13051,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=18",
+            "value": 0.0009,
+            "ci": [
+              0.0013,
+              0.0042
+            ],
+            "n": 13000,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=19",
+            "value": 0.0022,
+            "ci": [
+              0.0016,
+              0.0049
+            ],
+            "n": 12952,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=20",
+            "value": 0.0018,
+            "ci": [
+              0.0014,
+              0.0043
+            ],
+            "n": 12914,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=21",
+            "value": 0.0028,
+            "ci": [
+              0.0016,
+              0.0056
+            ],
+            "n": 12863,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=22",
+            "value": 0.0017,
+            "ci": [
+              0.0014,
+              0.0046
+            ],
+            "n": 12810,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=23",
+            "value": 0.0021,
+            "ci": [
+              0.0017,
+              0.0044
+            ],
+            "n": 12773,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=24",
+            "value": 0.0039,
+            "ci": [
+              0.0022,
+              0.0064
+            ],
+            "n": 12730,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=25",
+            "value": 0.0039,
+            "ci": [
+              0.0022,
+              0.0063
+            ],
+            "n": 12695,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=26",
+            "value": 0.002,
+            "ci": [
+              0.0016,
+              0.0048
+            ],
+            "n": 12649,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=27",
+            "value": 0.0019,
+            "ci": [
+              0.0013,
+              0.005
+            ],
+            "n": 12613,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=28",
+            "value": 0.0029,
+            "ci": [
+              0.0016,
+              0.0053
+            ],
+            "n": 12573,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=29",
+            "value": 0.0022,
+            "ci": [
+              0.0015,
+              0.0048
+            ],
+            "n": 12530,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=30",
+            "value": 0.0014,
+            "ci": [
+              0.0013,
+              0.0044
+            ],
+            "n": 12499,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=31",
+            "value": 0.002,
+            "ci": [
+              0.0015,
+              0.0048
+            ],
+            "n": 12458,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=32",
+            "value": 0.0026,
+            "ci": [
+              0.0017,
+              0.0056
+            ],
+            "n": 12416,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=33",
+            "value": 0.0034,
+            "ci": [
+              0.0019,
+              0.0062
+            ],
+            "n": 12373,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=34",
+            "value": 0.0046,
+            "ci": [
+              0.0025,
+              0.0071
+            ],
+            "n": 12334,
+            "status": "pass"
+          },
+          {
+            "level": "calendar_month=35",
+            "value": 0.0018,
+            "ci": [
+              0.0015,
+              0.0049
+            ],
+            "n": 12291,
+            "status": "pass"
+          }
+        ],
+        "figures": [
+          "ece_by_cut.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-10",
+      "runner": "04_calibration",
+      "metric": "brier_calibrated_minus_brier_raw",
+      "scope": "overall",
+      "cut": null,
+      "op": "lt",
+      "threshold": 0.0,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "Isotonic calibration must actually improve the score, not merely re-shape it. If it does not, the calibration step is decoration and should be cut.",
+      "source": "plan §B L8 bands (\"Brier(cal) < Brier(raw)\")",
+      "note": null,
+      "result": {
+        "criterion_id": "DR-10",
+        "value": -6.8e-05,
+        "ci": [
+          -0.0001,
+          -0.0
+        ],
+        "n": 467471,
+        "status": "pass",
+        "detail": "Brier(raw)=0.0177, Brier(calibrated)=0.0177",
+        "breakdown": [],
+        "figures": []
+      }
+    },
+    {
+      "id": "DR-11",
+      "runner": "05_rank_order",
+      "metric": "risk_band_default_rate_monotonicity",
+      "scope": "per_portfolio",
+      "cut": null,
+      "op": "monotone_increasing",
+      "threshold": null,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "Observed default rate must rise strictly from Green to Amber to Red inside every portfolio. A relationship manager reads the band, not the score, so this is the property the product actually rests on.",
+      "source": "plan §B L8 bands (\"bands strictly monotone within every portfolio\"); §D gate G2",
+      "note": "Asserted on the 8-month rank-order exhibit (branch 0914ac6, §B L5 DM-3), i.e. the ordering must hold in each of the exhibit's months, not only pooled. Strict monotonicity — ties fail.",
+      "result": {
+        "criterion_id": "DR-11",
+        "value": null,
+        "ci": null,
+        "n": null,
+        "status": "pass",
+        "detail": "pooled (reported, not gated — scope is per_portfolio): monotone, Green 0.0034 -> Amber 0.0838 -> Red 0.7290; operating thresholds amber=0.074653, red=0.271968 (live cost-minimising)",
+        "breakdown": [
+          {
+            "level": "MSME-CC",
+            "value": [
+              0.0037,
+              0.1031,
+              0.864
+            ],
+            "ci": null,
+            "n": 46557,
+            "status": "pass"
+          },
+          {
+            "level": "MSME-TL",
+            "value": [
+              0.0032,
+              0.0976,
+              0.7566
+            ],
+            "ci": null,
+            "n": 39920,
+            "status": "pass"
+          },
+          {
+            "level": "Housing",
+            "value": [
+              0.0031,
+              0.1788,
+              0.7892
+            ],
+            "ci": null,
+            "n": 71404,
+            "status": "pass"
+          },
+          {
+            "level": "Education",
+            "value": [
+              0.004,
+              0.1296,
+              0.7447
+            ],
+            "ci": null,
+            "n": 37559,
+            "status": "pass"
+          },
+          {
+            "level": "Agri",
+            "value": [
+              0.0031,
+              0.0496,
+              0.6987
+            ],
+            "ci": null,
+            "n": 135043,
+            "status": "pass"
+          },
+          {
+            "level": "Retail-Unsecured",
+            "value": [
+              0.0047,
+              0.108,
+              0.684
+            ],
+            "ci": null,
+            "n": 45385,
+            "status": "pass"
+          },
+          {
+            "level": "LAP",
+            "value": [
+              0.0031,
+              0.1022,
+              0.7765
+            ],
+            "ci": null,
+            "n": 48651,
+            "status": "pass"
+          },
+          {
+            "level": "Auto",
+            "value": [
+              0.0032,
+              0.0766,
+              0.6634
+            ],
+            "ci": null,
+            "n": 42952,
+            "status": "pass"
+          }
+        ],
+        "figures": [
+          "rank_order_small_multiples.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-12",
+      "runner": "05_rank_order",
+      "metric": "monotone_decile_step_fraction",
+      "scope": "per_portfolio",
+      "cut": null,
+      "op": "ge",
+      "threshold": 0.9,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "A finer-grained rank-order check than the three bands: at decile resolution, at least 9 of the 10 step-ups in observed default rate must be non-decreasing.",
+      "source": "plan §B L8 bands (\"≥9/10 decile steps\")",
+      "note": "INTERPRETATION. The plan's clause reads \"bands strictly monotone within every portfolio, ≥9/10 decile steps\" as one sentence. We split it into two criteria because it states two different tests at two resolutions (three bands, strict; ten deciles, 9-of-10). Both are pre-registered at the plan's own numbers, and both are scoped per portfolio, which is the scope the sentence carries.",
+      "result": {
+        "criterion_id": "DR-12",
+        "value": 0.5556,
+        "ci": null,
+        "n": 46557,
+        "status": "fail",
+        "detail": "literal fraction gates (per the brief); CI-aware fraction reported only (a step only counts as a reversal when the two deciles' Wilson intervals do not overlap): {'MSME-CC': 1.0, 'MSME-TL': 1.0, 'Housing': 1.0, 'Education': 1.0, 'Agri': 1.0, 'Retail-Unsecured': 1.0, 'LAP': 1.0, 'Auto': 1.0}. pooled literal=1.0000, pooled CI-aware=1.0000 (reported, not gated); operating thresholds amber=0.074653, red=0.271968 (live cost-minimising).",
+        "breakdown": [
+          {
+            "level": "MSME-CC",
+            "value": 0.5556,
+            "ci": null,
+            "n": 46557,
+            "status": "fail"
+          },
+          {
+            "level": "MSME-TL",
+            "value": 0.5556,
+            "ci": null,
+            "n": 39920,
+            "status": "fail"
+          },
+          {
+            "level": "Housing",
+            "value": 0.7778,
+            "ci": null,
+            "n": 71404,
+            "status": "fail"
+          },
+          {
+            "level": "Education",
+            "value": 0.7778,
+            "ci": null,
+            "n": 37559,
+            "status": "fail"
+          },
+          {
+            "level": "Agri",
+            "value": 0.7778,
+            "ci": null,
+            "n": 135043,
+            "status": "fail"
+          },
+          {
+            "level": "Retail-Unsecured",
+            "value": 0.8889,
+            "ci": null,
+            "n": 45385,
+            "status": "fail"
+          },
+          {
+            "level": "LAP",
+            "value": 0.6667,
+            "ci": null,
+            "n": 48651,
+            "status": "fail"
+          },
+          {
+            "level": "Auto",
+            "value": 0.8889,
+            "ci": null,
+            "n": 42952,
+            "status": "fail"
+          }
+        ],
+        "figures": [
+          "decile_steps.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-13",
+      "runner": "06_stability",
+      "metric": "psi_score_distribution",
+      "scope": "overall",
+      "cut": null,
+      "op": "le",
+      "threshold": 0.1,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "Population Stability Index of the score distribution between the training window and the most recent window. 0.10 is the conventional \"no meaningful shift\" line in bank model-risk practice.",
+      "source": "plan §B L8 bands (\"PSI ≤ 0.10\")",
+      "note": null,
+      "result": {
+        "criterion_id": "DR-13",
+        "value": 0.0006,
+        "ci": null,
+        "n": 500168,
+        "status": "pass",
+        "detail": "train window n=581245 (months < 24, embargoed), OOT window n=500168 (months >= 24), 10 quantile bins fixed on the training window",
+        "breakdown": [],
+        "figures": [
+          "psi_score.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-14",
+      "runner": "06_stability",
+      "metric": "max_feature_csi",
+      "scope": "overall",
+      "cut": null,
+      "op": "le",
+      "threshold": 0.25,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "Characteristic Stability Index per input feature. Reported for every feature; the maximum across features gates.",
+      "source": "plan §B L8 bands (\"no CSI > 0.25\")",
+      "note": "Expressed as a maximum so a single number gates, which is what \"no CSI > 0.25\" says. The full per-feature table goes in the report.",
+      "result": {
+        "criterion_id": "DR-14",
+        "value": 3.6344,
+        "ci": null,
+        "n": 500168,
+        "status": "fail",
+        "detail": "max over 62 model-input features, binding feature: vintage_band",
+        "breakdown": [
+          {
+            "level": "sector",
+            "value": 0.0012,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "region",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "loan_type",
+            "value": 0.0009,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "segment",
+            "value": 0.0003,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "qualification",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "promoter_age_group",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "log_sanctioned",
+            "value": 0.0004,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "business_age_years",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "dpd",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "utilisation",
+            "value": 0.0004,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "inflow",
+            "value": 0.0004,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "gst_sales",
+            "value": 0.0001,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "txn_count",
+            "value": 0.0001,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "bounce",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "minbal_breach",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "adverse_remark",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "dpd_max_6m",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "times_late_6m",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "bounces_6m",
+            "value": 0.0179,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "minbal_breach_6m",
+            "value": 0.0125,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "util_avg_3m",
+            "value": 0.0004,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "util_max_6m",
+            "value": 0.0182,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "months_over_90pct_util_6m",
+            "value": 0.0259,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "inflow_trend_3m",
+            "value": 0.0519,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "inflow_vs_6m_avg",
+            "value": 0.0765,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "sales_trend_3m",
+            "value": 0.3114,
+            "ci": null,
+            "n": 500168,
+            "status": "fail"
+          },
+          {
+            "level": "txn_drop_flag",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "adverse_remark_6m",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "portfolio",
+            "value": 0.0013,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "constitution",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "state",
+            "value": 0.0001,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "city_tier",
+            "value": 0.0007,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "nic_group",
+            "value": 0.0009,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "secured",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "tenor_months",
+            "value": 0.0008,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "interest_rate_pa",
+            "value": 0.0012,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "vintage_band",
+            "value": 3.6344,
+            "ci": null,
+            "n": 500168,
+            "status": "fail"
+          },
+          {
+            "level": "outstanding",
+            "value": 0.029,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "demanded_amount",
+            "value": 0.0143,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "collected_amount",
+            "value": 0.0122,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "collection_ratio",
+            "value": 0.0033,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "collection_ratio_3m",
+            "value": 0.019,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "balance",
+            "value": 0.0002,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "min_balance_6m",
+            "value": 0.001,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "bureau_score",
+            "value": 0.001,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "drawing_power",
+            "value": 0.0004,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "salary_credit",
+            "value": 0.0003,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "salary_vs_6m_avg",
+            "value": 0.0627,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "salary_gap_6m",
+            "value": 0.0536,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "other_bank_emi",
+            "value": 0.0043,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "emi_burden_ratio",
+            "value": 0.0054,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "ltv",
+            "value": 0.3193,
+            "ci": null,
+            "n": 500168,
+            "status": "fail"
+          },
+          {
+            "level": "ltv_vs_schedule",
+            "value": 0.2676,
+            "ci": null,
+            "n": 500168,
+            "status": "fail"
+          },
+          {
+            "level": "rental_income",
+            "value": 0.0001,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "rental_vs_6m_avg",
+            "value": 0.0737,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "crop_receipt",
+            "value": 0.0025,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "crop_receipt_vs_norm",
+            "value": 0.0014,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "renewal_overdue_months",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "moratorium_active",
+            "value": 0.0,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "commute_spend",
+            "value": 0.0002,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "commute_vs_6m_avg",
+            "value": 0.0774,
+            "ci": null,
+            "n": 500168,
+            "status": "pass"
+          },
+          {
+            "level": "months_since_moratorium_end_band",
+            "value": 1.0703,
+            "ci": null,
+            "n": 500168,
+            "status": "fail"
+          }
+        ],
+        "figures": [
+          "csi_features.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-15",
+      "runner": "07_leakage",
+      "metric": "dpd_family_attribution_share_at_10_12m",
+      "scope": "overall",
+      "cut": null,
+      "op": "le",
+      "threshold": 0.05,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "This is what makes the \"we see it a year early\" claim honest. For predictions made 10–12 months before NPA onset, the days-past-due family must contribute at most 5% of total absolute attribution — the warning has to come from cash flow and utilisation, not from an account that is already visibly late.",
+      "source": "plan §B L8 bands (\"DPD share ≤ 5% at 10–12 mo\")",
+      "note": "Attribution = share of summed absolute SHAP-style contribution over the DPD family as listed in src/rigor.py GROUPS[\"Days-past-due / repayment\"].",
+      "result": {
+        "criterion_id": "DR-15",
+        "value": 0.0381,
+        "ci": [
+          0.0325,
+          0.0356
+        ],
+        "n": 4330,
+        "status": "pass",
+        "detail": "primary reading (collection_ratio as its own family, per src/rigor.py's leakage_families.primary): 0.0381. Alternative reading (collection folded into DPD): 0.2092. independent recompute from the cached DR-01 holdout model over the same bucket (n=4432): 0.0341 (agrees with data/rigor.json's 0.0381 within 1pp). DRISHTi's own GROUPS families: ['Adverse filings', 'Borrower profile', 'Bureau', 'Cash-flow (inflows / GST)', 'Credit-limit utilisation', 'Days-past-due / repayment', 'Demand vs collection', 'Income & balance', 'Leverage & collateral'].",
+        "breakdown": [],
+        "figures": [
+          "lead_time_attribution.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-16",
+      "runner": "07_leakage",
+      "metric": "permuted_label_auc",
+      "scope": "overall",
+      "cut": null,
+      "op": "between",
+      "threshold": [
+        0.48,
+        0.52
+      ],
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "Retrain the full pipeline on randomly permuted labels. Anything outside chance means the evaluation harness itself leaks — the strongest single check that the reported AUC is real.",
+      "source": "plan §B L8 bands (\"permutation AUC ∈ [0.48,0.52]\")",
+      "note": "INTERPRETATION: the permutation is of the LABEL (the standard permutation-test form), with the split, features and hyper-parameters left untouched. Averaged over the registered seeds.",
+      "result": {
+        "criterion_id": "DR-16",
+        "value": 0.5001,
+        "ci": [
+          0.4937,
+          0.5102
+        ],
+        "n": 63226,
+        "status": "pass",
+        "detail": "mean over 5/5 registered seeds of a full retrain on randomly permuted labels (split/features/hyper-parameters untouched), on the 9,000 x 36 book (see _refit.py for why not the full 45,000 x 48 book). Per-seed: [{'level': 'seed=7', 'value': 0.5102, 'ci': None, 'n': 63226}, {'level': 'seed=8', 'value': 0.5025, 'ci': None, 'n': 63502}, {'level': 'seed=9', 'value': 0.4937, 'ci': None, 'n': 63434}, {'level': 'seed=10', 'value': 0.4975, 'ci': None, 'n': 63441}, {'level': 'seed=11', 'value': 0.4968, 'ci': None, 'n': 63407}].",
+        "breakdown": [],
+        "figures": [
+          "permutation_auc.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-17",
+      "runner": "07_leakage",
+      "metric": "availability_at_time_manifest",
+      "scope": "overall",
+      "cut": null,
+      "op": "exists",
+      "threshold": null,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "A per-feature manifest stating, for every model input, when that value would actually have been knowable in a bank's systems relative to the observation month. A feature that a bank only learns after the fact is leakage no statistical test will catch.",
+      "source": "plan §B L8 bands (\"availability-at-time manifest\")",
+      "note": "INTERPRETATION. The plan lists this among the leakage bands without saying \"reported\", so we registered it as a gating artefact: the manifest must exist and cover every feature the model consumes. A feature missing from the manifest fails the criterion.",
+      "result": {
+        "criterion_id": "DR-17",
+        "value": true,
+        "ci": null,
+        "n": 62,
+        "status": "pass",
+        "detail": "62 of 62 scored model-input columns covered by the manifest; every scored column is covered",
+        "breakdown": [
+          {
+            "level": "sector",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "region",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "loan_type",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "segment",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "qualification",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "promoter_age_group",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "log_sanctioned",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "business_age_years",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "dpd",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Days-past-due / repayment; source=core banking system (CBS) — days-past-due, bounce and minimum-balance-breach events post same day",
+            "status": "pass"
+          },
+          {
+            "level": "utilisation",
+            "value": "utilisation T+0 (CBS); drawing_power refreshed quarterly (DATA_CARD.md drawing_power_refresh_months=3) — stale up to 3 months between refreshes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Credit-limit utilisation; source=core banking system (utilisation) + stock/book-debt statement (drawing_power)",
+            "status": "pass"
+          },
+          {
+            "level": "inflow",
+            "value": "bank inflows T+0 (CBS); GST-sourced fields lag 0-2 months (42% same month, 43% T+1, 15% T+2 — DATA_CARD.md measurement.gst_report_lag_distribution)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Cash-flow (inflows / GST); source=CBS statement feed (inflow/txn_count) + GSTR-3B filing (gst_sales, sales_trend_3m)",
+            "status": "pass"
+          },
+          {
+            "level": "gst_sales",
+            "value": "bank inflows T+0 (CBS); GST-sourced fields lag 0-2 months (42% same month, 43% T+1, 15% T+2 — DATA_CARD.md measurement.gst_report_lag_distribution)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Cash-flow (inflows / GST); source=CBS statement feed (inflow/txn_count) + GSTR-3B filing (gst_sales, sales_trend_3m)",
+            "status": "pass"
+          },
+          {
+            "level": "txn_count",
+            "value": "bank inflows T+0 (CBS); GST-sourced fields lag 0-2 months (42% same month, 43% T+1, 15% T+2 — DATA_CARD.md measurement.gst_report_lag_distribution)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Cash-flow (inflows / GST); source=CBS statement feed (inflow/txn_count) + GSTR-3B filing (gst_sales, sales_trend_3m)",
+            "status": "pass"
+          },
+          {
+            "level": "bounce",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Days-past-due / repayment; source=core banking system (CBS) — days-past-due, bounce and minimum-balance-breach events post same day",
+            "status": "pass"
+          },
+          {
+            "level": "minbal_breach",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Days-past-due / repayment; source=core banking system (CBS) — days-past-due, bounce and minimum-balance-breach events post same day",
+            "status": "pass"
+          },
+          {
+            "level": "adverse_remark",
+            "value": "same day to T+1 (branch/RM-filed remark)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Adverse filings; source=branch/relationship-manager filing into CBS",
+            "status": "pass"
+          },
+          {
+            "level": "dpd_max_6m",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Days-past-due / repayment; source=core banking system (CBS) — days-past-due, bounce and minimum-balance-breach events post same day",
+            "status": "pass"
+          },
+          {
+            "level": "times_late_6m",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Days-past-due / repayment; source=core banking system (CBS) — days-past-due, bounce and minimum-balance-breach events post same day",
+            "status": "pass"
+          },
+          {
+            "level": "bounces_6m",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Days-past-due / repayment; source=core banking system (CBS) — days-past-due, bounce and minimum-balance-breach events post same day",
+            "status": "pass"
+          },
+          {
+            "level": "minbal_breach_6m",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Days-past-due / repayment; source=core banking system (CBS) — days-past-due, bounce and minimum-balance-breach events post same day",
+            "status": "pass"
+          },
+          {
+            "level": "util_avg_3m",
+            "value": "utilisation T+0 (CBS); drawing_power refreshed quarterly (DATA_CARD.md drawing_power_refresh_months=3) — stale up to 3 months between refreshes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Credit-limit utilisation; source=core banking system (utilisation) + stock/book-debt statement (drawing_power)",
+            "status": "pass"
+          },
+          {
+            "level": "util_max_6m",
+            "value": "utilisation T+0 (CBS); drawing_power refreshed quarterly (DATA_CARD.md drawing_power_refresh_months=3) — stale up to 3 months between refreshes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Credit-limit utilisation; source=core banking system (utilisation) + stock/book-debt statement (drawing_power)",
+            "status": "pass"
+          },
+          {
+            "level": "months_over_90pct_util_6m",
+            "value": "utilisation T+0 (CBS); drawing_power refreshed quarterly (DATA_CARD.md drawing_power_refresh_months=3) — stale up to 3 months between refreshes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Credit-limit utilisation; source=core banking system (utilisation) + stock/book-debt statement (drawing_power)",
+            "status": "pass"
+          },
+          {
+            "level": "inflow_trend_3m",
+            "value": "bank inflows T+0 (CBS); GST-sourced fields lag 0-2 months (42% same month, 43% T+1, 15% T+2 — DATA_CARD.md measurement.gst_report_lag_distribution)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Cash-flow (inflows / GST); source=CBS statement feed (inflow/txn_count) + GSTR-3B filing (gst_sales, sales_trend_3m)",
+            "status": "pass"
+          },
+          {
+            "level": "inflow_vs_6m_avg",
+            "value": "bank inflows T+0 (CBS); GST-sourced fields lag 0-2 months (42% same month, 43% T+1, 15% T+2 — DATA_CARD.md measurement.gst_report_lag_distribution)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Cash-flow (inflows / GST); source=CBS statement feed (inflow/txn_count) + GSTR-3B filing (gst_sales, sales_trend_3m)",
+            "status": "pass"
+          },
+          {
+            "level": "sales_trend_3m",
+            "value": "bank inflows T+0 (CBS); GST-sourced fields lag 0-2 months (42% same month, 43% T+1, 15% T+2 — DATA_CARD.md measurement.gst_report_lag_distribution)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Cash-flow (inflows / GST); source=CBS statement feed (inflow/txn_count) + GSTR-3B filing (gst_sales, sales_trend_3m)",
+            "status": "pass"
+          },
+          {
+            "level": "txn_drop_flag",
+            "value": "bank inflows T+0 (CBS); GST-sourced fields lag 0-2 months (42% same month, 43% T+1, 15% T+2 — DATA_CARD.md measurement.gst_report_lag_distribution)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Cash-flow (inflows / GST); source=CBS statement feed (inflow/txn_count) + GSTR-3B filing (gst_sales, sales_trend_3m)",
+            "status": "pass"
+          },
+          {
+            "level": "adverse_remark_6m",
+            "value": "same day to T+1 (branch/RM-filed remark)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Adverse filings; source=branch/relationship-manager filing into CBS",
+            "status": "pass"
+          },
+          {
+            "level": "portfolio",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "constitution",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "state",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "city_tier",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "nic_group",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "secured",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "tenor_months",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "interest_rate_pa",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "vintage_band",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          },
+          {
+            "level": "outstanding",
+            "value": "utilisation T+0 (CBS); drawing_power refreshed quarterly (DATA_CARD.md drawing_power_refresh_months=3) — stale up to 3 months between refreshes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Credit-limit utilisation; source=core banking system (utilisation) + stock/book-debt statement (drawing_power)",
+            "status": "pass"
+          },
+          {
+            "level": "demanded_amount",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Demand vs collection; source=core banking system — demand/collection posting is a same-day ledger event",
+            "status": "pass"
+          },
+          {
+            "level": "collected_amount",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Demand vs collection; source=core banking system — demand/collection posting is a same-day ledger event",
+            "status": "pass"
+          },
+          {
+            "level": "collection_ratio",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Demand vs collection; source=core banking system — demand/collection posting is a same-day ledger event",
+            "status": "pass"
+          },
+          {
+            "level": "collection_ratio_3m",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Demand vs collection; source=core banking system — demand/collection posting is a same-day ledger event",
+            "status": "pass"
+          },
+          {
+            "level": "balance",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Income & balance; source=CBS — salary credit, account balance, rental/crop receipt and commute spend are transaction-feed events",
+            "status": "pass"
+          },
+          {
+            "level": "min_balance_6m",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Income & balance; source=CBS — salary credit, account balance, rental/crop receipt and commute spend are transaction-feed events",
+            "status": "pass"
+          },
+          {
+            "level": "bureau_score",
+            "value": "up to 3 months stale (DATA_CARD.md bureau.report_lag_months=3 — bureaus refresh monthly and the file reaches the lender later still)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Bureau; source=credit bureau monthly refresh file",
+            "status": "pass"
+          },
+          {
+            "level": "drawing_power",
+            "value": "utilisation T+0 (CBS); drawing_power refreshed quarterly (DATA_CARD.md drawing_power_refresh_months=3) — stale up to 3 months between refreshes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Credit-limit utilisation; source=core banking system (utilisation) + stock/book-debt statement (drawing_power)",
+            "status": "pass"
+          },
+          {
+            "level": "salary_credit",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Income & balance; source=CBS — salary credit, account balance, rental/crop receipt and commute spend are transaction-feed events",
+            "status": "pass"
+          },
+          {
+            "level": "salary_vs_6m_avg",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Income & balance; source=CBS — salary credit, account balance, rental/crop receipt and commute spend are transaction-feed events",
+            "status": "pass"
+          },
+          {
+            "level": "salary_gap_6m",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Income & balance; source=CBS — salary credit, account balance, rental/crop receipt and commute spend are transaction-feed events",
+            "status": "pass"
+          },
+          {
+            "level": "other_bank_emi",
+            "value": "same day for EMI-burden/moratorium flags (CBS); LTV updated only at valuation/schedule events, otherwise stale",
+            "ci": null,
+            "n": null,
+            "detail": "family=Leverage & collateral; source=core banking system + collateral valuation records",
+            "status": "pass"
+          },
+          {
+            "level": "emi_burden_ratio",
+            "value": "same day for EMI-burden/moratorium flags (CBS); LTV updated only at valuation/schedule events, otherwise stale",
+            "ci": null,
+            "n": null,
+            "detail": "family=Leverage & collateral; source=core banking system + collateral valuation records",
+            "status": "pass"
+          },
+          {
+            "level": "ltv",
+            "value": "same day for EMI-burden/moratorium flags (CBS); LTV updated only at valuation/schedule events, otherwise stale",
+            "ci": null,
+            "n": null,
+            "detail": "family=Leverage & collateral; source=core banking system + collateral valuation records",
+            "status": "pass"
+          },
+          {
+            "level": "ltv_vs_schedule",
+            "value": "same day for EMI-burden/moratorium flags (CBS); LTV updated only at valuation/schedule events, otherwise stale",
+            "ci": null,
+            "n": null,
+            "detail": "family=Leverage & collateral; source=core banking system + collateral valuation records",
+            "status": "pass"
+          },
+          {
+            "level": "rental_income",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Income & balance; source=CBS — salary credit, account balance, rental/crop receipt and commute spend are transaction-feed events",
+            "status": "pass"
+          },
+          {
+            "level": "rental_vs_6m_avg",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Income & balance; source=CBS — salary credit, account balance, rental/crop receipt and commute spend are transaction-feed events",
+            "status": "pass"
+          },
+          {
+            "level": "crop_receipt",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Income & balance; source=CBS — salary credit, account balance, rental/crop receipt and commute spend are transaction-feed events",
+            "status": "pass"
+          },
+          {
+            "level": "crop_receipt_vs_norm",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Income & balance; source=CBS — salary credit, account balance, rental/crop receipt and commute spend are transaction-feed events",
+            "status": "pass"
+          },
+          {
+            "level": "renewal_overdue_months",
+            "value": "same day for EMI-burden/moratorium flags (CBS); LTV updated only at valuation/schedule events, otherwise stale",
+            "ci": null,
+            "n": null,
+            "detail": "family=Leverage & collateral; source=core banking system + collateral valuation records",
+            "status": "pass"
+          },
+          {
+            "level": "moratorium_active",
+            "value": "same day for EMI-burden/moratorium flags (CBS); LTV updated only at valuation/schedule events, otherwise stale",
+            "ci": null,
+            "n": null,
+            "detail": "family=Leverage & collateral; source=core banking system + collateral valuation records",
+            "status": "pass"
+          },
+          {
+            "level": "commute_spend",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Income & balance; source=CBS — salary credit, account balance, rental/crop receipt and commute spend are transaction-feed events",
+            "status": "pass"
+          },
+          {
+            "level": "commute_vs_6m_avg",
+            "value": "same day (T+0)",
+            "ci": null,
+            "n": null,
+            "detail": "family=Income & balance; source=CBS — salary credit, account balance, rental/crop receipt and commute spend are transaction-feed events",
+            "status": "pass"
+          },
+          {
+            "level": "months_since_moratorium_end_band",
+            "value": "known at origination (T+0 forever after) — static account attributes",
+            "ci": null,
+            "n": null,
+            "detail": "family=Borrower profile; source=loan origination / KYC record",
+            "status": "pass"
+          }
+        ],
+        "figures": [
+          "availability_manifest_note.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-18",
+      "runner": "08_ablation",
+      "metric": "auc_drop_when_cashflow_family_removed",
+      "scope": "overall",
+      "cut": null,
+      "op": "ge",
+      "threshold": 0.04,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "The product's whole thesis is that current-account cash flow sees trouble before the loan account does. If removing the cash-flow family costs less than 0.04 AUC, the thesis is not supported by our own model.",
+      "source": "plan §B L8 bands (\"cash-flow family ≥ 0.04\")",
+      "note": "Family as listed in src/rigor.py GROUPS[\"Cash-flow (inflows / GST)\"].",
+      "result": {
+        "criterion_id": "DR-18",
+        "value": 0.001,
+        "ci": [
+          -0.0057,
+          0.0066
+        ],
+        "n": 63226,
+        "status": "fail",
+        "detail": "AUC drop when the Cash-flow (inflows / GST) family (7 columns) is removed, on the 9,000 x 36 book (seed 7), baseline AUC=0.8533, dropped AUC=0.8523. Full family table: Demand vs collection: ΔAUC=0.018 (CI (0.0104, 0.0261), n_cols=4); Income & balance: ΔAUC=0.0085 (CI (0.0016, 0.0153), n_cols=11); Bureau: ΔAUC=0.0024 (CI (-0.0058, 0.0097), n_cols=1); Days-past-due / repayment: ΔAUC=0.0011 (CI (-0.003, 0.0052), n_cols=7); Cash-flow (inflows / GST): ΔAUC=0.001 (CI (-0.0057, 0.0066), n_cols=7); Credit-limit utilisation: ΔAUC=-0.0005 (CI (-0.0072, 0.0068), n_cols=6); Adverse filings: ΔAUC=-0.005 (CI (-0.009, -0.0011), n_cols=2); Leverage & collateral: ΔAUC=-0.0058 (CI (-0.0116, 0.0007), n_cols=6); Borrower profile: ΔAUC=-0.0123 (CI (-0.023, -0.0037), n_cols=18).",
+        "breakdown": [],
+        "figures": [
+          "ablation_deltas.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-19",
+      "runner": "08_ablation",
+      "metric": "max_auc_gain_from_dropping_any_family",
+      "scope": "overall",
+      "cut": null,
+      "op": "le",
+      "threshold": 0.0,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "No feature family may be actively harmful. A family whose removal improves the model is either noise the model is over-fitting or a bug.",
+      "source": "plan §B L8 bands (\"no family raises AUC when dropped\")",
+      "note": "Registered exactly as written, on the point estimate, with no noise allowance. A small positive delta inside its own CI would still be recorded as a failure and explained in the report rather than waved through — that decision is being made now, not after seeing the number.",
+      "result": {
+        "criterion_id": "DR-19",
+        "value": 0.0123,
+        "ci": [
+          0.0037,
+          0.023
+        ],
+        "n": 63226,
+        "status": "fail",
+        "detail": "largest AUC gain from dropping any family: 0.0123 (family: Borrower profile). No noise allowance — a small positive gain inside its own CI is recorded as a failure (criteria.yaml DR-19 note). Full family table: Demand vs collection: ΔAUC=0.018 (CI (0.0104, 0.0261), n_cols=4); Income & balance: ΔAUC=0.0085 (CI (0.0016, 0.0153), n_cols=11); Bureau: ΔAUC=0.0024 (CI (-0.0058, 0.0097), n_cols=1); Days-past-due / repayment: ΔAUC=0.0011 (CI (-0.003, 0.0052), n_cols=7); Cash-flow (inflows / GST): ΔAUC=0.001 (CI (-0.0057, 0.0066), n_cols=7); Credit-limit utilisation: ΔAUC=-0.0005 (CI (-0.0072, 0.0068), n_cols=6); Adverse filings: ΔAUC=-0.005 (CI (-0.009, -0.0011), n_cols=2); Leverage & collateral: ΔAUC=-0.0058 (CI (-0.0116, 0.0007), n_cols=6); Borrower profile: ΔAUC=-0.0123 (CI (-0.023, -0.0037), n_cols=18).",
+        "breakdown": [],
+        "figures": [
+          "ablation_deltas.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-20",
+      "runner": "09_seeds",
+      "metric": "n_seeds_run",
+      "scope": "overall",
+      "cut": null,
+      "op": "ge",
+      "threshold": 5,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "One seed is an anecdote. Five is the minimum at which the CI below means anything.",
+      "source": "plan §B L8 bands (\"≥5 seeds\"); §D gate G7",
+      "note": null,
+      "result": {
+        "criterion_id": "DR-20",
+        "value": 5,
+        "ci": null,
+        "n": 5,
+        "status": "pass",
+        "detail": "seeds actually run: [7, 8, 9, 10, 11] (5/5 produced a valid AUC). Per-seed: [{'seed': 7, 'auc': 0.8533, 'n': 63226}, {'seed': 8, 'auc': 0.8468, 'n': 63502}, {'seed': 9, 'auc': 0.86, 'n': 63434}, {'seed': 10, 'auc': 0.8577, 'n': 63441}, {'seed': 11, 'auc': 0.857, 'n': 63407}].",
+        "breakdown": [],
+        "figures": [
+          "seed_sweep_auc.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-21",
+      "runner": "09_seeds",
+      "metric": "cross_seed_auc_ci_width",
+      "scope": "overall",
+      "cut": null,
+      "op": "le",
+      "threshold": 0.02,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "The headline AUC must be a property of the model, not of the seed. A cross-seed interval wider than 0.02 means the number we would print is within noise of a materially different number.",
+      "source": "plan §B L8 bands (\"CI width ≤ 0.02\")",
+      "note": null,
+      "result": {
+        "criterion_id": "DR-21",
+        "value": 0.0123,
+        "ci": [
+          0.8475,
+          0.8598
+        ],
+        "n": 63226,
+        "status": "pass",
+        "detail": "cross-seed 2.5th-97.5th percentile interval of the 5 per-seed AUC point estimates (criteria.yaml confidence.cross_seed), width=0.0123. Per-seed: [{'seed': 7, 'auc': 0.8533, 'n': 63226}, {'seed': 8, 'auc': 0.8468, 'n': 63502}, {'seed': 9, 'auc': 0.86, 'n': 63434}, {'seed': 10, 'auc': 0.8577, 'n': 63441}, {'seed': 11, 'auc': 0.857, 'n': 63407}]. Note: at n=5 seeds the percentile interval is close to (min, max) rather than a smooth tail estimate — reported as pre-registered, not smoothed.",
+        "breakdown": [],
+        "figures": [
+          "seed_sweep_auc.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-22",
+      "runner": "10_stress",
+      "metric": "abs_auc_delta_under_2x_base_rate",
+      "scope": "overall",
+      "cut": null,
+      "op": "le",
+      "threshold": 0.03,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "A downturn doubles slippage. The model has to keep ranking under it, or it is exactly the wrong tool at exactly the wrong time.",
+      "source": "plan §B L8 bands (\"2× base rate ΔAUC ≤ 0.03\")",
+      "note": "Absolute delta against the base scenario; direction is reported.",
+      "result": {
+        "criterion_id": "DR-22",
+        "value": 0.0019,
+        "ci": [
+          -0.0023,
+          0.0061
+        ],
+        "n": 63226,
+        "status": "pass",
+        "detail": "base AUC=0.8533, 2x-base-rate AUC=0.8552 (up), |ΔAUC|=0.0019. 5002 extra duplicated positive training rows (multiplier=2), scored against the unduplicated test split.",
+        "breakdown": [],
+        "figures": [
+          "stress_auc_deltas.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-23",
+      "runner": "10_stress",
+      "metric": "abs_auc_delta_under_bureau_missing",
+      "scope": "overall",
+      "cut": null,
+      "op": "le",
+      "threshold": 0.02,
+      "min_n": 0,
+      "severity": "fail",
+      "rationale": "Bureau data is the input most likely to be unavailable, delayed or consent-blocked in production. The model must degrade gracefully without it.",
+      "source": "plan §B L8 bands (\"bureau-missing ≤ 0.02\")",
+      "note": "INTERPRETATION: the stress is the bureau family fully masked at score time (100% missing), not the ~7% MAR missingness the generator already builds in (§B L4 SD-D4). The generator's baseline missingness is part of the base scenario, not the stress.",
+      "result": {
+        "criterion_id": "DR-23",
+        "value": 0.0069,
+        "ci": [
+          -0.0152,
+          0.0031
+        ],
+        "n": 63226,
+        "status": "pass",
+        "detail": "base AUC=0.8533, bureau-masked AUC=0.8463 (down), |ΔAUC|=0.0069. Bureau family (['bureau_score']) blanked to NaN at score time on the ALREADY-fitted model (100% missing — not the generator's baseline ~7% MAR missingness, per criteria.yaml DR-23's note).",
+        "breakdown": [],
+        "figures": [
+          "stress_auc_deltas.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-24",
+      "runner": "11_fairness",
+      "metric": "adverse_impact_ratio",
+      "scope": "per_cut",
+      "cut": "protected_proxies",
+      "op": "ge",
+      "threshold": 0.8,
+      "min_n": 500,
+      "severity": "report",
+      "rationale": "Four-fifths rule on the flag rate: least-flagged group ÷ most-flagged group within each protected-proxy attribute, at the live operating threshold.",
+      "source": "plan §B L8 bands (\"fairness 80% rule ... reported honestly\")",
+      "note": "REPORTED, NOT GATED — the plan says \"reported honestly\". The 0.80 reference line is recorded so the report can state how far each attribute sits from it, and any breach is written into the README's \"what we did not build, and why\" rather than being tuned away. DRISHTi holds no gender, caste, religion or marital-status field at all; the protected-proxy attributes evaluated are promoter_age_group, qualification, geography (region) and constitution.",
+      "result": {
+        "criterion_id": "DR-24",
+        "value": 0.9195,
+        "ci": null,
+        "n": 467471,
+        "status": "report",
+        "detail": "four-fifths rule (least-flagged / most-flagged group), one cell per protected-proxy attribute. flagged = Amber or Red at amber=0.074653, red=0.271968 (live cost-minimising). DRISHTi holds no gender, caste, religion or marital-status field at all. REPORTED, NOT GATED. lowest ratio: geography (region)=0.7198.",
+        "breakdown": [
+          {
+            "level": "promoter_age_group",
+            "value": 0.9195,
+            "ci": null,
+            "n": 467471,
+            "detail": "per-group flag rate: [('<30', 0.0496, 80934, (0.0481, 0.0511)), ('30-40', 0.052, 159364, (0.0509, 0.0531)), ('40-50', 0.0519, 127669, (0.0507, 0.0531)), ('50-60', 0.0491, 72577, (0.0475, 0.0506)), ('60+', 0.0534, 26927, (0.0507, 0.0561))]",
+            "status": "report"
+          },
+          {
+            "level": "qualification",
+            "value": 0.7772,
+            "ci": null,
+            "n": 467471,
+            "detail": "per-group flag rate: [('Graduate', 0.049, 210588, (0.0481, 0.0499)), ('UnderGrad', 0.054, 139432, (0.0528, 0.0552)), ('Professional', 0.0464, 70876, (0.0449, 0.0479)), ('SchoolOnly', 0.0597, 46575, (0.0576, 0.0619))]",
+            "status": "report"
+          },
+          {
+            "level": "geography (region)",
+            "value": 0.7198,
+            "ci": null,
+            "n": 467471,
+            "detail": "per-group flag rate: [('North', 0.0535, 109699, (0.0522, 0.0548)), ('South', 0.0499, 127315, (0.0487, 0.0511)), ('West', 0.0429, 119753, (0.0417, 0.044)), ('East', 0.0596, 69421, (0.0579, 0.0614)), ('Central', 0.0586, 41283, (0.0563, 0.0609))]",
+            "status": "report"
+          },
+          {
+            "level": "constitution",
+            "value": 0.7752,
+            "ci": null,
+            "n": 467471,
+            "detail": "per-group flag rate: [('Individual', 0.0512, 335677, (0.0504, 0.0519)), ('Proprietorship', 0.0516, 93442, (0.0502, 0.053)), ('Partnership', 0.0565, 14945, (0.053, 0.0604)), ('PvtLtd', 0.0466, 16255, (0.0434, 0.0499)), ('LLP', 0.0438, 7152, (0.0393, 0.0488))]",
+            "status": "report"
+          }
+        ],
+        "figures": [
+          "fairness_flag_rates.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-25",
+      "runner": "11_fairness",
+      "metric": "tpr_gap",
+      "scope": "per_cut",
+      "cut": "protected_proxies",
+      "op": "le",
+      "threshold": 0.15,
+      "min_n": 500,
+      "severity": "report",
+      "rationale": "Maximum minus minimum true-positive rate across the groups of each protected-proxy attribute at the operating threshold — i.e. whether the early warning actually reaches every group equally.",
+      "source": "plan §B L8 bands (\"TPR gap ≤ 0.15 reported honestly\")",
+      "note": "Same treatment as DR-24: 0.15 is a reference line that is reported, not a gate.",
+      "result": {
+        "criterion_id": "DR-25",
+        "value": 0.0209,
+        "ci": null,
+        "n": 16936,
+        "status": "report",
+        "detail": "max-min TPR across groups, one cell per protected-proxy attribute. flagged = Amber or Red at amber=0.074653, red=0.271968 (live cost-minimising). DRISHTi holds no gender, caste, religion or marital-status field at all. REPORTED, NOT GATED. widest gap: geography (region)=0.0992.",
+        "breakdown": [
+          {
+            "level": "promoter_age_group",
+            "value": 0.0209,
+            "ci": null,
+            "n": 16936,
+            "detail": "per-group TPR (among actual 12m defaulters): [('<30', 0.6551, 2778, (0.6373, 0.6726)), ('30-40', 0.6595, 5889, (0.6473, 0.6715)), ('40-50', 0.6644, 4684, (0.6507, 0.6778)), ('50-60', 0.6711, 2490, (0.6524, 0.6893)), ('60+', 0.6502, 1095, (0.6215, 0.6779))]",
+            "status": "report"
+          },
+          {
+            "level": "qualification",
+            "value": 0.0215,
+            "ci": null,
+            "n": 16936,
+            "detail": "per-group TPR (among actual 12m defaulters): [('Graduate', 0.6635, 7305, (0.6526, 0.6743)), ('UnderGrad', 0.6638, 5288, (0.6509, 0.6764)), ('Professional', 0.6645, 2301, (0.6449, 0.6835)), ('SchoolOnly', 0.643, 2042, (0.622, 0.6635))]",
+            "status": "report"
+          },
+          {
+            "level": "geography (region)",
+            "value": 0.0992,
+            "ci": null,
+            "n": 16936,
+            "detail": "per-group TPR (among actual 12m defaulters): [('North', 0.6612, 4206, (0.6468, 0.6753)), ('South', 0.6562, 4703, (0.6425, 0.6696)), ('West', 0.6116, 3659, (0.5957, 0.6273)), ('East', 0.7108, 2811, (0.6937, 0.7272)), ('Central', 0.7039, 1557, (0.6808, 0.7261))]",
+            "status": "report"
+          },
+          {
+            "level": "constitution",
+            "value": 0.0962,
+            "ci": null,
+            "n": 16936,
+            "detail": "per-group TPR (among actual 12m defaulters): [('Individual', 0.6694, 12077, (0.6609, 0.6777)), ('Proprietorship', 0.6398, 3479, (0.6237, 0.6556)), ('Partnership', 0.6867, 533, (0.6461, 0.7246)), ('PvtLtd', 0.6276, 615, (0.5888, 0.6649)), ('LLP', 0.5905, 232, (0.5263, 0.6518))]",
+            "status": "report"
+          }
+        ],
+        "figures": [
+          "fairness_tpr_gaps.png"
+        ]
+      }
+    },
+    {
+      "id": "DR-26",
+      "runner": "12_baseline_ladder",
+      "metric": "auc_by_baseline_rung",
+      "scope": "overall",
+      "cut": null,
+      "op": "report",
+      "threshold": null,
+      "min_n": 0,
+      "severity": "report",
+      "rationale": "Contextualises the gain: DPD-only rule, logistic-regression scorecard, then the LightGBM model, each with CI. If the scorecard is within noise of the model, that is the honest finding and the deck says so.",
+      "source": "plan §B L8 (runner 12); src/rigor.py baseline ladder",
+      "note": "The plan specifies runner 12 but pre-registers no band for it, so no threshold was invented. Reported with CIs; a human reads it.",
+      "result": {
+        "criterion_id": "DR-26",
+        "value": 0.8885,
+        "ci": [
+          0.8814,
+          0.8949
+        ],
+        "n": 467471,
+        "status": "report",
+        "detail": "three rungs on the SAME 45,000 x 48 grouped-holdout split (seed 7): [('DPD-only rule (logistic, 7 cols)', 0.6947, (0.688, 0.701)), ('Logistic regression (scorecard-style)', 0.8569, (0.8501, 0.864)), ('LightGBM (ours)', 0.8885, (0.8814, 0.8949))]. Deltas: scorecard -> LightGBM: 0.0315; DPD-only -> scorecard: 0.1622. data/rigor.json baseline_ladder: [{'model': 'Logistic regression (scorecard-style)', 'auc': 0.873}, {'model': 'LightGBM (ours)', 'auc': 0.902}]. REPORTED, no pre-registered band (criteria.yaml DR-26 note).",
+        "breakdown": [
+          {
+            "level": "DPD-only rule (logistic, 7 cols)",
+            "value": 0.6947,
+            "ci": [
+              0.688,
+              0.701
+            ],
+            "n": 467471,
+            "status": "report"
+          },
+          {
+            "level": "Logistic regression (scorecard-style)",
+            "value": 0.8569,
+            "ci": [
+              0.8501,
+              0.864
+            ],
+            "n": 467471,
+            "status": "report"
+          },
+          {
+            "level": "LightGBM (ours)",
+            "value": 0.8885,
+            "ci": [
+              0.8814,
+              0.8949
+            ],
+            "n": 467471,
+            "status": "report"
+          }
+        ],
+        "figures": [
+          "baseline_ladder.png"
+        ]
+      }
+    }
+  ],
+  "amendments": [],
+  "rulings": [
+    {
+      "at": "2026-09-16T02:00:00+05:30",
+      "ruling": "DRISHTi has EIGHT portfolios — MSME-CC, MSME-TL, Housing, Education, Agri, Retail-Unsecured, LAP, Auto. The \"7 portfolios\" figure in plan §B L4 SD-D2 and in the §D G2 gate was stale from plan v1 and has been patched.",
+      "affects": [
+        "cuts.portfolio",
+        "DR-06",
+        "DR-09",
+        "DR-11",
+        "DR-12"
+      ],
+      "effect": "Every per-portfolio criterion applies to all eight portfolios. No threshold changed; only the number of cells each per-portfolio criterion must clear."
+    }
+  ]
+}
