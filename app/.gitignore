@@ -1,1 +1,7 @@
 .vercel
+
+# Playwright e2e/a11y/Lighthouse artefacts — regenerate with `npm run e2e` / `npm run lighthouse`.
+e2e/report/
+e2e/test-results/
+e2e/lighthouse/*.report.json
+e2e/lighthouse/*.report.html
