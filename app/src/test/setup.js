@@ -1,9 +1,18 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach, vi } from 'vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
+
+// Twenty-one jsdom files run in parallel on one laptop; recharts alone takes hundreds of
+// milliseconds to lay out. The 1 s default makes a genuinely-passing assertion flaky under
+// load, which teaches everyone to re-run the suite instead of reading it.
+configure({ asyncUtilTimeout: 5000 })
+import { resetSnapshotCache } from '../domain/snapshot'
 
 afterEach(() => {
   cleanup()
+  // The snapshot loader memoises its fetch for the life of the page, which is right in a
+  // browser and wrong between tests: the second test would read the first test's fixture.
+  resetSnapshotCache()
   // Cookies leak between tests otherwise: document.cookie has no clear().
   for (const part of document.cookie.split(';')) {
     const name = part.split('=')[0].trim()

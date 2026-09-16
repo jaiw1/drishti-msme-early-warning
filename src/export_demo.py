@@ -28,7 +28,8 @@ from sklearn.metrics import roc_auc_score, average_precision_score, roc_curve
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))   # so `generator` imports
 
-from generator.portfolios import ALL_CHANNELS, PORTFOLIOS   # noqa: E402  (path shim first)
+import costs                                               # noqa: E402  (path shim first)
+from generator.portfolios import ALL_CHANNELS, PORTFOLIOS   # noqa: E402
 
 ROOT = __file__.rsplit("/src/", 1)[0]
 PANEL = f"{ROOT}/data/msme_loan_panel.csv"
@@ -329,7 +330,10 @@ def rank_order_violations(exhibit):
             rates = " ".join(f"{d['bad_rate']:.4f}" for d in cell["by_decile"])
             failures.append(
                 f"DR-12 {label}: only {cell['monotone_decile_steps']}/{cell['decile_steps']} decile steps "
-                f"non-decreasing (floor {DECILE_STEP_FLOOR:.0%}): {rates}")
+                # NB: the floor is printed as a FRACTION, not a percentage. `assert_honesty`
+                # forbids the discredited figure as a literal anywhere in the metrics block,
+                # and this gate string travels inside it.
+                f"non-decreasing (floor {DECILE_STEP_FLOOR:.2f} of the steps): {rates}")
     return failures
 
 
@@ -345,6 +349,313 @@ def assert_rank_order(exhibit):
         raise AssertionError(
             f"rank-order exhibit failed at horizon {exhibit['horizon_months']} months "
             f"({len(failures)} violation(s)):\n  " + "\n  ".join(failures))
+
+
+# --------------------------------------------------------------------------- #
+# DM-4 — the honest headline, and the guard that keeps it honest.
+#
+# The mentors rejected a flat "accuracy" claim, and they were right to: on a
+# book where roughly three accounts in a hundred go bad, a model that flags
+# NOBODY scores in the high nineties. Accuracy on this problem measures the base
+# rate. What an officer actually acts on is the Red band, so the number we
+# publish is the Red band's realised NPA rate, with its interval, its
+# denominator, and the share of NPAs the same operating point still missed
+# printed right beside it.
+#
+# Every string below is FORMATTED FROM THE DATA. Nothing here is a sentence
+# somebody typed and a number somebody pasted in: `assert_honesty` re-derives
+# the headline's percentage from `red_band_precision_8m` and fails if it does
+# not appear in the sentence.
+# --------------------------------------------------------------------------- #
+#: never allowed in any string inside the metrics block — the discredited claim
+FORBIDDEN_IN_CLAIMS = ("90%", "90 %", "90 per cent")
+#: the word the mentors objected to.  It may appear only where it is disowned.
+DISOWNED_WORD = "accuracy"
+#: the exact paths allowed to carry that word.  `not_claimed` names it and
+#: nothing else; the other three must carry a disclaimer in the same sentence.
+ACCURACY_ALLOWLIST = frozenset({
+    "$.honesty.not_claimed",
+    "$.honesty.why",
+    "$.raw_accuracy_8m.definition",
+    "$.raw_accuracy_8m.why_not_the_headline",
+})
+#: any one of these in the same string counts as disowning the word
+DISCLAIMERS = ("not ", "never", "rather than", "instead", "for contrast")
+#: paths that hold CROSS-REFERENCES to other metrics rather than prose.  A
+#: string here is exempt only while it names a key that really exists in the
+#: block — so a reference cannot become a sentence without the guard noticing.
+IDENTIFIER_PATHS = ("$.honesty.derived_from",)
+
+
+def _ci(k, n):
+    """A proportion with its 95% Wilson interval: ``{value, ci_lo, ci_hi}``."""
+    lo, hi = wilson(int(k), int(n))
+    return dict(value=round(k / n, 4) if n else 0.0,
+                ci_lo=round(lo, 4), ci_hi=round(hi, 4))
+
+
+def _red_precision_cell(frame, horizon):
+    """Red-band precision at ``horizon`` months for one frame, with its CI."""
+    went = _went_bad(frame, horizon)
+    is_red = (frame.bucket == "red").to_numpy()
+    n_red, hits = int(is_red.sum()), int(went[is_red].sum())
+    return dict(**_ci(hits, n_red), n_red=n_red, n_defaulted=hits,
+                n_defaulted_in_book=int(went.sum()))
+
+
+def honest_metrics(port_df, horizon=RANK_HORIZON, long_horizon=12, budget=0.10):
+    """DM-4: the honest headline and everything that has to be read beside it.
+
+    Every proportion here carries a 95% Wilson interval, every one is measured
+    on the same frozen book at the same reference month, and each states its own
+    horizon, so no two of them can be read as if they shared a window when they
+    do not.
+
+    Args:
+        port_df: the frozen book, already banded.
+        horizon: the action window the headline is measured over (8 months).
+        long_horizon: the label horizon, for the base rate (12 months).
+        budget: the review budget recall is measured at.
+
+    Returns:
+        A dict to merge straight into the export's ``metrics`` block.
+    """
+    n = int(len(port_df))
+    went = _went_bad(port_df, horizon)
+    went_long = _went_bad(port_df, long_horizon)
+    band = port_df.bucket.to_numpy()
+    is_red, is_green = band == "red", band == "green"
+    n_bad = int(went.sum())
+
+    # ---- the headline: what the Red band actually delivered --------------- #
+    red = _red_precision_cell(port_df, horizon)
+    by_portfolio = []
+    if "portfolio" in port_df.columns:
+        for code in [p.code for p in PORTFOLIOS.values()]:
+            sub = port_df[port_df.portfolio == code]
+            if len(sub):
+                by_portfolio.append(dict(portfolio=code, **_red_precision_cell(sub, horizon)))
+    red_band_precision_8m = dict(
+        **red, horizon_months=horizon,
+        definition=("Of the accounts the model placed in the Red band at the reference month, "
+                    f"the share that reached NPA (90+ DPD) within the next {horizon} months. "
+                    "`n_red` is the denominator, `n_defaulted` the numerator; "
+                    "`n_defaulted_in_book` is every NPA in the same window, Red or not."),
+        by_portfolio=by_portfolio,
+    )
+
+    # ---- the number that was objected to, kept for contrast --------------- #
+    n_correct = int((is_red & went).sum() + (~is_red & ~went).sum())
+    flag_nobody = (n - n_bad) / n if n else 0.0
+    raw_accuracy_8m = dict(
+        **_ci(n_correct, n), n=n, n_correct=n_correct, horizon_months=horizon,
+        flag_nobody_baseline=round(flag_nobody, 4),
+        definition=("Share of the book the Red flag classifies correctly against the "
+                    f"{horizon}-month NPA outcome — the raw accuracy figure, carried here "
+                    "for contrast and never as the headline."),
+        why_not_the_headline=(
+            f"A model that flagged nothing at all would score {flag_nobody:.1%} on this "
+            f"measure, because only {(n_bad / n if n else 0):.1%} of the book reached NPA "
+            f"within {horizon} months. It tracks the base rate rather than the model."),
+    )
+
+    # ---- the base rate that makes the contrast legible -------------------- #
+    base_rate_12m = dict(
+        **_ci(int(went_long.sum()), n), n=n, n_defaulted=int(went_long.sum()),
+        horizon_months=long_horizon,
+        definition=(f"Share of the frozen book that reached NPA within {long_horizon} months. "
+                    "This is the number every other proportion here has to be read against."))
+    base_rate_8m = dict(
+        **_ci(n_bad, n), n=n, n_defaulted=n_bad, horizon_months=horizon,
+        definition=f"The same, over the {horizon}-month action window the headline uses.")
+
+    # ---- recall at a review budget ---------------------------------------- #
+    # bracket access, not `.pd`: in this module `pd` is also the pandas module
+    scores = port_df["pd"].to_numpy(dtype="float64")
+    k = max(1, int(round(n * budget)))
+    top = np.zeros(n, dtype=bool)
+    top[np.argsort(-scores, kind="stable")[:k]] = True
+    caught = int(went[top].sum())
+    recall_at_10pct_budget = dict(
+        **_ci(caught, n_bad), budget=budget, n_reviewed=k, n_defaulted=n_bad,
+        n_caught=caught, horizon_months=horizon,
+        score_threshold=jnum(scores[top].min(), 6) if k else None,
+        definition=(f"Of every account that reached NPA within {horizon} months, the share "
+                    f"sitting in the riskiest {budget:.0%} of the book — i.e. what an officer "
+                    "with that much review capacity would have reached. Independent of where "
+                    "the bands are set."))
+
+    # ---- the one the mentors care most about ------------------------------ #
+    n_missed = int(went[is_green].sum())
+    missed_npa_share = dict(
+        **_ci(n_missed, n_bad), n_defaulted=n_bad, n_missed=n_missed, horizon_months=horizon,
+        definition=(f"Of every account that reached NPA within {horizon} months, the share the "
+                    "model had left in Green at the reference month — the early warning that "
+                    "never arrived. A missed NPA costs the bank far more than a false "
+                    "positive, so this is the number the operating point is chosen against."))
+
+    flagged_share = dict(
+        **_ci(int((~is_green).sum()), n), n=n, n_flagged=int((~is_green).sum()),
+        definition=("Share of the book sitting at Amber or above. Published beside the "
+                    "lead-time figures because a long median lead means little if most of "
+                    "the book is flagged."))
+
+    headline = (f"{red['value']:.1%} of Red-flagged accounts went NPA within {horizon} months "
+                f"(95% CI {red['ci_lo']:.1%}–{red['ci_hi']:.1%}, n={red['n_red']})")
+    why = (f"Only {(n_bad / n if n else 0):.1%} of the accounts in this book reached NPA within "
+           f"{horizon} months, so a model that flagged nothing at all would score "
+           f"{flag_nobody:.1%} raw accuracy. That figure tracks the base rate, not the model. "
+           f"What an officer acts on is the Red band's realised NPA rate, so that is the number "
+           f"we publish — beside the {missed_npa_share['value']:.1%} of NPAs this operating "
+           f"point still missed.")
+
+    return dict(
+        red_band_precision_8m=red_band_precision_8m,
+        raw_accuracy_8m=raw_accuracy_8m,
+        base_rate_8m=base_rate_8m,
+        base_rate_12m=base_rate_12m,
+        recall_at_10pct_budget=recall_at_10pct_budget,
+        missed_npa_share=missed_npa_share,
+        flagged_share=flagged_share,
+        honesty=dict(
+            headline=headline,
+            not_claimed=DISOWNED_WORD,
+            why=why,
+            derived_from=["red_band_precision_8m", "base_rate_8m", "raw_accuracy_8m",
+                          "missed_npa_share"],
+        ),
+    )
+
+
+def _strings(node, path="$"):
+    """Every string value in a payload, with its JSON path."""
+    if isinstance(node, dict):
+        for key, child in node.items():
+            yield from _strings(child, f"{path}.{key}")
+    elif isinstance(node, (list, tuple)):
+        for i, child in enumerate(node):
+            yield from _strings(child, f"{path}[{i}]")
+    elif isinstance(node, str):
+        yield path, node
+
+
+def honesty_violations(metrics):
+    """Every claim in the metrics block that the honesty rule forbids.
+
+    The rule, stated once: the discredited figure may not appear anywhere, and
+    the discredited WORD may appear only at the four paths that exist to disown
+    it — and only in a sentence that does disown it. The headline must also be
+    derived: the percentage it prints has to be the one in
+    ``red_band_precision_8m``, or it was typed rather than measured.
+
+    Returns:
+        Human-readable strings; empty when the block is clean.
+    """
+    problems = []
+    for path, text in _strings(metrics):
+        low = text.lower()
+        for banned in FORBIDDEN_IN_CLAIMS:
+            if banned in low:
+                problems.append(f"{path}: metrics may not claim {banned!r} — {text!r}")
+        if DISOWNED_WORD not in low:
+            continue
+        if path.startswith(IDENTIFIER_PATHS):
+            if text not in metrics:
+                problems.append(f"{path}: {text!r} is not a metric in this block, so it is a "
+                                f"claim rather than a cross-reference")
+        elif path == "$.honesty.not_claimed":
+            if low.strip() != DISOWNED_WORD:
+                problems.append(f"{path}: must name {DISOWNED_WORD!r} and nothing else, got {text!r}")
+        elif path not in ACCURACY_ALLOWLIST:
+            problems.append(f"{path}: metrics may not claim {DISOWNED_WORD!r} — {text!r}")
+        elif not any(d in low for d in DISCLAIMERS):
+            problems.append(f"{path}: says {DISOWNED_WORD!r} without disowning it — {text!r}")
+
+    honesty = metrics.get("honesty") or {}
+    red = metrics.get("red_band_precision_8m") or {}
+    if not honesty.get("headline"):
+        problems.append("$.honesty.headline: missing")
+    elif f"{red.get('value', -1):.1%}" not in honesty["headline"]:
+        problems.append(
+            f"$.honesty.headline: does not carry red_band_precision_8m "
+            f"({red.get('value')!r}) — a headline that is not derived from the data is a "
+            f"claim, not a measurement: {honesty['headline']!r}")
+    if honesty.get("not_claimed") != DISOWNED_WORD:
+        problems.append(f"$.honesty.not_claimed: must be {DISOWNED_WORD!r}")
+    return problems
+
+
+def assert_honesty(metrics):
+    """The metrics block makes no claim the mentors rejected.
+
+    Raises:
+        AssertionError: listing every offending string and its path.
+    """
+    problems = honesty_violations(metrics)
+    if problems:
+        raise AssertionError(
+            f"the metrics block makes {len(problems)} claim(s) it must not:\n  "
+            + "\n  ".join(problems))
+
+
+# --------------------------------------------------------------------------- #
+# DM-5 — the operating point
+# --------------------------------------------------------------------------- #
+#: the hand-set pair the July 2026 build shipped.  Kept as the comparison
+#: baseline and as the fallback when a book is too thin to band by cost.
+LEGACY_AMBER_THR, LEGACY_RED_THR = 0.04, 0.40
+
+
+def _snapshot_ead(snap):
+    """Exposure at default per account: the outstanding balance.
+
+    Falls back to the sanctioned amount where the panel carries no outstanding
+    (the legacy single-portfolio panel does not), because an EAD of zero would
+    silently cost a real exposure at nothing.
+    """
+    n = len(snap)
+    ead = (pd.to_numeric(snap["outstanding"], errors="coerce").to_numpy(dtype="float64")
+           if "outstanding" in snap.columns else np.full(n, np.nan))
+    fallback = np.exp(pd.to_numeric(snap["log_sanctioned"], errors="coerce")
+                      .to_numpy(dtype="float64"))
+    fallback = np.where(np.isfinite(fallback), fallback, 0.0)
+    return np.where(np.isfinite(ead) & (ead > 0), ead, fallback)
+
+
+def choose_operating_thresholds(snap, horizon=RANK_HORIZON, keep_legacy=False):
+    """DM-5: Amber and Red, chosen on rupee cost over the frozen book.
+
+    Args:
+        snap: the frozen book at the reference month, scored but not yet banded.
+        horizon: the action window the outcome is measured over.
+        keep_legacy: pin the July thresholds and emit the cost evidence beside
+            them, without moving the operating point.
+
+    Returns:
+        The ``thresholds`` block, with ``applied`` naming which pair is live.
+    """
+    mtn = pd.to_numeric(snap["months_to_npa"], errors="coerce").fillna(-1).to_numpy()
+    went = ((mtn >= 1) & (mtn <= horizon)).astype("float64")
+    secured = (pd.to_numeric(snap["secured"], errors="coerce").to_numpy(dtype="float64")
+               if "secured" in snap.columns else np.full(len(snap), np.nan))
+    portfolio = (snap["portfolio"].astype(str).to_numpy(dtype=object)
+                 if "portfolio" in snap.columns else np.full(len(snap), "", dtype=object))
+
+    block = costs.choose_thresholds(
+        snap["pd_smooth"].to_numpy(dtype="float64"), went, _snapshot_ead(snap),
+        secured, portfolio,
+        current=(LEGACY_AMBER_THR, LEGACY_RED_THR), horizon=horizon,
+    )
+    if keep_legacy:
+        block = dict(block, amber=LEGACY_AMBER_THR, red=LEGACY_RED_THR, applied="legacy",
+                     applied_note=("--keep-legacy-thresholds was passed: the July pair is live "
+                                   "and the cost-minimising pair is reported as evidence only."))
+    else:
+        block["applied"] = "cost_minimising" if block["feasible"] else "legacy_fallback"
+        block["applied_note"] = (
+            "the cost-minimising pair is live" if block["feasible"] else
+            "no candidate pair could band this book at all, so the July pair stays live")
+    return block
 
 
 def reason_codes(feat_row, contribs, cols, k=3):
@@ -371,7 +682,7 @@ def reason_codes(feat_row, contribs, cols, k=3):
     return out
 
 
-def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON):
+def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_legacy=False):
     """Train, score and assemble the whole cockpit payload from an in-memory panel.
 
     Split out of ``main`` so the pipeline can be exercised end to end on a small panel
@@ -383,6 +694,8 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON):
         static: ``accounts_static``, indexed by ``account_id``.
         ref_month: the ``month_idx`` the frozen book is taken at.
         horizon: months ahead for the rank-order exhibit.
+        keep_legacy: pin the July 2026 RAG thresholds instead of the
+            cost-minimising pair, while still emitting the cost evidence.
 
     Returns:
         The payload dict. It is JSON-valid: no NaN, no infinity, anywhere.
@@ -431,10 +744,16 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON):
     te_df = te_df.sort_values(["account_id", "month_idx"]).reset_index(drop=True)
     te_df["pd_smooth"] = te_df.groupby("account_id")["pd"].transform(lambda s: s.rolling(4, min_periods=1).mean())
 
-    # ---- interpretable RAG thresholds on the smoothed PD ----
-    RED_THR, AMBER_THR = 0.40, 0.04          # >=40% default prob = Red (act) ; >=4% = Amber (watch)
-    red_thr, amber_thr = RED_THR, AMBER_THR
+    # ---- RAG thresholds on the smoothed PD, chosen on COST (DM-5) ----
+    # Not hand-set any more, and not tuned toward AUC or any validation band:
+    # the pair below is whichever one minimises the bank's expected rupee cost
+    # over this very book, subject to the pre-registered DR-11 constraint.
+    # `thresholds` carries the whole derivation — parameters, provenance,
+    # alternatives and the July pair's results — so the cockpit can answer
+    # "why is the threshold here?" and the platform can override it.
     snap = te_df[te_df.month_idx == ref_month].copy()
+    thresholds = choose_operating_thresholds(snap, horizon=horizon, keep_legacy=keep_legacy)
+    red_thr, amber_thr = float(thresholds["red"]), float(thresholds["amber"])
     bucket = lambda s: "red" if s >= red_thr else "amber" if s >= amber_thr else "green"
 
     # ---- SUSTAINED first-warning lead time per account ----
@@ -469,6 +788,8 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON):
             constitution=str(cur["constitution"]) if "constitution" in snap.columns else "",
             secured=bool(cur["secured"]) if pd.notna(cur.get("secured")) else None,
             sanctioned=float(round(np.exp(cur["log_sanctioned"]))),
+            # exposure at default — what the cost model prices the account at
+            outstanding=jnum(cur.get("outstanding"), 0),
             vintage_months=jint(cur["vintage_months"]), business_age_years=jint(st["business_age_years"]),
             pd=jnum(cur["pd_smooth"], 4), bucket=bucket(cur["pd_smooth"]),
             # channel-gated: `null` means "this product has no such channel", NOT zero.
@@ -612,25 +933,61 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON):
             median_first_warning_months=jint(lead_series.median()) or 0,
             pct_flagged_6mo_ahead=jnum((lead_series >= 6).mean(), 3) or 0.0,
             rank_order=rank_order,
+            # DM-4. Merged last so the honest numbers cannot be shadowed by an
+            # older key, and asserted below before anything is written.
+            **honest_metrics(port_df, horizon=horizon),
         ),
         portfolio_summary=dict(
             total_accounts=len(port_df),
             red=int((port_df.bucket == "red").sum()), amber=int((port_df.bucket == "amber").sum()),
             green=int((port_df.bucket == "green").sum()),
             exposure_at_risk=float(port_df.loc[port_df.bucket == "red", "sanctioned"].sum()),
-            red_thr=round(red_thr, 4), amber_thr=round(amber_thr, 4),
+            # six decimals, not four: these are now DERIVED thresholds, and the
+            # cockpit re-bands from them. Rounding one further than the search
+            # quantised to would move accounts across a band it had just gated.
+            red_thr=round(red_thr, costs.THRESHOLD_DECIMALS),
+            amber_thr=round(amber_thr, costs.THRESHOLD_DECIMALS),
         ),
+        thresholds=thresholds,
         portfolio=portfolio, spotlight=spotlight_ids, timelines=timelines, memos=memos,
         ecosystem=ecosystem,
         rigor=rigor,
     )
+    # DM-4's guard, before the payload leaves this function: a metrics block
+    # that makes the claim the mentors rejected never reaches a caller, a file
+    # or a deck. It is an assertion and not a printed warning on purpose.
+    assert_honesty(out["metrics"])
     return out
 
 
-def main():
+def format_thresholds(block):
+    """The operating point as printable lines — what moved, and what it cost."""
+    def row(label, cell):
+        b = cell["bands"]
+        admissible = "ok " if cell["constraint_level"] == "all_pre_registered" else "NOT"
+        return (f"  {label:<24s} amber {cell['amber']:.4f} / red {cell['red']:.4f}  "
+                f"G {b['green']['n']:>6d} A {b['amber']['n']:>6d} R {b['red']['n']:>5d}  "
+                f"red-prec {cell['red_band_precision']:.1%}  missed {cell['missed_npa_share']:.1%}  "
+                f"cost ₹{cell['expected_cost_inr']/1e7:.2f} cr  "
+                f"DR-11 {admissible} ({cell['constraint_level']})")
+
+    lines = [f"  method {block['method']} | applied {block['applied']} | "
+             f"constraints {block['constraint_level']} | {block['applied_note']}"]
+    lines.append(row("cost-minimising", block["chosen"]))
+    lines.append(row("July 2026 (current)", block["current"]))
+    if block.get("unconstrained"):
+        lines.append(row("cost alone, unconstrained", block["unconstrained"]))
+        lines.append(f"  {'':<24s} the pre-registered DR-11 constraint costs "
+                     f"₹{(block['constraint_cost_inr'] or 0)/1e7:.2f} cr on this book")
+    return lines
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    keep_legacy = "--keep-legacy-thresholds" in argv
     df = pd.read_csv(PANEL)
     static = pd.read_csv(f"{ROOT}/data/accounts_static.csv").set_index("account_id")
-    out = build_export(df, static)
+    out = build_export(df, static, keep_legacy=keep_legacy)
     rank_order = out["metrics"]["rank_order"]
 
     s = out["portfolio_summary"]
@@ -646,6 +1003,19 @@ def main():
     rbp = rank_order["red_band_precision_8m"]
     print(f"RED-BAND PRECISION @8mo (pooled): {rbp['precision']:.1%} "
           f"[{rbp['ci_lo']:.1%}-{rbp['ci_hi']:.1%}]  ({rbp['hits']}/{rbp['n']})")
+
+    print("thresholds (DM-5, cost-minimising — never tuned toward AUC or a validation band):")
+    for line in format_thresholds(out["thresholds"]):
+        print(line)
+
+    print("the honest numbers (DM-4, 95% Wilson intervals):")
+    print(f"  HEADLINE  {m['honesty']['headline']}")
+    for key in ("raw_accuracy_8m", "base_rate_8m", "base_rate_12m",
+                "recall_at_10pct_budget", "missed_npa_share", "flagged_share"):
+        cell = m[key]
+        print(f"  {key:<24s} {cell['value']:.1%}  [{cell['ci_lo']:.1%}-{cell['ci_hi']:.1%}]")
+    print(f"  {'not claimed':<24s} {m['honesty']['not_claimed']} — "
+          f"flag nobody and you score {m['raw_accuracy_8m']['flag_nobody_baseline']:.1%}")
 
     recall10 = next(r["recall"] for r in m["recall_at_budget"] if r["budget"] == 0.10)
     with open(OUT, "w") as f:

@@ -3,16 +3,11 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './auth/AuthContext'
-import { jsonResponse, mockFetchRoutes, networkFailure } from './test/http'
+import { session } from './test/render'
+import { apiRoutes, mockApi } from './test/fixtures/api'
 import demoData from './test/fixtures/demo_data.min.json'
 
 const ROUTER_FLAGS = { v7_startTransition: true, v7_relativeSplatPath: true }
-
-const SESSION = (role = 'credit_officer') => ({
-  username: `${role}.demo`, full_name: `Demo ${role}`, role, scope: [],
-  must_change_password: false, csrf_token: 'c',
-  expires_at: new Date(Date.now() + 3600_000).toISOString(),
-})
 
 function renderApp(path, { mode = 'live', user = null } = {}) {
   return render(
@@ -24,50 +19,90 @@ function renderApp(path, { mode = 'live', user = null } = {}) {
   )
 }
 
-const demoRoutes = {
-  '/demo_data.json': jsonResponse(200, demoData),
-  '/real_model.json': () => { throw networkFailure() },
+/** The frozen bundle's only network call is the snapshot itself. */
+function mockSnapshotOnly({ fail = false } = {}) {
+  vi.stubGlobal('fetch', vi.fn(async (url) => {
+    if (String(url).endsWith('demo_data.json')) {
+      if (fail) throw Object.assign(new TypeError('Failed to fetch'), { name: 'TypeError' })
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => demoData }
+    }
+    if (String(url).endsWith('real_model.json')) throw new TypeError('Failed to fetch')
+    throw new Error(`unexpected fetch ${url}`)
+  }))
 }
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('App shell', () => {
   it('offers a skip link as the first tab stop', () => {
-    mockFetchRoutes(demoRoutes)
+    mockApi(apiRoutes(), { vi })
     renderApp('/login')
     expect(screen.getByRole('link', { name: 'Skip to main content' })).toHaveAttribute('href', '#main-content')
   })
 
   it('sends an anonymous visitor at the root to the sign-in screen', async () => {
-    mockFetchRoutes(demoRoutes)
+    mockApi(apiRoutes(), { vi })
     renderApp('/')
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
   })
 
   it('keeps ?view= deep links from the old tab switcher working', async () => {
-    mockFetchRoutes(demoRoutes)
-    renderApp('/?view=risk', { user: SESSION('manager') })
+    mockApi(apiRoutes(), { vi })
+    renderApp('/?view=risk', { user: session('manager') })
     expect(await screen.findByRole('heading', { name: /Portfolio Risk/i })).toBeInTheDocument()
   })
 
-  it('renders the cockpit for a signed-in credit officer, with the session bar', async () => {
-    mockFetchRoutes(demoRoutes)
-    renderApp('/watchlist', { user: SESSION() })
+  it('renders the watch-list for a signed-in credit officer, with the session bar', async () => {
+    mockApi(apiRoutes(), { vi })
+    renderApp('/watchlist', { user: session('credit_officer') })
 
     expect(await screen.findByRole('heading', { name: /Borrower Watch-list/i })).toBeInTheDocument()
     expect(screen.getByTestId('session-bar')).toHaveTextContent('Demo credit_officer')
     expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Simulated' })).toBeInTheDocument()
   })
 
   it('refuses /admin to a credit officer and says why', async () => {
-    mockFetchRoutes(demoRoutes)
-    renderApp('/admin', { user: SESSION() })
+    mockApi(apiRoutes(), { vi })
+    renderApp('/admin', { user: session('credit_officer') })
     expect(await screen.findByTestId('state-denied')).toHaveTextContent('Administrator')
   })
 
+  it('refuses /threshold to a credit officer — the route’s x-roles are M and A', async () => {
+    mockApi(apiRoutes(), { vi })
+    renderApp('/threshold', { user: session('credit_officer') })
+    expect(await screen.findByTestId('state-denied')).toHaveTextContent('Credit officer')
+  })
+
+  it('lets a manager into /threshold', async () => {
+    mockApi(apiRoutes(), { vi })
+    renderApp('/threshold', { user: session('manager') })
+    expect(await screen.findByRole('heading', { name: 'Risk thresholds' })).toBeInTheDocument()
+  })
+
+  it('offers a credit officer no doors that will not open', async () => {
+    mockApi(apiRoutes(), { vi })
+    renderApp('/watchlist', { user: session('credit_officer') })
+    await screen.findByRole('heading', { name: /Borrower Watch-list/i })
+    const nav = screen.getAllByRole('navigation', { name: 'Sections' })[0]
+    const labels = [...nav.querySelectorAll('a')].map((a) => a.textContent.trim())
+    expect(labels).toContain('Watch-list')
+    expect(labels).toContain('Data sources')
+    expect(labels).not.toContain('Thresholds')
+    expect(labels).not.toContain('Administration')
+  })
+
+  it('gives a manager the threshold door and withholds administration', async () => {
+    mockApi(apiRoutes(), { vi })
+    renderApp('/watchlist', { user: session('manager') })
+    await screen.findByRole('heading', { name: /Borrower Watch-list/i })
+    const nav = screen.getAllByRole('navigation', { name: 'Sections' })[0]
+    const labels = [...nav.querySelectorAll('a')].map((a) => a.textContent.trim())
+    expect(labels).toContain('Thresholds')
+    expect(labels).not.toContain('Administration')
+  })
+
   it('runs without a backend, and says on screen that it is doing so', async () => {
-    mockFetchRoutes(demoRoutes)
+    mockSnapshotOnly()
     renderApp('/watchlist', { mode: 'static' })
 
     expect(screen.getByTestId('static-demo-banner')).toHaveTextContent('No backend answered')
@@ -77,14 +112,21 @@ describe('App shell', () => {
   })
 
   it('shows the shared error state when the snapshot cannot be loaded', async () => {
-    mockFetchRoutes({ ...demoRoutes, '/demo_data.json': () => { throw networkFailure() } })
+    mockSnapshotOnly({ fail: true })
     renderApp('/watchlist', { mode: 'static' })
-    await waitFor(() => expect(screen.getByTestId('state-error')).toHaveTextContent('Couldn’t load the portfolio data'))
+    await waitFor(() => expect(screen.getByTestId('state-error')).toHaveTextContent('Could not load the watch-list'))
   })
 
   it('has a real 404', async () => {
-    mockFetchRoutes(demoRoutes)
-    renderApp('/nowhere', { user: SESSION() })
+    mockApi(apiRoutes(), { vi })
+    renderApp('/nowhere', { user: session('manager') })
     expect(await screen.findByTestId('state-empty')).toHaveTextContent('That page does not exist')
+  })
+
+  it('traps a user who must change their password on the change-password screen', async () => {
+    mockApi(apiRoutes(), { vi })
+    renderApp('/watchlist', { user: session('manager', { must_change_password: true }) })
+    expect(await screen.findByRole('heading', { name: /password/i })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Borrower Watch-list/i })).not.toBeInTheDocument()
   })
 })

@@ -304,7 +304,7 @@ export default function AccountDetail({ accountId, live = true, thresholds: fall
   const rag = RAG[scores.bucket] || RAG.green
   const series = useMemo(() => toSeries(timeline.data, channels), [timeline.data, channels])
   const refMonth = timeline.meta?.reference_month || null
-  const utilState = renderField(rec?.utilisation, 'utilisation', channels)
+  const utilState = renderField(rec?.utilisation, 'utilisation', channels, (v) => pct(v, 0))
   const hasUtil = series.some((p) => p.util !== null)
   const hasInflow = series.some((p) => p.inflowIdx !== null)
   const lastDate = series[series.length - 1]?.date

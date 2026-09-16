@@ -396,3 +396,235 @@ def test_payload_exhibit_covers_every_portfolio_in_the_book(payload):
     exhibit = payload["metrics"]["rank_order"]
     in_book = {r["portfolio"] for r in payload["portfolio"]}
     assert {c["portfolio"] for c in exhibit["by_portfolio"]} == in_book
+
+
+# --------------------------------------------------------------------------- #
+# DM-4 — the honest headline
+#
+# The mentors rejected a flat accuracy claim. On a book where roughly three
+# accounts in a hundred go bad, flagging NOBODY scores in the high nineties, so
+# the figure measures the base rate rather than the model. What replaces it is
+# the Red band's realised NPA rate at eight months, with its interval, its
+# denominator, and the share of NPAs the same operating point still missed.
+#
+# The tests below check three separable things: the arithmetic, that the prose
+# is DERIVED rather than typed, and that the guard refuses the discredited claim
+# however it is phrased.
+# --------------------------------------------------------------------------- #
+def _banded_book():
+    """A hand-counted book: 200 accounts, 12 NPAs inside 8 months, 15 inside 12.
+
+    Red 10 (6 bad) · Amber 20 (4 bad) · Green 170 (2 bad inside 8 months, plus 3
+    more that only turn inside 12).  Scores descend Red -> Amber -> Green and the
+    four bad Ambers carry the highest Amber scores, so the 10% budget catches
+    exactly the 10 Red and Amber NPAs.
+    """
+    rows = []
+    for i in range(10):                                  # Red, highest scores
+        rows.append(("red", "MSME-CC", 0.90 + i / 1000, 4 if i < 6 else -1))
+    for i in range(20):                                  # Amber, bads score highest
+        rows.append(("amber", "MSME-CC", 0.50 + (20 - i) / 1000, 4 if i < 4 else -1))
+    for i in range(170):                                 # Green
+        months = 4 if i < 2 else (10 if i < 5 else -1)
+        rows.append(("green", "MSME-CC", 0.01 + i / 100_000, months))
+    return _book(rows)
+
+
+@pytest.fixture(scope="module")
+def honest():
+    return export_demo.honest_metrics(_banded_book())
+
+
+def test_ci_helper_is_a_wilson_interval_around_the_point_estimate():
+    cell = export_demo._ci(30, 100)
+    assert cell["value"] == 0.30
+    lo, hi = export_demo.wilson(30, 100)
+    assert (cell["ci_lo"], cell["ci_hi"]) == (round(lo, 4), round(hi, 4))
+    assert cell["ci_lo"] < cell["value"] < cell["ci_hi"]
+
+
+def test_ci_helper_is_defined_on_an_empty_cell():
+    assert export_demo._ci(0, 0) == dict(value=0.0, ci_lo=0.0, ci_hi=0.0)
+
+
+def test_red_band_precision_is_the_hand_counted_number(honest):
+    cell = honest["red_band_precision_8m"]
+    assert (cell["n_red"], cell["n_defaulted"]) == (10, 6)
+    assert cell["value"] == 0.6
+    assert cell["n_defaulted_in_book"] == 12
+    assert cell["horizon_months"] == 8
+    assert cell["ci_lo"] < 0.6 < cell["ci_hi"]
+
+
+def test_raw_accuracy_is_carried_for_contrast_with_its_own_baseline(honest):
+    cell = honest["raw_accuracy_8m"]
+    assert (cell["n"], cell["n_correct"]) == (200, 190)     # 6 true Red + 184 true non-Red
+    assert cell["value"] == 0.95
+    assert cell["flag_nobody_baseline"] == 0.94             # 188 of 200, flagging nothing
+    assert cell["value"] - cell["flag_nobody_baseline"] < 0.02, (
+        "the whole point: the model beats 'flag nobody' by almost nothing on this measure")
+
+
+def test_the_two_base_rates_use_the_two_horizons(honest):
+    assert honest["base_rate_8m"]["value"] == 0.06          # 12 of 200
+    assert honest["base_rate_12m"]["value"] == 0.075        # 15 of 200
+    assert honest["base_rate_8m"]["horizon_months"] == 8
+    assert honest["base_rate_12m"]["horizon_months"] == 12
+
+
+def test_recall_at_a_tenth_of_the_book_is_counted_over_defaulters(honest):
+    cell = honest["recall_at_10pct_budget"]
+    assert (cell["n_reviewed"], cell["n_defaulted"], cell["n_caught"]) == (20, 12, 10)
+    assert cell["value"] == pytest.approx(10 / 12, abs=1e-4)
+    assert cell["ci_lo"] < cell["value"] < cell["ci_hi"]
+
+
+def test_missed_npa_share_counts_defaulters_left_in_green(honest):
+    cell = honest["missed_npa_share"]
+    assert (cell["n_defaulted"], cell["n_missed"]) == (12, 2)
+    assert cell["value"] == pytest.approx(2 / 12, abs=1e-4)
+
+
+def test_flagged_share_is_published_beside_the_lead_times(honest):
+    """A long median lead means little if most of the book is flagged."""
+    assert honest["flagged_share"]["n_flagged"] == 30
+    assert honest["flagged_share"]["value"] == 0.15
+
+
+def test_every_honest_metric_carries_an_interval_and_a_definition(honest):
+    for key in ("red_band_precision_8m", "raw_accuracy_8m", "base_rate_8m", "base_rate_12m",
+                "recall_at_10pct_budget", "missed_npa_share", "flagged_share"):
+        cell = honest[key]
+        assert {"value", "ci_lo", "ci_hi", "definition"} <= set(cell), key
+        assert cell["ci_lo"] <= cell["value"] <= cell["ci_hi"], key
+
+
+def test_red_band_precision_is_repeated_for_every_portfolio_in_the_book():
+    book = pd.concat([_ranked_book(p.code) for p in PORTFOLIOS.values()], ignore_index=True)
+    cell = export_demo.honest_metrics(book)["red_band_precision_8m"]
+    assert [c["portfolio"] for c in cell["by_portfolio"]] == [p.code for p in PORTFOLIOS.values()]
+    for entry in cell["by_portfolio"]:
+        assert {"value", "ci_lo", "ci_hi", "n_red", "n_defaulted"} <= set(entry)
+        assert entry["ci_lo"] <= entry["value"] <= entry["ci_hi"]
+
+
+# --------------------------------------------------------------------------- #
+# DM-4 — the honesty block, and the guard on it
+# --------------------------------------------------------------------------- #
+def test_the_headline_is_formatted_from_the_measured_number(honest):
+    headline = honest["honesty"]["headline"]
+    assert headline.startswith("60.0% of Red-flagged accounts went NPA within 8 months")
+    assert "n=10" in headline
+    assert f"{honest['red_band_precision_8m']['ci_lo']:.1%}" in headline
+
+
+def test_the_why_is_formatted_from_the_measured_numbers(honest):
+    why = honest["honesty"]["why"]
+    assert "6.0%" in why and "94.0%" in why      # base rate, and the flag-nobody score
+    assert "16.7%" in why                        # the NPAs this operating point missed
+
+
+def test_the_block_names_what_it_does_not_claim(honest):
+    assert honest["honesty"]["not_claimed"] == "accuracy"
+    assert export_demo.honesty_violations(honest) == []
+    export_demo.assert_honesty(honest)           # must not raise
+
+
+def test_a_hard_coded_headline_fails_the_guard(honest):
+    """A sentence whose number was typed rather than measured is a claim."""
+    faked = dict(honest, honesty=dict(honest["honesty"], headline="91.2% of Red-flagged accounts"))
+    problems = export_demo.honesty_violations(faked)
+    assert any("not carry red_band_precision_8m" in p for p in problems)
+    with pytest.raises(AssertionError, match="headline"):
+        export_demo.assert_honesty(faked)
+
+
+def test_the_discredited_figure_is_refused_wherever_it_hides(honest):
+    buried = dict(honest, rank_order=dict(note="90% accuracy on held-out accounts"))
+    problems = export_demo.honesty_violations(buried)
+    assert any("90%" in p for p in problems)
+    with pytest.raises(AssertionError, match="90%"):
+        export_demo.assert_honesty(buried)
+
+
+def test_the_word_is_refused_outside_the_paths_that_disown_it(honest):
+    claimed = dict(honest, summary="the model reaches 0.95 accuracy on the held-out book")
+    problems = export_demo.honesty_violations(claimed)
+    assert any("$.summary" in p for p in problems)
+
+
+def test_using_the_word_without_disowning_it_fails_even_where_it_is_allowed(honest):
+    weakened = dict(honest, raw_accuracy_8m=dict(
+        honest["raw_accuracy_8m"], definition="the accuracy of the model"))
+    problems = export_demo.honesty_violations(weakened)
+    assert any("without disowning it" in p for p in problems)
+
+
+def test_not_claimed_may_name_the_word_and_nothing_else(honest):
+    padded = dict(honest, honesty=dict(honest["honesty"],
+                                       not_claimed="accuracy, which is actually quite good"))
+    assert export_demo.honesty_violations(padded)
+
+
+def test_a_cross_reference_must_name_a_metric_that_exists(honest):
+    """`derived_from` is exempt only while it points at something real."""
+    dangling = dict(honest, honesty=dict(honest["honesty"],
+                                         derived_from=["accuracy_is_high_actually"]))
+    assert any("cross-reference" in p for p in export_demo.honesty_violations(dangling))
+
+
+def test_the_payloads_metrics_pass_the_guard(payload):
+    """The real pipeline's own output, not a hand-built block."""
+    export_demo.assert_honesty(payload["metrics"])
+    assert payload["metrics"]["honesty"]["not_claimed"] == "accuracy"
+
+
+def test_the_headline_and_the_rank_order_exhibit_cannot_disagree(payload):
+    """Two code paths compute Red-band precision; they must be the same number."""
+    metrics = payload["metrics"]
+    assert (metrics["red_band_precision_8m"]["value"]
+            == metrics["rank_order"]["red_band_precision_8m"]["precision"])
+    assert (metrics["red_band_precision_8m"]["n_red"]
+            == metrics["rank_order"]["red_band_precision_8m"]["n"])
+
+
+# --------------------------------------------------------------------------- #
+# DM-5 — the operating point, as the export applies it
+# --------------------------------------------------------------------------- #
+def test_the_payload_carries_the_cost_derivation(payload):
+    block = payload["thresholds"]
+    assert block["method"] == "cost_minimising"
+    assert block["horizon_months"] == export_demo.RANK_HORIZON
+    assert block["current"]["amber"] == export_demo.LEGACY_AMBER_THR
+    assert block["current"]["red"] == export_demo.LEGACY_RED_THR
+    assert block["cost_params"] and block["provenance"]
+    assert block["provenance"]["effective_rate_pa"]["sandbox_fixture"] is True
+
+
+def test_the_bands_in_the_book_are_the_thresholds_that_were_costed(payload):
+    """Whatever the search picked has to be what the accounts were banded on."""
+    amber, red = payload["thresholds"]["amber"], payload["thresholds"]["red"]
+    assert payload["portfolio_summary"]["amber_thr"] == amber
+    assert payload["portfolio_summary"]["red_thr"] == red
+    for record in payload["portfolio"]:
+        expected = "red" if record["pd"] >= red else "amber" if record["pd"] >= amber else "green"
+        # `pd` is the banding score rounded for the wire, so only an account sitting
+        # exactly on a threshold could differ; none may differ by a whole band.
+        assert record["bucket"] == expected or abs(record["pd"] - amber) < 1e-4 \
+            or abs(record["pd"] - red) < 1e-4
+
+
+def test_the_july_thresholds_can_still_be_pinned():
+    """The escape hatch: emit the cost evidence without moving the operating point."""
+    panel, accounts = generate(GeneratorConfig(n_accounts=400, months=EXPORT_MONTHS))
+    panel = panel.assign(account_id=panel.account_id.astype(str))
+    static = accounts.assign(account_id=accounts.account_id.astype(str)).set_index("account_id")
+    out = export_demo.build_export(panel, static, keep_legacy=True)
+    assert out["thresholds"]["applied"] == "legacy"
+    assert out["thresholds"]["amber"] == export_demo.LEGACY_AMBER_THR
+    assert out["thresholds"]["red"] == export_demo.LEGACY_RED_THR
+    assert out["thresholds"]["chosen"], "the cost evidence is still emitted"
+
+
+def test_exposure_at_default_reaches_the_cockpit(payload):
+    assert any(record["outstanding"] for record in payload["portfolio"])
