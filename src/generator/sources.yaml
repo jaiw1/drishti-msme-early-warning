@@ -1,0 +1,1729 @@
+# =============================================================================
+# DRISHTi synthetic population — SOURCED PARAMETERS
+# =============================================================================
+# Every empirical number the generator uses about the Indian lending market
+# lives here, never in code. Each parameter is a node:
+#
+#   value:        what the generator reads
+#   source:       who published it, in words a reviewer can check
+#   url:          where to read it ("none" if and only if confidence: assumed)
+#   retrieved_on: the date we read it
+#   confidence:   high | medium | low | assumed
+#   note:         optional — how the number was derived or why it is what it is
+#
+# `assumed` is honest and expected: much of a bank's internal book composition
+# is simply not public. An assumed node MUST carry url "none"; a sourced node
+# MUST carry a real link. `src/generator/sources.py:validate()` enforces both
+# directions, and tests/test_sources_schema.py fails the build if it drifts.
+#
+# WHAT IS *NOT* HERE: the simulation's shape constants (AR(1) phi, the stress
+# ramp split, channel elasticities, lead months). They describe the simulator,
+# not the market; no source could back them, so pretending otherwise would be
+# worse than leaving them in `portfolios.py` where they are documented as
+# design choices.
+#
+# TWO THINGS A REVIEWER SHOULD READ FIRST
+#   1. book.*  — IDBI's actual FY26 retail book, and the arithmetic that turns
+#      its RUPEE shares into the ACCOUNT shares a panel needs.
+#   2. The default-rate bands. The synthetic book slips FAR harder than IDBI's
+#      real one (see book.idbi_fy26.slippage_ratio_pct: 0.63%). We target
+#      system-wide SECTORAL GNPA levels instead, which is roughly 5x IDBI's
+#      current slippage. That is a deliberate, disclosed departure — an
+#      early-warning model needs enough positives to learn from — and it is on
+#      the known-unrealisms list for DATA_CARD.md. This panel is NOT a
+#      representation of IDBI's book quality.
+# =============================================================================
+
+meta:
+  schema_version:
+    value: "1.0.0"
+    source: "This file's own contract; bumped when a node's shape changes."
+    url: "none"
+    retrieved_on: "2026-09-16"
+    confidence: assumed
+  book_scope:
+    value: "IDBI reported Retail segment, restricted to the eight DRISHTi portfolios"
+    source: >-
+      IDBI reports Retail (70% of gross advances) vs Corporate (30%). Its Retail
+      line ALREADY contains Agriculture and MSME as sub-lines of Non-Structured
+      Retail Advances, so for IDBI "Retail" is what other public-sector banks
+      call RAM — do not add a RAM bucket on top of it. Corporate (Large + Mid
+      Corporate Group) is out of DRISHTi's scope, and so are the retail lines
+      DRISHTi has no portfolio for: Gold Loan, bulk/centralised business, staff
+      and other retail.
+    url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+    retrieved_on: "2026-09-16"
+    confidence: high
+  mix_basis:
+    value: "accounts"
+    source: >-
+      Banks publish the book by VALUE; the panel is one row per ACCOUNT-month.
+      Account shares are therefore derived as (value share / mean ticket),
+      renormalised — then shrunk toward a uniform mix (see
+      book.mix_shrinkage_lambda) so no portfolio is too thin to carry a
+      per-portfolio AUC with a bootstrap CI.
+    url: "none"
+    retrieved_on: "2026-09-16"
+    confidence: assumed
+
+# -----------------------------------------------------------------------------
+# IDBI's actual book, and the arithmetic from rupees to accounts.
+# -----------------------------------------------------------------------------
+book:
+  idbi_fy26:
+    gross_advances_cr:
+      value: 259274
+      source: "IDBI Bank Investors Presentation, Q4 FY2025-26, Business Performance / Advances."
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: high
+    retail_advances_cr:
+      value: 182294
+      source: >-
+        Structured Retail 107,712 cr + Non-Structured Retail 74,582 cr = 70% of
+        gross advances; Corporate (Large 51,563 + Mid 25,417) is the other 30%.
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: high
+    structured_retail_cr:
+      value: {housing: 75285, lap: 21968, auto_education_personal: 6787, others: 3672}
+      source: >-
+        IDBI Investors Presentation Q4 FY2025-26, Structured Retail Advances.
+        The four lines sum exactly to the reported 107,712 cr. IDBI does NOT
+        split Auto / Education / Personal — they are one combined line.
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: high
+    non_structured_retail_cr:
+      value: {msme: 22826, gold: 21321, agri: 13589, bulk_business: 12649, other_retail: 4197}
+      source: >-
+        IDBI Investors Presentation Q4 FY2025-26, Non-Structured Retail
+        Advances. The five values sum exactly to the reported 74,582 cr, but the
+        deck's chart carries no machine-readable legend, so the mapping of
+        number to LABEL is a best reading rather than a confirmed one.
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: medium
+      note: >-
+        Cross-check: on the priority-sector/ANBC basis the same deck reports
+        Agriculture 41,073 cr (18.18% of ANBC) and MSME 34,626 cr (15.33%).
+        Those are roughly double the numbers above because ANBC counts agri and
+        MSME exposure booked anywhere in the bank, including Corporate. The
+        product-wise retail figures are the right basis for a retail panel.
+    gnpa_pct:
+      value: 2.32
+      source: "IDBI Bank Q4 FY2025-26 results: GNPA 2.32%, NNPA 0.15%, PCR 99.39%."
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: high
+    slippage_ratio_pct:
+      value: 0.63
+      source: >-
+        Annualised fresh-NPA (net basis) for FY26, down from 0.73% in FY25.
+        SMA-to-standard-advances was 1.20% at Mar-26 (1.51% at Mar-25).
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: high
+      note: >-
+        READ THIS BEFORE QUOTING ANY DRISHTi DEFAULT RATE. The synthetic book is
+        calibrated to sectoral GNPA levels (3-4% annual), not to IDBI's 0.63%.
+        The gap is deliberate and disclosed; DRISHTi's numbers are not IDBI's.
+
+  msme_cc_share_of_msme:
+    value: 0.55
+    source: >-
+      IDBI does not publish a cash-credit / term-loan split of its MSME book.
+      55/45 is the split the July 2026 DRISHTi build used and is retained so the
+      two MSME portfolios stay comparable with it.
+    url: "none"
+    retrieved_on: "2026-09-16"
+    confidence: assumed
+
+  auto_education_personal_split:
+    value: {auto: 0.45, education: 0.30, retail_unsecured: 0.25}
+    source: >-
+      IDBI reports Auto, Education and Personal as one 6,787 cr line. The split
+      is our judgement: vehicle finance is the largest of the three at a
+      public-sector bank, education next, and IDBI is not a large unsecured
+      personal-loan lender.
+    url: "none"
+    retrieved_on: "2026-09-16"
+    confidence: assumed
+
+  mix_shrinkage_lambda:
+    value: 0.60
+    source: >-
+      Account shares are shrunk toward a uniform eight-way mix as
+      (1 - lambda) * derived + lambda / 8. At lambda = 0.60 the thinnest
+      portfolio carries 8.3% of accounts instead of 2.0%, which is what
+      criterion DR-06 (per-portfolio AUC with a bootstrap CI, min_n = 0) needs
+      to be answerable for all eight. The undistorted shares are recorded on
+      each portfolio as `account_share_undistorted`. This IS a departure from
+      the real book and belongs on the known-unrealisms list.
+    url: "none"
+    retrieved_on: "2026-09-16"
+    confidence: assumed
+
+  rbi_sectoral_credit_growth_yoy_pct:
+    value: {non_food: 19.1, agriculture: 17.0, industry: 20.0, services: 22.9,
+            personal_loans: 16.2}
+    source: >-
+      RBI, Sectoral Deployment of Bank Credit, July 2026 (released 31-Aug-2026).
+      The press release publishes growth rates in prose; the outstanding-amount
+      tables are in a linked spreadsheet we could not parse, so no absolute
+      product-level rupee figures are used here.
+    url: "https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx?prid=63478"
+    retrieved_on: "2026-09-16"
+    confidence: medium
+    note: "Context only — the generator does not read this node."
+
+# -----------------------------------------------------------------------------
+# Parameters shared by every portfolio unless it overrides them.
+# -----------------------------------------------------------------------------
+shared:
+
+  regions:
+    value: {North: 0.24, South: 0.26, West: 0.28, East: 0.14, Central: 0.08}
+    source: >-
+      Inherited unchanged from the July 2026 build's MSME population so the two
+      MSME portfolios reproduce their published distributions exactly. Broadly
+      consistent with the West-and-South tilt of RBI's state credit data but not
+      derived from it.
+    url: "none"
+    retrieved_on: "2026-09-16"
+    confidence: assumed
+
+  states_within_region:
+    value:
+      North: {Delhi: 0.405, "Uttar Pradesh": 0.193, Rajasthan: 0.116, Haryana: 0.116,
+              Punjab: 0.097, Uttarakhand: 0.031, "Himachal Pradesh": 0.023,
+              "Jammu & Kashmir": 0.019}
+      South: {"Tamil Nadu": 0.310, Karnataka: 0.276, Telangana: 0.172,
+              "Andhra Pradesh": 0.121, Kerala: 0.121}
+      West: {Maharashtra: 0.800, Gujarat: 0.190, Goa: 0.010}
+      East: {"West Bengal": 0.392, Odisha: 0.196, Bihar: 0.196, Jharkhand: 0.118,
+             Assam: 0.098}
+      Central: {"Madhya Pradesh": 0.714, Chhattisgarh: 0.286}
+    source: >-
+      Ordering and relative weight follow RBI/BSR-linked state credit data:
+      Maharashtra first, then Delhi, then Tamil Nadu; seven states (Maharashtra,
+      Delhi, Tamil Nadu, Karnataka, Uttar Pradesh, West Bengal, Gujarat) hold
+      about 72% of bank credit. A clean top-ten-states percentage table could
+      not be located, so the within-region weights are our reading of the
+      end-March-2024 state figures rather than a transcription.
+    url: "https://www.business-standard.com/economy/news/gujarat-leads-in-fy25-loan-growth-karnataka-in-deposits-shows-data-125121201390_1.html"
+    retrieved_on: "2026-09-16"
+    confidence: low
+    note: >-
+      Only the WITHIN-region split is sourced. Region shares are held at the
+      July build's values so the existing `region` cut stays comparable.
+
+  city_tiers:
+    value: {Rural: 0.08, "Semi-Urban": 0.14, Urban: 0.23, Metropolitan: 0.55}
+    source: >-
+      The four levels are RBI's centre population groups (Rural under 10,000;
+      Semi-Urban 10,000 to 1 lakh; Urban 1 to 10 lakh; Metropolitan 10 lakh and
+      above, on Census 2011 population). The actual share of credit by
+      population group could not be located, so the split itself is ours.
+    url: "none"
+    retrieved_on: "2026-09-16"
+    confidence: assumed
+
+  constitutions:
+    value: {Individual: 0.04, Proprietorship: 0.70, Partnership: 0.08,
+            PvtLtd: 0.13, LLP: 0.05}
+    source: >-
+      Udyam registration analysis puts proprietary concerns at 78-79.5% of
+      registered MSMEs and partnerships at 6-7.9%. Bank CREDIT skews to larger
+      constitutions than registrations do, so proprietorship is set below the
+      registration share and companies above it. Spellings are the platform
+      contract's (data/bank/SCHEMA.md and fixture.json), which writes `PvtLtd`.
+    url: "https://dcmsme.gov.in/"
+    retrieved_on: "2026-09-16"
+    confidence: low
+
+  sectors:
+    value: {Manufacturing: 0.22, Trading: 0.30, Services: 0.24, Retail: 0.16,
+            Logistics: 0.08}
+    source: >-
+      Inherited unchanged from the July 2026 build's MSME population so the two
+      MSME portfolios reproduce their published distributions exactly. Udyam
+      data supports services outnumbering manufacturing, which this mix has
+      (Trading + Services + Retail = 70%), but the split is not transcribed from
+      it: the only Udyam counts we could locate were stale.
+    url: "none"
+    retrieved_on: "2026-09-16"
+    confidence: assumed
+
+  sector_risk:
+    value: {Manufacturing: 1.05, Trading: 1.15, Services: 0.90, Retail: 1.10,
+            Logistics: 1.20, Agriculture: 1.10, Salaried: 0.85}
+    source: >-
+      Relative risk multipliers. The five MSME values are the July 2026 build's;
+      Agriculture and Salaried are new and set by judgement (salaried borrowers
+      default less than self-employed ones at the same score).
+    url: "none"
+    retrieved_on: "2026-09-16"
+    confidence: assumed
+
+  nic_groups:
+    value:
+      Manufacturing: "NIC 10-33 Manufacturing"
+      Trading: "NIC 46 Wholesale trade"
+      Retail: "NIC 47 Retail trade"
+      Services: "NIC 55-96 Services"
+      Logistics: "NIC 49-53 Transport and storage"
+      Agriculture: "NIC 01-03 Agriculture, forestry and fishing"
+      Salaried: null
+    source: >-
+      National Industrial Classification 2008 division groups, the taxonomy
+      Udyam registration and bank MSME reporting both use. `Salaried` is not an
+      enterprise activity, so it maps to no NIC group and the column is null for
+      salaried borrowers.
+    url: "https://www.mospi.gov.in/classification/national-industrial-classification"
+    retrieved_on: "2026-09-16"
+    confidence: medium
+
+  qualifications:
+    value: {Graduate: 0.45, UnderGrad: 0.30, Professional: 0.15, SchoolOnly: 0.10}
+    source: "Inherited unchanged from the July 2026 build's MSME population."
+    url: "none"
+    retrieved_on: "2026-09-16"
+    confidence: assumed
+
+  age_groups:
+    value: {"<30": 0.12, "30-40": 0.34, "40-50": 0.30, "50-60": 0.17, "60+": 0.07}
+    source: "Inherited unchanged from the July 2026 build's MSME population."
+    url: "none"
+    retrieved_on: "2026-09-16"
+    confidence: assumed
+
+  # For salaried portfolios this column reads as years in current employment;
+  # it keeps its July name so the schema stays compatible.
+  business_age:
+    shape:
+      value: 2.2
+      source: "Inherited from the July 2026 build: years-in-business ~ gamma(2.2, 3.0)."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    scale:
+      value: 3.0
+      source: "Inherited from the July 2026 build."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    bounds:
+      value: [0.0, 30.0]
+      source: "Inherited from the July 2026 build."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+
+  vintage_months_bounds:
+    value: [0, 48]
+    source: >-
+      Months on book at panel start. Inherited from the July 2026 build; long
+      tenor portfolios override it upward because a 20-year home-loan book
+      genuinely carries older accounts.
+    url: "none"
+    retrieved_on: "2026-09-16"
+    confidence: assumed
+
+  bureau:
+    missing_share:
+      value: 0.07
+      source: >-
+        Share of accounts with no bureau file. Matches the platform fixture's
+        stated "~7% with no bureau file" (data/bank/SCHEMA.md), which the
+        MAR-missingness work in SD-D4 and validation criterion DR-23 assume.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    score_bounds:
+      value: [300.0, 900.0]
+      source: "The CIBIL TransUnion score runs 300 to 900."
+      url: "https://www.cibil.com/faq/cibil-score"
+      retrieved_on: "2026-09-16"
+      confidence: high
+    score_mean:
+      value: 725.0
+      source: "Centre of the distribution for a sanctioned (already underwritten) book."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    score_sd:
+      value: 62.0
+      source: "Spread chosen so about a tenth of a sanctioned book sits below 650."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    risk_gain:
+      value: 30.0
+      source: >-
+        Points of bureau score lost per unit of latent risk z. Calibrated so a
+        borrower two standard deviations riskier scores about 60 points lower —
+        strong enough to matter, weak enough that the bureau file alone cannot
+        carry the model.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    stress_drop:
+      value: 55.0
+      source: >-
+        Points of bureau score lost at full latent stress, applied with a
+        reporting lag (see bureau.report_lag_months).
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    report_lag_months:
+      value: 3
+      source: >-
+        Credit institutions report to bureaus monthly and the refreshed file
+        reaches a lender later still; three months is the conservative end.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+
+  seasonality:
+    kharif_harvest_months:
+      value: [10, 11]
+      source: >-
+        Kharif is sown with the south-west monsoon in June-July and harvested
+        from September-October; mandi sale and the cash it raises land a few
+        weeks later, so the credit-visible peak is October-November.
+      url: "https://agriwelfare.gov.in/en/Agricultural_Statistics_at_a_Glance"
+      retrieved_on: "2026-09-16"
+      confidence: medium
+      note: >-
+        Months are uncontested across sources, but we could not open a primary
+        NABARD or Ministry of Agriculture crop-calendar document, so this is
+        recorded as medium rather than high.
+    rabi_harvest_months:
+      value: [4, 5, 6]
+      source: >-
+        Rabi is sown October-November after the monsoon and harvested April to
+        June under irrigation. KCC repayment and renewal conventionally align
+        with harvest — rabi around April-June, kharif around September-November
+        — which is what the one-year prompt-repayment interest subvention
+        assumes.
+      url: "https://agriwelfare.gov.in/en/Agricultural_Statistics_at_a_Glance"
+      retrieved_on: "2026-09-16"
+      confidence: medium
+    harvest_receipt_multiple:
+      value: 3.2
+      source: >-
+        How much larger a harvest-month crop receipt is than the borrower's
+        off-season monthly average. Agricultural income is lumpy; the multiple
+        is judgement.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    off_season_floor:
+      value: 0.18
+      source: "Off-season receipts as a fraction of the borrower's monthly norm."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+
+  salary:
+    credit_to_emi_multiple:
+      value: 3.1
+      source: >-
+        Monthly salary credit as a multiple of the EMI, i.e. a
+        fixed-obligation-to-income ratio of about 32% at origination.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    multiple_sd:
+      value: 0.9
+      source: "Dispersion of the salary-to-EMI multiple across borrowers."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    multiple_bounds:
+      value: [1.6, 9.0]
+      source: "Clipped so no sanctioned account starts below 1.6x EMI coverage."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    gap_threshold:
+      value: 0.60
+      source: >-
+        A salary credit below 60% of its own trailing six-month average counts
+        as a salary gap — a missed, delayed or part-paid month.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+
+  balance:
+    months_of_emi:
+      value: 1.35
+      source: >-
+        Average CASA balance expressed in months of EMI or interest demand.
+        Indian retail borrowers hold thin buffers.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    months_of_emi_sd:
+      value: 0.7
+      source: "Dispersion of the balance buffer across borrowers."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    minimum_balance:
+      value: 3000.0
+      source: >-
+        Average-monthly-balance requirement on a public-sector savings account,
+        typically 1,000 to 3,000 rupees outside premium variants; breaching it
+        is the `minbal_breach` event for the salaried portfolios.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+
+# -----------------------------------------------------------------------------
+# THE EIGHT PORTFOLIOS
+# Keys are the registry's snake_case codes; `contract_code` is the spelling the
+# platform contract (data/bank/SCHEMA.md, validation/criteria.yaml) requires in
+# the panel's `portfolio` column, and the contract wins wherever they differ.
+# -----------------------------------------------------------------------------
+portfolios:
+
+  # ---- MSME cash credit / overdraft --------------------------------------- #
+  msme_cc:
+    contract_code:
+      value: "MSME-CC"
+      source: "Portfolio enum in data/bank/SCHEMA.md and data/bank/fixture.json."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    loan_type:
+      value: "CashCredit"
+      source: "data/bank/fixture.json: all 20 MSME-CC records carry loan_type CashCredit."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    value_share:
+      value: 0.0894
+      source: >-
+        12,554 cr of the 140,455 cr eight-portfolio universe: IDBI's MSME line
+        (22,826 cr) at the 55% cash-credit split in book.msme_cc_share_of_msme.
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: medium
+    account_share_undistorted:
+      value: 0.0471
+      source: "value_share divided by the lognormal mean ticket, renormalised across the eight."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    account_share:
+      value: 0.101
+      source: >-
+        The two MSME portfolios share one population and one ticket
+        distribution, so shrinkage is applied to MSME as a SINGLE line (two of
+        the eight uniform slots) and the result is then split by
+        book.msme_cc_share_of_msme. Shrinking them independently would have
+        silently moved the cash-credit / term-loan ratio away from 55/45.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    annual_default_rate_band:
+      value: [0.028, 0.045]
+      source: >-
+        SIDBI-TransUnion CIBIL MSME Pulse balance-level delinquency by exposure
+        band at Mar-2025: 5.8% for exposure up to 10 lakh and 2.9% for 10-50
+        lakh. This portfolio's median ticket (12 lakh) sits just above the
+        boundary, so the band brackets the 10-50 lakh figure on the upside.
+        Bank-only MSME GNPA was separately reported near 3.3% in Sep-2025.
+      url: "https://www.business-standard.com/industry/news/msme-loan-portfolio-s-delinquency-rate-down-to-two-year-low-of-2-3-report-124022800807_1.html"
+      retrieved_on: "2026-09-16"
+      confidence: medium
+    risk_offset:
+      value: 0.0
+      source: >-
+        Calibration constant, in latent log-odds, solved so the realised
+        12-month label rate lands on the midpoint of the band above. MSME-CC is
+        the reference portfolio and carries offset 0 by construction, which is
+        what keeps the July 2026 MSME distributions reproducible.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    ticket:
+      log_mean:
+        value: 14.0
+        source: >-
+          Inherited from the July 2026 build: lognormal(14.0, 1.1), median about
+          12 lakh, mean about 22 lakh. Cross-checks well against the roughly
+          20 lakh average ticket reported for new MSME loans, though that figure
+          is from 2023 and is not directly comparable to a stock book.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      log_sd:
+        value: 1.1
+        source: "Inherited from the July 2026 build."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      bounds:
+        value: [50000.0, 50000000.0]
+        source: "Inherited from the July 2026 build: 0.5 lakh to 5 crore."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    tenor_months:
+      value: [12, 12]
+      source: >-
+        A cash-credit limit is sanctioned for one year and renewed annually. The
+        platform fixture carries tenor_months 12 on every MSME-CC record.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    interest_rate_pa:
+      value: [0.0855, 0.1100]
+      source: >-
+        Public-sector-bank MSME working-capital / cash-credit rates quoted from
+        about 8.55% upward, read from consumer rate-aggregator listings rather
+        than from the banks' own rate cards.
+      url: "https://www.urbanmoney.com"
+      retrieved_on: "2026-09-16"
+      confidence: low
+    secured_share:
+      value: 0.75
+      source: >-
+        Collateral-free MSME lending is guaranteed under CGTMSE, so a minority
+        of the book is unsecured. The platform fixture shows 15 of 20 MSME-CC
+        records secured.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    channels:
+      value: ["utilisation", "cash_flow", "gst", "transactions", "repayment",
+              "adverse", "drawing_power"]
+      source: >-
+        What a bank can actually observe on a cash-credit account: the operating
+        account turns over daily, GST returns are filed, and a drawing power is
+        recomputed against stock-and-book-debt statements.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+
+  # ---- MSME term loan ------------------------------------------------------ #
+  msme_tl:
+    contract_code:
+      value: "MSME-TL"
+      source: "Portfolio enum in data/bank/SCHEMA.md and data/bank/fixture.json."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    loan_type:
+      value: "TermLoan"
+      source: "data/bank/fixture.json: all 20 MSME-TL records carry loan_type TermLoan."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    value_share:
+      value: 0.0731
+      source: "10,272 cr of the 140,455 cr universe: IDBI's MSME line at the 45% term-loan split."
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: medium
+    account_share_undistorted:
+      value: 0.0386
+      source: "value_share divided by the lognormal mean ticket, renormalised."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    account_share:
+      value: 0.083
+      source: >-
+        The MSME line's shrunk account share, at the 45% term-loan split — see
+        msme_cc.account_share.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    annual_default_rate_band:
+      value: [0.028, 0.045]
+      source: "Same MSME delinquency evidence as MSME-CC."
+      url: "https://www.business-standard.com/industry/news/msme-loan-portfolio-s-delinquency-rate-down-to-two-year-low-of-2-3-report-124022800807_1.html"
+      retrieved_on: "2026-09-16"
+      confidence: medium
+    risk_offset:
+      value: 0.0
+      source: "Calibration constant; MSME-TL shares MSME-CC's credit risk in the July build."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    ticket:
+      log_mean:
+        value: 14.0
+        source: "Inherited from the July 2026 build."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      log_sd:
+        value: 1.1
+        source: "Inherited from the July 2026 build."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      bounds:
+        value: [50000.0, 50000000.0]
+        source: "Inherited from the July 2026 build."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    tenor_months:
+      value: [36, 120]
+      source: >-
+        MSME term loans typically run three to ten years. No public tenor
+        distribution was located, so the range is ours.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    interest_rate_pa:
+      value: [0.0910, 0.1155]
+      source: >-
+        SBI MSME term-loan rates of roughly 9.10-11.55% (MCLR / EBLR linked),
+        read from consumer rate-aggregator listings rather than the bank's own
+        rate card.
+      url: "https://www.urbanmoney.com"
+      retrieved_on: "2026-09-16"
+      confidence: low
+    secured_share:
+      value: 0.55
+      source: "The platform fixture shows 11 of 20 MSME-TL records secured."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    channels:
+      value: ["utilisation", "cash_flow", "gst", "transactions", "repayment", "adverse"]
+      source: >-
+        A term loan has no drawing power. Its `utilisation` is the
+        outstanding-to-sanction ratio a bank still watches.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+
+  # ---- Housing ------------------------------------------------------------- #
+  housing:
+    contract_code:
+      value: "Housing"
+      source: "Portfolio enum in data/bank/SCHEMA.md and data/bank/fixture.json."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    loan_type:
+      value: "TermLoan"
+      source: "data/bank/fixture.json."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    value_share:
+      value: 0.5360
+      source: >-
+        75,285 cr of the 140,455 cr universe. Housing is over half of IDBI's
+        structured retail book by rupees and the single largest line in it.
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: high
+    account_share_undistorted:
+      value: 0.1835
+      source: "value_share divided by the lognormal mean ticket, renormalised."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    account_share:
+      value: 0.148
+      source: "account_share_undistorted shrunk toward uniform at book.mix_shrinkage_lambda."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    annual_default_rate_band:
+      value: [0.008, 0.016]
+      source: >-
+        RBI sectoral GNPA at Mar-2025 puts the whole Personal Loans bucket
+        (housing + vehicle + education + other retail) at 1.20%, while the
+        unsecured slice inside it runs 1.8%. Secured housing therefore sits
+        below 1.2%; a band of 0.8-1.6% brackets it.
+      url: "https://www.outlookmoney.com/banking/loan/agriculture-sector-records-highest-bad-loans-at-610-per-cent-says-rbi-report"
+      retrieved_on: "2026-09-16"
+      confidence: low
+    risk_offset:
+      value: -1.652
+      source: "Calibration constant in latent log-odds; see msme_cc.risk_offset."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    ticket:
+      log_mean:
+        value: 14.845
+        source: >-
+          Median about 28 lakh, mean about 34 lakh. Industry reporting puts the
+          FY25 average home-loan ticket at 70-76 lakh, but that sample skews to
+          metropolitan and private-lender borrowers; a public-sector retail book
+          sits materially lower, so we did NOT adopt it.
+        url: "https://www.business-standard.com/industry/news/home-loan-volume-and-value-see-double-digit-growth-in-fy25-report-125060300462_1.html"
+        retrieved_on: "2026-09-16"
+        confidence: low
+      log_sd:
+        value: 0.62
+        source: "Home-loan tickets are far less dispersed than MSME limits."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      bounds:
+        value: [300000.0, 150000000.0]
+        source: "3 lakh to 15 crore."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    tenor_months:
+      value: [120, 300]
+      source: "Home loans are written for ten to twenty-five years. No public tenor distribution located."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    interest_rate_pa:
+      value: [0.0725, 0.0900]
+      source: >-
+        SBI home-loan card rates of 7.25-8.45% and PNB from 8.15%, read from
+        consumer rate-aggregator listings in September 2026 rather than from the
+        banks' own rate cards.
+      url: "https://www.urbanmoney.com"
+      retrieved_on: "2026-09-16"
+      confidence: low
+    secured_share:
+      value: 1.0
+      source: "A home loan is secured on the property by definition."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    vintage_months_bounds:
+      value: [0, 120]
+      source: >-
+        A twenty-year book carries far older accounts than a working-capital
+        book, so months-on-book at panel start runs to ten years.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    constitutions:
+      value: {Individual: 1.0}
+      source: >-
+        Retail home loans are written to individuals. The platform fixture's 20
+        Housing records are all Individual.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    sectors:
+      value: {Salaried: 0.72, Services: 0.10, Trading: 0.08, Retail: 0.05,
+              Manufacturing: 0.04, Logistics: 0.01}
+      source: "Occupation of the borrower; home loans skew heavily salaried."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    regions:
+      value: {North: 0.22, South: 0.32, West: 0.30, East: 0.10, Central: 0.06}
+      source: "Housing credit concentrates in the western and southern metros."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    city_tiers:
+      value: {Rural: 0.04, "Semi-Urban": 0.16, Urban: 0.28, Metropolitan: 0.52}
+      source: "Home-loan demand is metropolitan and urban."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    age_groups:
+      value: {"<30": 0.14, "30-40": 0.40, "40-50": 0.28, "50-60": 0.14, "60+": 0.04}
+      source: "First home purchase clusters in the thirties."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    channels:
+      value: ["cash_flow", "transactions", "repayment", "salary", "ltv"]
+      source: >-
+        A salaried home-loan borrower files no GST return and has no credit
+        limit to utilise. What the bank sees is the salary credit into the CASA
+        account, the balance it maintains, the EMI presentation, and the
+        loan-to-value of the mortgage.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    ltv:
+      origination:
+        value: 0.74
+        source: >-
+          Loan-to-value at sanction. RBI caps housing LTV at 90% for loans up to
+          30 lakh, 80% up to 75 lakh and 75% above; banks originate below the cap.
+        url: "https://www.rbi.org.in/Scripts/BS_ViewMasCirculardetails.aspx"
+        retrieved_on: "2026-09-16"
+        confidence: low
+      origination_sd:
+        value: 0.08
+        source: "Dispersion of LTV at sanction."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      collateral_drift_pa:
+        value: 0.045
+        source: "Residential property price growth, annualised, applied to the collateral value."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+
+  # ---- Education ----------------------------------------------------------- #
+  education:
+    contract_code:
+      value: "Education"
+      source: "Portfolio enum in data/bank/SCHEMA.md and data/bank/fixture.json."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    loan_type:
+      value: "TermLoan"
+      source: "data/bank/fixture.json."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    value_share:
+      value: 0.0145
+      source: >-
+        2,036 cr of the 140,455 cr universe: 30% of IDBI's combined
+        Auto/Education/Personal line of 6,787 cr (see
+        book.auto_education_personal_split — the split itself is ours).
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: low
+    account_share_undistorted:
+      value: 0.0196
+      source: "value_share divided by the lognormal mean ticket, renormalised."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    account_share:
+      value: 0.083
+      source: >-
+        account_share_undistorted shrunk toward uniform at
+        book.mix_shrinkage_lambda. This is the portfolio the shrinkage exists
+        for: 2.0% of accounts would not support a per-portfolio AUC with a CI.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    annual_default_rate_band:
+      value: [0.015, 0.040]
+      source: >-
+        Education-loan NPA at public-sector banks fell from about 7% in FY21 to
+        about 2% in FY25 (Minister of State for Finance, Lok Sabha reply,
+        Dec-2025). The band is centred a little above the FY25 level to keep the
+        historical range in view; it is deliberately NOT the 5-8% figure this
+        product carried a few years ago.
+      url: "https://www.pib.gov.in/PressReleseDetailm.aspx?PRID=2204268"
+      retrieved_on: "2026-09-16"
+      confidence: high
+    risk_offset:
+      value: 0.036
+      source: "Calibration constant in latent log-odds; see msme_cc.risk_offset."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    ticket:
+      log_mean:
+        value: 13.30
+        source: >-
+          Median about 6 lakh. Most domestic education loans sit under the 7.5
+          lakh collateral-free threshold; overseas loans average far higher
+          (about 38 lakh market-wide, from a study-abroad industry source we
+          rate as weak), which the wide log_sd carries.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      log_sd:
+        value: 0.85
+        source: >-
+          Wide, because a domestic engineering degree and an overseas master's
+          sit in the same portfolio.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      bounds:
+        value: [50000.0, 50000000.0]
+        source: "0.5 lakh to 5 crore."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    tenor_months:
+      value: [60, 180]
+      source: "Education loans run five to fifteen years after the moratorium. No public distribution located."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    interest_rate_pa:
+      value: [0.0850, 0.1100]
+      source: "Public-sector-bank education-loan rates. No rate card was verified for this product."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    secured_share:
+      value: 0.18
+      source: >-
+        Education loans up to 7.5 lakh are collateral-free under the Credit
+        Guarantee Fund Scheme for Education Loans, and most tickets sit below it.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    vintage_months_bounds:
+      value: [0, 84]
+      source: "The book carries accounts still inside their course moratorium and ones years into repayment."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    constitutions:
+      value: {Individual: 1.0}
+      source: "Education loans are written to the student, with a co-applicant."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    sectors:
+      value: {Salaried: 0.88, Services: 0.05, Trading: 0.04, Retail: 0.02,
+              Manufacturing: 0.01}
+      source: "Occupation of the co-applicant, and of the borrower after the course."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    regions:
+      value: {North: 0.20, South: 0.38, West: 0.20, East: 0.14, Central: 0.08}
+      source: "Education-loan volumes concentrate in the southern states."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    city_tiers:
+      value: {Rural: 0.10, "Semi-Urban": 0.24, Urban: 0.32, Metropolitan: 0.34}
+      source: "Education borrowers are drawn from a much wider geography than home-loan borrowers."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    age_groups:
+      value: {"<30": 0.62, "30-40": 0.24, "40-50": 0.09, "50-60": 0.04, "60+": 0.01}
+      source: "The borrower is a student or a recent graduate."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    channels:
+      value: ["cash_flow", "transactions", "repayment", "salary", "moratorium"]
+      source: >-
+        The defining observable is the moratorium: no EMI is demanded during the
+        course and for a grace period after it, and the first months of real
+        demand are when the portfolio breaks.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    moratorium:
+      end_month_bounds:
+        value: [-36, 30]
+        source: >-
+          Moratorium end relative to panel month 0, spanning a book in which
+          some accounts are years into repayment and others have not been asked
+          for a rupee yet. Negative means the account was already repaying
+          before the panel opened. The moratorium itself is the IBA Model
+          Education Loan Scheme repayment holiday — course period plus one
+          year, or six months after employment, whichever is earlier — which is
+          why the spread is this wide.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      post_end_stress_months:
+        value: 9
+        source: "How long after moratorium end the elevated stop-paying hazard persists."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+
+  # ---- Agriculture (Kisan Credit Card) ------------------------------------- #
+  agri:
+    contract_code:
+      value: "Agri"
+      source: "Portfolio enum in data/bank/SCHEMA.md and data/bank/fixture.json."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    loan_type:
+      value: "CashCredit"
+      source: >-
+        A Kisan Credit Card is a revolving cash-credit facility; the platform
+        fixture carries loan_type CashCredit on all 20 Agri records.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    value_share:
+      value: 0.0967
+      source: "13,589 cr of the 140,455 cr universe: IDBI's Agri line in Non-Structured Retail."
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: medium
+    account_share_undistorted:
+      value: 0.5590
+      source: >-
+        value_share divided by the lognormal mean ticket, renormalised.
+        Agriculture is under a tenth of the book by RUPEES and more than half of
+        it by ACCOUNTS, because KCC tickets are two orders of magnitude smaller
+        than a home loan's.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    account_share:
+      value: 0.300
+      source: >-
+        account_share_undistorted shrunk toward uniform at
+        book.mix_shrinkage_lambda. Even after shrinkage agri is the largest
+        portfolio by account count, which is correct for a public-sector bank.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    annual_default_rate_band:
+      value: [0.045, 0.080]
+      source: >-
+        Agriculture carries the highest GNPA of any major sector for scheduled
+        commercial banks — 6.10% at Mar-2025, against a system average of 2.30%
+        — and about a third of all bank GNPA by value.
+      url: "https://www.outlookmoney.com/banking/loan/agriculture-sector-records-highest-bad-loans-at-610-per-cent-says-rbi-report"
+      retrieved_on: "2026-09-16"
+      confidence: medium
+      note: >-
+        The 6.10% figure is reported as coming from an RBI publication (most
+        likely Trend and Progress of Banking in India 2024-25); we could not
+        confirm which, so this is medium rather than high.
+    risk_offset:
+      value: 1.157
+      source: "Calibration constant in latent log-odds; see msme_cc.risk_offset."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    ticket:
+      log_mean:
+        value: 11.85
+        source: >-
+          Median KCC limit about 1.4 lakh, mean about 2 lakh. No published
+          average KCC ticket could be located; the level is anchored on the
+          policy limits instead — collateral-free agricultural lending was
+          raised to 2 lakh with effect from 1-Jan-2025, and interest subvention
+          runs to 3 lakh.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      log_sd:
+        value: 0.85
+        source: "KCC limits scale with land holding, which is highly skewed."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      bounds:
+        value: [10000.0, 20000000.0]
+        source: "10 thousand to 2 crore."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    tenor_months:
+      value: [12, 12]
+      source: >-
+        A KCC limit is sanctioned for a crop year and reviewed annually (the
+        card itself is valid five years, extendable).
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    interest_rate_pa:
+      value: [0.0400, 0.0700]
+      source: >-
+        Short-term crop loans carry a concessional 7% rate under interest
+        subvention, reduced to an effective 4% on prompt repayment; the
+        subvention cap is 3 lakh and was announced as moving to 5 lakh.
+      url: "https://www.tribuneindia.com/news/business/kisan-credit-card-interest-subvention-scheme-limit-to-be-raised-to-rs-5-lakh-sitharaman"
+      retrieved_on: "2026-09-16"
+      confidence: medium
+    secured_share:
+      value: 0.35
+      source: >-
+        RBI raised the collateral-free agricultural lending limit from 1.60 lakh
+        to 2.00 lakh per borrower with effect from 1-Jan-2025, and most KCC
+        limits sit below it, so the majority of the book is unsecured.
+      url: "https://www.tribuneindia.com/news/business/kisan-credit-card-interest-subvention-scheme-limit-to-be-raised-to-rs-5-lakh-sitharaman"
+      retrieved_on: "2026-09-16"
+      confidence: medium
+    vintage_months_bounds:
+      value: [0, 36]
+      source: "KCC limits are reviewed annually; the book is young."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    constitutions:
+      value: {Individual: 0.88, Proprietorship: 0.10, Partnership: 0.02}
+      source: >-
+        KCC borrowers are individual farmers — about 7.7 crore of them
+        nationally. NOTE: the platform fixture gives its Agri records business
+        constitutions, which is not realistic; the fixture is a fabricated
+        offline stand-in and is not a source.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    sectors:
+      value: {Agriculture: 1.0}
+      source: "By definition."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    regions:
+      value: {North: 0.26, South: 0.24, West: 0.18, East: 0.20, Central: 0.12}
+      source: "Agricultural credit is far less metropolitan-concentrated than the rest of the book."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    city_tiers:
+      value: {Rural: 0.72, "Semi-Urban": 0.22, Urban: 0.05, Metropolitan: 0.01}
+      source: "KCC is a rural and semi-urban product."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    channels:
+      value: ["utilisation", "cash_flow", "transactions", "repayment",
+              "drawing_power", "harvest"]
+      source: >-
+        A KCC account is observed through seasonal crop receipts, the limit it
+        draws against, and whether it is renewed on time after the crop year.
+        There is no GST return and no salary credit.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    harvest:
+      renewal_month:
+        value: 12
+        source: "Months between KCC reviews."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      miss_depth:
+        value: 0.62
+        source: >-
+          Fraction by which harvest receipts fall at full latent stress — a crop
+          failure, a price collapse, or an unsold harvest.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+
+  # ---- Retail unsecured (personal loans) ----------------------------------- #
+  retail_unsecured:
+    contract_code:
+      value: "Retail-Unsecured"
+      source: "Portfolio enum in data/bank/SCHEMA.md and data/bank/fixture.json."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    loan_type:
+      value: "TermLoan"
+      source: "data/bank/fixture.json."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    value_share:
+      value: 0.0121
+      source: >-
+        1,697 cr of the 140,455 cr universe: 25% of IDBI's combined
+        Auto/Education/Personal line (see book.auto_education_personal_split).
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: low
+    account_share_undistorted:
+      value: 0.0509
+      source: "value_share divided by the lognormal mean ticket, renormalised."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    account_share:
+      value: 0.095
+      source: "account_share_undistorted shrunk toward uniform at book.mix_shrinkage_lambda."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    annual_default_rate_band:
+      value: [0.014, 0.032]
+      source: >-
+        RBI's Financial Stability Report (June 2025) puts unsecured retail GNPA
+        at about 1.8%, against 1.1% for retail overall; unsecured products now
+        account for over half of all retail slippages. The band brackets 1.8%
+        on the upside for a public-sector book.
+      url: "https://rbidocs.rbi.org.in/rdocs/PublicationReport/Pdfs/0FSRJUNE20253006258AE798B4484642AD861CC35BC2CB3D8E.PDF"
+      retrieved_on: "2026-09-16"
+      confidence: medium
+      note: >-
+        Do not conflate this with the 1.2% RBI sectoral figure for "Personal
+        Loans": that bucket bundles housing, vehicle and education, which pull
+        it down.
+    risk_offset:
+      value: -0.641
+      source: "Calibration constant in latent log-odds; see msme_cc.risk_offset."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    ticket:
+      log_mean:
+        value: 12.206
+        source: >-
+          Median about 2 lakh, mean about 2.75 lakh. The only sourced figures we
+          found were CRIF's FY21 and FY22 averages (1.25 lakh falling to 83,000)
+          which cover all lenders including small-ticket digital lending; a
+          public-sector bank's personal-loan ticket is larger than that.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      log_sd:
+        value: 0.80
+        source: "Dispersion of personal-loan tickets."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      bounds:
+        value: [20000.0, 4000000.0]
+        source: "20 thousand to 40 lakh."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    tenor_months:
+      value: [12, 60]
+      source: "Personal loans run one to five years. No public distribution located."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    interest_rate_pa:
+      value: [0.1000, 0.1500]
+      source: >-
+        SBI personal-loan rates of roughly 10-15%, read from consumer
+        rate-aggregator listings rather than the bank's own rate card.
+      url: "https://www.urbanmoney.com"
+      retrieved_on: "2026-09-16"
+      confidence: low
+    secured_share:
+      value: 0.0
+      source: "Unsecured by definition."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    vintage_months_bounds:
+      value: [0, 36]
+      source: "A short-tenor book carries young accounts."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    constitutions:
+      value: {Individual: 1.0}
+      source: "Personal loans are written to individuals."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    sectors:
+      value: {Salaried: 0.85, Services: 0.06, Trading: 0.05, Retail: 0.03,
+              Logistics: 0.01}
+      source: "Public-sector-bank personal loans are predominantly a salaried product."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    city_tiers:
+      value: {Rural: 0.06, "Semi-Urban": 0.16, Urban: 0.30, Metropolitan: 0.48}
+      source: "Unsecured retail credit is urban and metropolitan."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    age_groups:
+      value: {"<30": 0.26, "30-40": 0.38, "40-50": 0.22, "50-60": 0.11, "60+": 0.03}
+      source: "Personal-loan borrowers are younger than the mortgage book."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    channels:
+      value: ["cash_flow", "transactions", "repayment", "salary", "emi_stacking"]
+      source: >-
+        The distinguishing observable is EMI stacking — other lenders' EMIs
+        visible in account-aggregator narrations. A borrower servicing four
+        other loans out of one salary is the population that breaks.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    emi_stacking:
+      other_emi_count_lambda:
+        value: 1.3
+        source: >-
+          Mean number of OTHER lenders' EMIs visible in the borrower's account
+          narrations at origination (Poisson).
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      other_emi_share_of_own:
+        value: 0.55
+        source: "Size of a typical other-bank EMI as a fraction of our own EMI."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      stress_new_emi_rate:
+        value: 0.22
+        source: >-
+          Monthly probability of taking on ANOTHER lender's EMI while under
+          latent stress — borrowing to service borrowing, the classic tell.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      burden_breach:
+        value: 0.55
+        source: >-
+          Total fixed obligations above 55% of monthly income is the level at
+          which a bank's own early-warning rules flag over-leverage.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+
+  # ---- Loan against property ----------------------------------------------- #
+  lap:
+    contract_code:
+      value: "LAP"
+      source: "Portfolio enum in data/bank/SCHEMA.md and data/bank/fixture.json."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    loan_type:
+      value: "TermLoan"
+      source: "data/bank/fixture.json."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    value_share:
+      value: 0.1564
+      source: >-
+        21,968 cr of the 140,455 cr universe. LAP is IDBI's second-largest
+        structured retail line after housing.
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: high
+    account_share_undistorted:
+      value: 0.0706
+      source: "value_share divided by the lognormal mean ticket, renormalised."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    account_share:
+      value: 0.103
+      source: "account_share_undistorted shrunk toward uniform at book.mix_shrinkage_lambda."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    annual_default_rate_band:
+      value: [0.018, 0.038]
+      source: >-
+        No public LAP delinquency figure could be located. The band is reasoned:
+        LAP is secured like housing (about 1.0%) but written to self-employed
+        borrowers with lumpier income, which puts it nearer the MSME level
+        (about 3.3%) than the mortgage level.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    risk_offset:
+      value: -0.468
+      source: "Calibration constant in latent log-odds; see msme_cc.risk_offset."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    ticket:
+      log_mean:
+        value: 14.40
+        source: >-
+          Median about 18 lakh, mean about 26 lakh. No published average LAP
+          ticket could be located; the level is set between the housing and MSME
+          books, which is where LAP sits in IDBI's own structured-retail line.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      log_sd:
+        value: 0.85
+        source: "Dispersion of LAP tickets."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      bounds:
+        value: [200000.0, 100000000.0]
+        source: "2 lakh to 10 crore."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    tenor_months:
+      value: [60, 180]
+      source: "LAP runs five to fifteen years. No public distribution located."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    interest_rate_pa:
+      value: [0.0920, 0.1050]
+      source: >-
+        SBI loan-against-property rates of 9.20-10.50%, read from consumer
+        rate-aggregator listings rather than the bank's own rate card.
+      url: "https://www.urbanmoney.com"
+      retrieved_on: "2026-09-16"
+      confidence: low
+    secured_share:
+      value: 1.0
+      source: "Secured on the mortgaged property by definition."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    vintage_months_bounds:
+      value: [0, 84]
+      source: "A ten-year book carries accounts up to seven years old at panel start."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    constitutions:
+      value: {Individual: 0.42, Proprietorship: 0.30, Partnership: 0.12,
+              PvtLtd: 0.10, LLP: 0.06}
+      source: >-
+        LAP is largely a self-employed product: the borrower is often an
+        individual mortgaging property to fund a business. This is the portfolio
+        where the constitution axis actually bites, because Individual borrowers
+        file no GST return and their GST columns go missing (SD-D4's MAR block).
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    sectors:
+      value: {Trading: 0.28, Services: 0.26, Manufacturing: 0.18, Retail: 0.14,
+              Salaried: 0.10, Logistics: 0.04}
+      source: "Activity of the self-employed LAP borrower."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    regions:
+      value: {North: 0.24, South: 0.24, West: 0.34, East: 0.10, Central: 0.08}
+      source: "LAP concentrates in the western metros."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    city_tiers:
+      value: {Rural: 0.03, "Semi-Urban": 0.15, Urban: 0.30, Metropolitan: 0.52}
+      source: "Property values make LAP an urban product."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    channels:
+      value: ["cash_flow", "gst", "transactions", "repayment", "adverse",
+              "ltv", "rental"]
+      source: >-
+        The two LAP-specific observables are the loan-to-value of the mortgaged
+        property and the rental income it throws off. A LAP borrower whose
+        tenant leaves and whose collateral value slips is the population that
+        breaks.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    ltv:
+      origination:
+        value: 0.58
+        source: "Lenders originate LAP at a lower LTV than housing because the collateral is harder to sell."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      origination_sd:
+        value: 0.10
+        source: "Dispersion of LAP LTV at sanction."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      collateral_drift_pa:
+        value: 0.030
+        source: "Commercial and mixed-use property appreciates more slowly than residential."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    rental:
+      share_of_emi:
+        value: 0.85
+        source: "Rental income from the mortgaged property as a multiple of the EMI at origination."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      share_sd:
+        value: 0.35
+        source: "Dispersion of the rental-to-EMI ratio."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      vacancy_rate:
+        value: 0.05
+        source: "Baseline monthly probability that the property is vacant and no rent is credited."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+
+  # ---- Auto ---------------------------------------------------------------- #
+  auto:
+    contract_code:
+      value: "Auto"
+      source: "Portfolio enum in data/bank/SCHEMA.md and data/bank/fixture.json."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    loan_type:
+      value: "TermLoan"
+      source: "data/bank/fixture.json."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    value_share:
+      value: 0.0217
+      source: >-
+        3,054 cr of the 140,455 cr universe: 45% of IDBI's combined
+        Auto/Education/Personal line (see book.auto_education_personal_split).
+      url: "https://www.idbi.bank.in/pdf/Analyst_Mar-2026.pdf"
+      retrieved_on: "2026-09-16"
+      confidence: low
+    account_share_undistorted:
+      value: 0.0307
+      source: "value_share divided by the lognormal mean ticket, renormalised."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    account_share:
+      value: 0.087
+      source: "account_share_undistorted shrunk toward uniform at book.mix_shrinkage_lambda."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    annual_default_rate_band:
+      value: [0.010, 0.026]
+      source: >-
+        No public vehicle-loan GNPA figure could be located. The band is
+        reasoned: the asset is hypothecated and repossessable, so delinquency
+        sits above secured housing (about 1.0%) and well below unsecured retail
+        (about 1.8%) — but a vehicle depreciates, which is why the band's top is
+        above the housing band's.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    risk_offset:
+      value: -1.022
+      source: "Calibration constant in latent log-odds; see msme_cc.risk_offset."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    ticket:
+      log_mean:
+        value: 13.30
+        source: >-
+          Median about 6 lakh, mean about 8 lakh, for a book that mixes cars and
+          two-wheelers. Public-sector-bank car-loan tickets were about 7.5 lakh
+          in FY22 (CRIF, stale) and the two-wheeler average ticket was about
+          95,000 in mid-2026 — the wide log_sd spans both.
+        url: "https://www.crifhighmark.com/media/6260/how-india-lends-feb-2026.pdf"
+        retrieved_on: "2026-09-16"
+        confidence: low
+      log_sd:
+        value: 0.80
+        source: "Wide enough to hold both a two-wheeler and a mid-size car in one portfolio."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      bounds:
+        value: [50000.0, 20000000.0]
+        source: "0.5 lakh (two-wheeler) to 2 crore."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    tenor_months:
+      value: [36, 84]
+      source: "Vehicle loans run three to seven years. No public distribution located."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    interest_rate_pa:
+      value: [0.0760, 0.0980]
+      source: >-
+        PNB vehicle-loan rates quoted from 7.60%, read from consumer
+        rate-aggregator listings rather than the bank's own rate card; the upper
+        bound is ours.
+      url: "https://www.urbanmoney.com"
+      retrieved_on: "2026-09-16"
+      confidence: low
+    secured_share:
+      value: 1.0
+      source: "Hypothecated on the vehicle by definition."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    vintage_months_bounds:
+      value: [0, 60]
+      source: "A five-to-seven-year book."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    constitutions:
+      value: {Individual: 0.90, Proprietorship: 0.07, PvtLtd: 0.02, Partnership: 0.01}
+      source: "Retail vehicle loans are overwhelmingly individual."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    sectors:
+      value: {Salaried: 0.78, Services: 0.08, Trading: 0.06, Retail: 0.04,
+              Logistics: 0.04}
+      source: "Occupation of the borrower."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    city_tiers:
+      value: {Rural: 0.08, "Semi-Urban": 0.22, Urban: 0.32, Metropolitan: 0.38}
+      source: "Vehicle finance reaches further down the population-group ladder than home loans."
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    channels:
+      value: ["cash_flow", "transactions", "repayment", "salary", "commute", "ltv"]
+      source: >-
+        A vehicle borrower's fuel, toll and parking spend is visible in card and
+        UPI narrations. A commute that stops at the same time as the salary
+        thins is the early tell that the borrower has lost the job the vehicle
+        was financed against.
+      url: "none"
+      retrieved_on: "2026-09-16"
+      confidence: assumed
+    ltv:
+      origination:
+        value: 0.80
+        source: "Lenders fund up to 85-90% of on-road value; originations cluster near 80%."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      origination_sd:
+        value: 0.07
+        source: "Dispersion of vehicle LTV at sanction."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      collateral_drift_pa:
+        value: -0.150
+        source: "Vehicles depreciate about 15% a year."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+    commute:
+      spend_share_of_emi:
+        value: 0.30
+        source: "Monthly fuel, toll and parking spend as a fraction of the EMI."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      spend_share_sd:
+        value: 0.12
+        source: "Dispersion of commute spend."
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
+      stress_drop:
+        value: 0.70
+        source: >-
+          Fraction by which commute spend falls at full latent stress: the
+          vehicle stops moving before the EMI stops being paid.
+        url: "none"
+        retrieved_on: "2026-09-16"
+        confidence: assumed
