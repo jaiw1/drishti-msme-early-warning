@@ -106,7 +106,7 @@ export default function Login() {
             <div className="text-lg font-extrabold leading-tight text-slate-900">
               DRISHT<span className="text-idbi-orangetx">i</span>
             </div>
-            <div className="text-xs leading-tight text-slate-500">MSME loan early-warning · IDBI Bank</div>
+            <div className="text-xs leading-tight text-slate-600">MSME loan early-warning · IDBI Bank</div>
           </div>
           <div className="ml-auto"><ScreenHelp screen="login" label="Help" /></div>
         </div>
@@ -193,13 +193,13 @@ export default function Login() {
             {pending ? 'Signing in…' : locked ? `Locked — ${countdownLabel(lockSeconds)}` : 'Sign in'}
           </button>
 
-          <p id="login-error-hint" className="text-[11px] leading-relaxed text-slate-500">
+          <p id="login-error-hint" className="text-[11px] leading-relaxed text-slate-600">
             Accounts are issued by the bank. Five failed attempts in fifteen minutes locks an account for
             fifteen minutes.
           </p>
         </form>
 
-        <p className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
+        <p className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-600">
           <ShieldCheck size={12} aria-hidden="true" />
           Sessions end after 8 hours, or 30 minutes idle.
         </p>

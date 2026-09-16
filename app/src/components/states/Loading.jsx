@@ -7,7 +7,7 @@ import { Loader2 } from 'lucide-react'
 export default function Loading({ label = 'Loading…', inline = false, testId = 'state-loading' }) {
   if (inline) {
     return (
-      <span className="inline-flex items-center gap-2 text-sm text-slate-500" data-testid={testId}>
+      <span className="inline-flex items-center gap-2 text-sm text-slate-600" data-testid={testId}>
         <Loader2 size={15} className="animate-spin" aria-hidden="true" />
         <span role="status" aria-live="polite">{label}</span>
       </span>
@@ -18,7 +18,7 @@ export default function Loading({ label = 'Loading…', inline = false, testId =
       className="grid place-items-center rounded-xl border border-slate-200 bg-white px-6 py-12"
       data-testid={testId}
     >
-      <div className="flex items-center gap-2 text-sm text-slate-500">
+      <div className="flex items-center gap-2 text-sm text-slate-600">
         <Loader2 size={18} className="animate-spin" aria-hidden="true" />
         <span role="status" aria-live="polite">{label}</span>
       </div>

@@ -66,12 +66,12 @@ function ChannelStrip({ channels }) {
             <li
               key={c.channel}
               className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs ${
-                c.present ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-slate-200 bg-white text-slate-500'
+                c.present ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-slate-200 bg-white text-slate-600'
               }`}
             >
               {c.present
                 ? <Check size={13} className="text-idbi-green" aria-hidden="true" />
-                : <CircleSlash size={13} className="text-slate-500" aria-hidden="true" />}
+                : <CircleSlash size={13} className="text-slate-600" aria-hidden="true" />}
               <span className="font-semibold">{c.label}</span>
               <span className="sr-only">{c.present ? 'observed' : 'not collected'}</span>
               {c.source && <SourceBadge source={badge.source} sandbox={badge.sandbox} iconOnly className="ml-0.5" />}
@@ -133,7 +133,7 @@ function ActionRecorder({ accountId, live, onRecorded }) {
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="action-note" className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-            Note <span className="font-normal normal-case text-slate-500">(optional, up to 2,000 characters)</span>
+            Note <span className="font-normal normal-case text-slate-600">(optional, up to 2,000 characters)</span>
           </label>
           <textarea
             id="action-note"
@@ -384,7 +384,7 @@ export default function AccountDetail({ accountId, live = true, thresholds: fall
             ].map((item) => (
               <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-3">
                 <dt className="text-[11px] uppercase tracking-wide text-slate-600">{item.label}</dt>
-                <dd className={`mt-0.5 text-lg font-extrabold ${item.muted ? 'text-sm font-semibold text-slate-500' : 'text-slate-900'}`}>
+                <dd className={`mt-0.5 text-lg font-extrabold ${item.muted ? 'text-sm font-semibold text-slate-600' : 'text-slate-900'}`}>
                   {item.value}
                 </dd>
                 {item.hint && <p className="mt-1 text-[11px] leading-relaxed text-slate-600">{item.hint}</p>}

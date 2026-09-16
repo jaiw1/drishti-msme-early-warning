@@ -75,7 +75,7 @@ function PrecisionCard({ entry }) {
       <div className="text-xs font-semibold text-slate-700">{entry.portfolio}</div>
       {value == null ? (
         <>
-          <div className="mt-1 text-sm font-semibold text-slate-500">not reported</div>
+          <div className="mt-1 text-sm font-semibold text-slate-600">not reported</div>
           <p className="mt-0.5 text-[11px] leading-relaxed text-slate-600">
             This run published no Red-band precision for {entry.portfolio}.
           </p>
@@ -284,7 +284,7 @@ export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, onS
                     <td className={`py-2 pr-3 text-right font-bold ${rag.text}`}>{pct(r.pd)}</td>
                     <td className="py-2 pr-3 text-right font-bold text-slate-900">{inr(r.atRisk)}</td>
                     <td className="hidden max-w-[280px] truncate py-2 pr-3 text-slate-600 lg:table-cell">{r.reasons?.[0] || '—'}</td>
-                    <td className="py-2 text-slate-500"><ChevronRight size={15} aria-hidden="true" /></td>
+                    <td className="py-2 text-slate-600"><ChevronRight size={15} aria-hidden="true" /></td>
                   </tr>
                 )
               })}

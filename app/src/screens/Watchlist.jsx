@@ -192,7 +192,7 @@ export default function Watchlist() {
                   Search this page
                 </label>
                 <div className="relative">
-                  <Search size={15} className="pointer-events-none absolute left-2.5 top-2.5 text-slate-500" aria-hidden="true" />
+                  <Search size={15} className="pointer-events-none absolute left-2.5 top-2.5 text-slate-600" aria-hidden="true" />
                   <input
                     id="f-search"
                     type="search"

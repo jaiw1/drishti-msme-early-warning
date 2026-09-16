@@ -98,7 +98,7 @@ export default function AppShell({
           </div>
           <div className="min-w-0">
             <h1 className="text-base font-extrabold text-slate-900 sm:text-lg">{title}</h1>
-            {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
+            {subtitle && <p className="text-xs text-slate-600">{subtitle}</p>}
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {source && <SourceBadge source={source} sandbox={sandbox} detail={sourceDetail} />}

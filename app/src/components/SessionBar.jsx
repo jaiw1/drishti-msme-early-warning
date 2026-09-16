@@ -34,7 +34,7 @@ export default function SessionBar({ className = '' }) {
 
   if (isStatic) {
     return (
-      <div className={`flex items-center gap-2 text-xs text-slate-500 ${className}`} data-testid="session-bar">
+      <div className={`flex items-center gap-2 text-xs text-slate-600 ${className}`} data-testid="session-bar">
         <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 font-semibold">
           <ShieldCheck size={13} aria-hidden="true" /> Static demo — no sign-in
         </span>
@@ -64,7 +64,7 @@ export default function SessionBar({ className = '' }) {
       {left && (
         <span
           className={`hidden items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold md:inline-flex ${
-            soon ? 'bg-rag-amber/10 text-rag-ambertx' : 'text-slate-500'
+            soon ? 'bg-rag-amber/10 text-rag-ambertx' : 'text-slate-600'
           }`}
           title="Time remaining on this sign-in session"
         >
@@ -78,7 +78,7 @@ export default function SessionBar({ className = '' }) {
         type="button"
         disabled={signingOut}
         onClick={async () => { setSigningOut(true); try { await logout() } finally { setSigningOut(false) } }}
-        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green disabled:opacity-60"
       >
         <LogOut size={13} aria-hidden="true" /> {signingOut ? 'Signing out…' : 'Sign out'}
       </button>

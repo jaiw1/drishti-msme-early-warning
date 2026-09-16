@@ -78,7 +78,7 @@ export function ToastProvider({ children, timeoutMs = 7000 }) {
                 <div className="font-semibold text-slate-800">{toast.message}</div>
                 {toast.detail && <div className="mt-0.5 text-xs leading-relaxed text-slate-600">{toast.detail}</div>}
                 {toast.audited && (
-                  <div className="mt-1 text-xs text-slate-500">
+                  <div className="mt-1 text-xs text-slate-600">
                     Recorded in the append-only audit log against your user id.
                   </div>
                 )}
@@ -87,7 +87,7 @@ export function ToastProvider({ children, timeoutMs = 7000 }) {
                 type="button"
                 onClick={() => dismiss(toast.id)}
                 aria-label="Dismiss notification"
-                className="rounded p-0.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green"
+                className="rounded p-0.5 text-slate-600 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green"
               >
                 <X size={15} aria-hidden="true" />
               </button>

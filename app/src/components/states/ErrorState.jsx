@@ -40,7 +40,7 @@ export default function ErrorState({
     >
       <p>{text}</p>
       {requestId && (
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-slate-600">
           Reference <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px]">{requestId}</code>
         </p>
       )}

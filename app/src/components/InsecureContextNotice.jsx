@@ -41,7 +41,7 @@ export default function InsecureContextNotice({ href }) {
         >
           Reload over HTTPS
         </a>
-        <p className="text-xs leading-relaxed text-slate-500">
+        <p className="text-xs leading-relaxed text-slate-600">
           If the certificate is self-signed, compare its SHA-256 fingerprint with the one published in
           the project README before accepting it.
         </p>

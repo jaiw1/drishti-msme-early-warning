@@ -67,7 +67,7 @@ export default function Dialog({
             type="button"
             onClick={onClose}
             aria-label={closeLabel}
-            className="rounded-lg p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green"
+            className="rounded-lg p-1 text-slate-600 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green"
           >
             <X size={20} aria-hidden="true" />
           </button>

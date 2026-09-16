@@ -150,7 +150,7 @@ export default function ChangePassword() {
             {pending ? 'Changing…' : 'Change password'}
           </button>
 
-          <p className="text-[11px] leading-relaxed text-slate-500">
+          <p className="text-[11px] leading-relaxed text-slate-600">
             Changing your password signs out every other session you have open. This one stays signed in.
           </p>
         </form>

@@ -22,7 +22,7 @@ export default function Panel({ tone = 'neutral', icon: Icon, title, children, a
           </div>
         )}
         {title && <div className="font-bold text-slate-800">{title}</div>}
-        {children && <div className="text-sm leading-relaxed text-slate-500">{children}</div>}
+        {children && <div className="text-sm leading-relaxed text-slate-600">{children}</div>}
         {actions && <div className="flex items-center justify-center gap-2 pt-1">{actions}</div>}
       </div>
     </div>
