@@ -216,6 +216,27 @@ def _decile_steps(deciles):
     return sum(1 for a, b in steps if b >= a), len(steps)
 
 
+def _decile_steps_ci(deciles):
+    """The same count, but a step only counts as a reversal if it is a REAL one.
+
+    REPORTED, NOT GATED — the gate stays on the literal DR-12 arithmetic above.
+
+    This exists because of what the 45,000-account run showed: the score puts nearly
+    all realised risk in the top decile, so deciles 1-9 sit at 0.0-1.8% and their
+    ordering is noise. MSME-CC's "reversal" was 0.0077 -> 0.0076: one account, across
+    two 130-account cells whose confidence intervals almost entirely coincide.
+    Requiring nine such coin-flips to land the right way up measures the seed, not the
+    model. A step is counted against the model here only when the later decile's rate
+    is lower AND the two Wilson intervals do not overlap — i.e. when the data can
+    actually tell the two cells apart.
+    """
+    ok = 0
+    for a, b in zip(deciles, deciles[1:]):
+        if b["bad_rate"] >= a["bad_rate"] or b["ci_hi"] >= a["ci_lo"]:
+            ok += 1
+    return ok, max(len(deciles) - 1, 0)
+
+
 def _exhibit_cell(frame, horizon, portfolio=None):
     """One rank-order panel — pooled, or one portfolio's.
 
@@ -225,6 +246,7 @@ def _exhibit_cell(frame, horizon, portfolio=None):
     bands = _by_band(frame, horizon)
     deciles = _by_decile(frame, horizon)
     ok, total = _decile_steps(deciles)
+    ok_ci, _ = _decile_steps_ci(deciles)
     red = next(b for b in bands if b["band"] == "Red")
     cell = dict(
         n=int(len(frame)),
@@ -240,6 +262,9 @@ def _exhibit_cell(frame, horizon, portfolio=None):
         monotone_decile_steps=ok,
         decile_steps=total,
         monotone_decile_step_fraction=round(ok / total, 4) if total else 0.0,
+        # reported beside the gated number, never instead of it — see _decile_steps_ci
+        monotone_decile_steps_ci=ok_ci,
+        monotone_decile_step_fraction_ci=round(ok_ci / total, 4) if total else 0.0,
     )
     if portfolio is not None:
         cell["portfolio"] = portfolio
@@ -287,6 +312,7 @@ def format_rank_order(exhibit):
         lines.append(f"  {label:<18s} n={cell['n']:<6d} {bands}")
         lines.append(f"  {'':<18s} deciles " + " ".join(f"{d['bad_rate']:.1%}" for d in cell["by_decile"])
                      + f"  monotone {cell['monotone_decile_steps']}/{cell['decile_steps']}"
+                     + f" (CI-aware {cell['monotone_decile_steps_ci']}/{cell['decile_steps']})"
                      + ("  BANDS OK" if cell["bands_monotone"] else "  BANDS NOT MONOTONE"))
     return lines
 

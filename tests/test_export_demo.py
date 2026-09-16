@@ -334,6 +334,46 @@ def test_decile_step_fraction_counts_non_decreasing_steps():
     assert exhibit["monotone_decile_step_fraction"] == 1.0
 
 
+def test_ci_aware_step_count_forgives_a_reversal_the_data_cannot_see():
+    """One account's difference between two big deciles is not a reversal.
+
+    This is the DIAGNOSTIC, not the gate: it must be at least as generous as the
+    literal count, and it must forgive a drop whose Wilson intervals overlap.
+    """
+    overlapping = [dict(bad_rate=0.0077, ci_lo=0.001, ci_hi=0.04),
+                   dict(bad_rate=0.0076, ci_lo=0.001, ci_hi=0.04)]
+    assert export_demo._decile_steps(overlapping)[0] == 0
+    assert export_demo._decile_steps_ci(overlapping)[0] == 1
+
+
+def test_ci_aware_step_count_still_catches_a_real_reversal():
+    separated = [dict(bad_rate=0.50, ci_lo=0.44, ci_hi=0.56),
+                 dict(bad_rate=0.02, ci_lo=0.01, ci_hi=0.05)]
+    assert export_demo._decile_steps_ci(separated)[0] == 0
+
+
+def test_ci_aware_count_is_never_stricter_than_the_gated_one():
+    book = pd.concat([_ranked_book(p.code) for p in PORTFOLIOS.values()], ignore_index=True)
+    exhibit = export_demo.rank_order_exhibit(book)
+    for cell in [exhibit] + exhibit["by_portfolio"]:
+        assert cell["monotone_decile_steps_ci"] >= cell["monotone_decile_steps"]
+        assert cell["monotone_decile_steps_ci"] <= cell["decile_steps"]
+
+
+def test_the_gate_ignores_the_ci_aware_diagnostic():
+    """A cell that fails the literal count must still fail, however forgiving the
+    diagnostic is — the pre-registered arithmetic is what gates."""
+    rows = []
+    for i in range(200):
+        score = i / 200
+        bucket = "red" if score >= 0.9 else "amber" if score >= 0.6 else "green"
+        rows.append((bucket, "Auto", score, 3 if i < 20 else -1))
+    exhibit = export_demo.rank_order_exhibit(_book(rows))
+    cell = exhibit["by_portfolio"][0]
+    assert cell["monotone_decile_step_fraction"] < export_demo.DECILE_STEP_FLOOR
+    assert any(v.startswith("DR-12") for v in export_demo.rank_order_violations(exhibit))
+
+
 def test_gate_reports_a_decile_reversal():
     """A book whose safest decile is its worst fails DR-12, not just DR-11."""
     rows = []
