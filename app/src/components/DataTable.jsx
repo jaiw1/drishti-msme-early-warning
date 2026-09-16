@@ -72,7 +72,9 @@ export function useRovingRows(count, { onActivate } = {}) {
   const rowProps = useCallback((index, key) => ({
     'data-row': true,
     tabIndex: index === active ? 0 : -1,
-    onFocus: () => setActive(index),
+    // The hook focuses a row itself when the arrow keys move the tab stop, and that
+    // focus event lands back here. Bail out rather than re-setting the same index.
+    onFocus: () => setActive((prev) => (prev === index ? prev : index)),
     onKeyDown: (event) => {
       switch (event.key) {
         case 'ArrowDown': event.preventDefault(); move(index + 1); break

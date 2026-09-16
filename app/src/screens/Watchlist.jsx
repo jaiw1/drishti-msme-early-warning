@@ -18,7 +18,7 @@ import AppShell from '../components/AppShell'
 import AccountDetail from '../components/AccountDetail'
 import Kpis from '../components/Kpis'
 import DataTable, { SortableHeader, useRovingRows } from '../components/DataTable'
-import SourceBadge, { SOURCE } from '../components/SourceBadge'
+import SourceBadge from '../components/SourceBadge'
 import Empty from '../components/states/Empty'
 import ErrorState from '../components/states/ErrorState'
 import Loading from '../components/states/Loading'
@@ -342,5 +342,3 @@ export default function Watchlist() {
     </AppShell>
   )
 }
-
-export { SOURCE }

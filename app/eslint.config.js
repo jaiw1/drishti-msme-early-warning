@@ -5,7 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import jsxA11y from 'eslint-plugin-jsx-a11y'
 
 export default [
-  { ignores: ['dist/**', 'node_modules/**', '.vercel/**'] },
+  { ignores: ['dist/**', 'node_modules/**', '.vercel/**', 'e2e/test-results/**', 'e2e/playwright-report/**', 'e2e/lighthouse/**'] },
   js.configs.recommended,
   {
     files: ['**/*.{js,jsx}'],
@@ -37,6 +37,12 @@ export default [
   },
   {
     files: ['vite.config.js', 'tailwind.config.js', 'postcss.config.js', 'eslint.config.js'],
+    languageOptions: { globals: { ...globals.node } },
+  },
+  {
+    // Playwright runs in Node, not in the browser: its specs read env vars, spawn the
+    // backend, and write artefacts. Lint them as Node, and never lint its output.
+    files: ['playwright.config.js', 'e2e/**/*.js'],
     languageOptions: { globals: { ...globals.node } },
   },
 ]

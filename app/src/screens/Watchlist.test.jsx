@@ -9,6 +9,12 @@ afterEach(() => vi.unstubAllGlobals())
 
 const render = (opts) => renderScreen(<Watchlist />, { path: '/watchlist', ...opts })
 
+// The screen makes two calls: the page of rows, and the run's roll-up for the KPI strip.
+// A test that only waits for the rows leaves the second landing after the test body has
+// returned, which React reports as an un-acted update. Wait for both.
+// ("Red — act now" is also a band-filter option, so key off the KPI's own sub-line.)
+const settled = () => screen.findByText(/exposure at risk/)
+
 describe('Watch-list', () => {
   it('is titled for the whole book, not for one product', async () => {
     mockApi(apiRoutes(), { vi })
@@ -16,10 +22,11 @@ describe('Watch-list', () => {
     expect(await screen.findByRole('heading', { name: 'Borrower Watch-list — all lending portfolios' })).toBeInTheDocument()
   })
 
-  it('shows a loading state before anything arrives', () => {
+  it('shows a loading state before anything arrives', async () => {
     mockApi(apiRoutes(), { vi })
     render()
     expect(screen.getByTestId('state-loading')).toBeInTheDocument()
+    await settled()
   })
 
   it('shows the shared error state, with the request id, when the API fails', async () => {
@@ -86,18 +93,25 @@ describe('Watch-list', () => {
     expect(first).toHaveAttribute('tabindex', '0')
     expect(second).toHaveAttribute('tabindex', '-1')
 
+    await settled()
     first.focus()
     await userEvent.keyboard('{ArrowDown}')
     await waitFor(() => expect(second).toHaveFocus())
+    // The roving group moves its tab stop with focus; wait for that to commit too.
+    await waitFor(() => expect(second).toHaveAttribute('tabindex', '0'))
   })
 
   it('opens the account drawer from the keyboard', async () => {
     mockApi(apiRoutes(), { vi })
     render()
     const row = await screen.findByRole('row', { name: /MSME00001/ })
+    await settled()
     row.focus()
     await userEvent.keyboard('{Enter}')
     expect(await screen.findByRole('dialog')).toHaveAccessibleName(/MSME00001/)
+    // The drawer fetches the account, its timeline and its memo; let all three land.
+    await screen.findByText(/Why the model flagged this account/)
+    await screen.findByText(/Early-warning memo/)
   })
 
   it('reads the frozen snapshot, and says so, when there is no backend', async () => {

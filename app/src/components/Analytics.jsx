@@ -16,7 +16,7 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { pct } from '../lib/format'
-import { SIGNAL_FAMILIES, coverageGap, familiesIn } from '../domain/families'
+import { coverageGap, familiesIn } from '../domain/families'
 import { byPortfolioList, honestyBlock, redBandPrecision } from '../domain/shapes'
 
 function Rigor({ rigor }) {
@@ -374,5 +374,3 @@ export default function Analytics({ metrics, rigor }) {
     </div>
   )
 }
-
-export { SIGNAL_FAMILIES }

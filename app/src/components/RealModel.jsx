@@ -3,6 +3,7 @@ import {
   LineChart, Line, ReferenceLine,
 } from 'recharts'
 import { BadgeCheck, Building2, TriangleAlert, CircleCheck } from 'lucide-react'
+import DataTable from './DataTable'
 
 function Stat({ value, label, hint, tint = 'text-idbi-green' }) {
   return (
@@ -89,17 +90,17 @@ export default function RealModel({ data, syntheticAuc }) {
           <span className="text-xs text-slate-500">(anonymised — real financials &amp; outcomes)</span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500">
+          <DataTable caption="Real companies the model scored, with their financials and their actual outcome">
+            <thead className="bg-slate-50 text-xs text-slate-600">
               <tr>
-                <th className="text-left px-4 py-2 font-semibold">Company</th>
-                <th className="text-left px-4 py-2 font-semibold">Industry</th>
-                <th className="text-right px-4 py-2 font-semibold">Int. cover</th>
-                <th className="text-right px-4 py-2 font-semibold">D/E</th>
-                <th className="text-right px-4 py-2 font-semibold">Margin</th>
-                <th className="text-right px-4 py-2 font-semibold">Risk</th>
-                <th className="text-left px-4 py-2 font-semibold">Outcome</th>
-                <th className="text-left px-4 py-2 font-semibold">Top reason</th>
+                <th scope="col" className="text-left px-4 py-2 font-semibold">Company</th>
+                <th scope="col" className="text-left px-4 py-2 font-semibold">Industry</th>
+                <th scope="col" className="text-right px-4 py-2 font-semibold">Int. cover</th>
+                <th scope="col" className="text-right px-4 py-2 font-semibold">D/E</th>
+                <th scope="col" className="text-right px-4 py-2 font-semibold">Margin</th>
+                <th scope="col" className="text-right px-4 py-2 font-semibold">Risk</th>
+                <th scope="col" className="text-left px-4 py-2 font-semibold">Outcome</th>
+                <th scope="col" className="text-left px-4 py-2 font-semibold">Top reason</th>
               </tr>
             </thead>
             <tbody>
@@ -107,7 +108,7 @@ export default function RealModel({ data, syntheticAuc }) {
                 const bad = e.outcome.startsWith('Default')
                 return (
                   <tr key={e.id} className="border-t border-slate-50">
-                    <td className="px-4 py-2.5 font-semibold text-slate-800">{e.id}<span className="text-slate-500 font-normal"> · {e.obs_year}</span></td>
+                    <th scope="row" className="px-4 py-2.5 text-left font-semibold text-slate-800">{e.id}<span className="text-slate-600 font-normal"> · {e.obs_year}</span></th>
                     <td className="px-4 py-2.5 text-slate-500">{e.industry}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{e.interest_cover ?? '—'}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{e.debt_to_equity ?? '—'}</td>
@@ -123,7 +124,7 @@ export default function RealModel({ data, syntheticAuc }) {
                 )
               })}
             </tbody>
-          </table>
+          </DataTable>
         </div>
       </section>
 

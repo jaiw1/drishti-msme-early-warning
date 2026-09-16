@@ -60,7 +60,7 @@ export default function AppShell({
         to={n.path}
         aria-current={current ? 'page' : undefined}
         className={mobile
-          ? `flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white ${current ? 'bg-white/20 text-white' : 'text-white/80'}`
+          ? `flex min-w-[68px] flex-1 shrink-0 flex-col items-center gap-0.5 px-1 py-2 text-center text-[10px] font-semibold leading-tight transition focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white ${current ? 'bg-white/20 text-white' : 'text-white/80'}`
           : `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${current ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'}`}
       >
         <n.icon size={mobile ? 18 : 18} aria-hidden="true" />
@@ -122,8 +122,10 @@ export default function AppShell({
         </main>
       </div>
 
+      {/* An administrator sees seven sections. Squashing seven labels into 375 px makes
+          every one of them unreadable, so the bar scrolls instead of shrinking. */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 flex border-t border-white/20 bg-idbi-green pb-[env(safe-area-inset-bottom)] text-white md:hidden"
+        className="scroll-thin fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-white/20 bg-idbi-green pb-[env(safe-area-inset-bottom)] text-white md:hidden"
         aria-label="Sections"
       >
         <NavLinks mobile />
