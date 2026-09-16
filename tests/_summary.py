@@ -15,6 +15,8 @@ import pandas as pd
 
 __all__ = [
     "CATEGORICAL_COLUMNS",
+    "CHAINS",
+    "SPINE_RULES",
     "NUMERIC_COLUMNS",
     "QUANTILES",
     "SLIDE_WINDOW",
@@ -22,6 +24,9 @@ __all__ = [
     "channel_leads",
     "signal_lead",
     "summarise",
+    "first_warning_leads",
+    "sustained_lead",
+    "sustained_leads_by_account",
 ]
 
 #: numeric columns the equivalence test compares distribution-by-distribution
@@ -146,6 +151,187 @@ def signal_lead(
     if not accounts:
         return 0.0, 0.0
     return (float(hits.median()) if len(hits) else 0.0), len(hits) / accounts
+
+
+#: consecutive months a signal must stay fired before it counts as a warning
+SUSTAIN_MONTHS = 3
+
+#: Each portfolio's chain, as the SD-D4 panel makes it readable: the first link
+#: of the chain the build plan gave that product, the rule that reads it, and
+#: the level.  ``rel_*`` rules compare against the account's own healthy
+#: baseline, which is how one rule can span a KCC crop receipt and a home-loan
+#: salary credit without pretending they are the same size.
+#:
+#: These are NOT SD-D3's thresholds.  SD-D3 calibrated them against a panel
+#: with no measurement noise, where "did this series ever cross its threshold"
+#: was a fair question of a defaulter.  With reporting lags, crop-year yield
+#: swings, late rent, festival seasons and a share of tenants paying a month
+#: behind, every series crosses every threshold somewhere in eighteen months —
+#: so the rule became what a bank would actually use (three consecutive months,
+#: :func:`sustained_lead`) and the levels were re-picked against the noisy
+#: panel with an eye on how often the same rule fires on an account that never
+#: goes bad.  LAP moved from ``rental_vs_6m_avg`` to ``rental_income`` against
+#: the borrower's own baseline for the same reason: a six-month-average
+#: comparison is unreadable once 12% of tenants pay late.
+CHAINS: dict[str, tuple[str, str, float]] = {
+    # GST sales -> utilisation -> bounces -> DPD
+    "msme_cc": ("gst_sales", "rel_lt", 0.85),
+    # EMI coverage -> part-payment -> DPD
+    "msme_tl": ("collection_ratio", "lt", 0.90),
+    # salary gap -> balance-floor breach -> EMI bounce -> DPD
+    "housing": ("salary_credit", "rel_lt", 0.75),
+    # moratorium end -> payment stop -> DPD
+    "education": ("collection_ratio", "lt", 0.90),
+    # harvest miss (seasonal) -> renewal overdue -> DPD
+    "agri": ("crop_receipt_vs_norm", "lt", -0.40),
+    # EMI stacking -> min-balance -> bounce -> DPD
+    "retail_unsecured": ("emi_burden_ratio", "rel_gt", 1.30),
+    # rental dip + LTV deterioration -> DPD
+    "lap": ("rental_income", "rel_lt", 0.60),
+    # commute spend + salary gap -> DPD
+    "auto": ("commute_spend", "rel_lt", 0.55),
+}
+
+#: what an early-warning system watches on every account, whatever the product
+SPINE_RULES: list[tuple[str, str, float]] = [
+    ("collection_ratio", "lt", 0.90),
+    ("inflow", "rel_lt", 0.80),
+]
+
+
+def _fired(
+    rows: pd.DataFrame, column: str, rule: str, threshold: float, base: pd.DataFrame | None
+) -> pd.Series:
+    """Boolean per row: is ``column`` past ``threshold`` under ``rule``?"""
+    if rule.startswith("rel"):
+        assert base is not None, "a relative rule needs baselines"
+        rows = rows.join(base[[column]], on="account_id", rsuffix="_base")
+        reference = threshold * rows[f"{column}_base"]
+    else:
+        reference = threshold
+    fired = rows[column] < reference if rule.endswith("lt") else rows[column] > reference
+    return fired.fillna(False)
+
+
+def sustained_leads_by_account(
+    panel: pd.DataFrame,
+    column: str,
+    rule: str,
+    threshold: float,
+    base: pd.DataFrame | None = None,
+    sustain: int = SUSTAIN_MONTHS,
+) -> pd.Series:
+    """Per-account sustained lead, in months before NPA; 0 where it never fires.
+
+    Args:
+        panel: rows for one portfolio, ``account_id`` as strings.
+        column: the signal.
+        rule: ``lt``/``gt``/``rel_lt``/``rel_gt``.
+        threshold: the level, or the multiple of the account's own baseline.
+        base: per-account baselines, required for the relative rules.
+        sustain: consecutive months the signal must stay fired.
+
+    Returns:
+        A Series indexed by ``account_id``.
+    """
+    rows = panel[(panel.months_to_npa >= 1) & (panel.months_to_npa <= SLIDE_WINDOW)]
+    if not len(rows):
+        return pd.Series(dtype=float)
+    grid = (
+        rows.assign(fired=_fired(rows, column, rule, threshold, base))
+        .pivot_table(index="account_id", columns="months_to_npa", values="fired",
+                     aggfunc="max", fill_value=False)
+        .astype(bool)
+    )
+    offsets = np.asarray(grid.columns, dtype=np.int64)
+    values = grid.to_numpy()
+    held = values.copy()
+    for step in range(1, sustain):
+        held[:, step:] &= values[:, :-step]
+    leads = np.where(
+        held.any(axis=1), offsets[np.argmax(held[:, ::-1], axis=1) * -1 - 1], 0
+    )
+    return pd.Series(leads, index=grid.index, name=column)
+
+
+def first_warning_leads(
+    panel: pd.DataFrame, rules: list[tuple[str, str, float]], sustain: int = SUSTAIN_MONTHS
+) -> pd.Series:
+    """Earliest sustained warning across several signals, per account.
+
+    This is what an early-warning system actually does: it watches every
+    instrument it has and raises the alarm on whichever moves first.  Judging
+    the panel on one column at a time understates the lead for exactly the
+    borrowers SD-D4 made interesting — the ones whose own product signal is
+    dark but whose collection ratio is not.
+
+    Args:
+        panel: rows for one portfolio, ``account_id`` as strings.
+        rules: ``(column, rule, threshold)`` triples to watch.
+        sustain: consecutive months a signal must stay fired.
+
+    Returns:
+        Per-account months before NPA of the earliest sustained warning; 0 for
+        accounts nothing ever fired for.
+    """
+    best: pd.Series | None = None
+    for column, rule, threshold in rules:
+        observed = panel[panel[column].notna()]
+        if not len(observed):
+            continue
+        base = (
+            baselines_by_account(observed, [column]) if rule.startswith("rel") else None
+        )
+        leads = sustained_leads_by_account(observed, column, rule, threshold, base, sustain)
+        best = leads if best is None else best.reindex(
+            best.index.union(leads.index)
+        ).fillna(0).combine(leads.reindex(best.index.union(leads.index)).fillna(0), max)
+    return pd.Series(dtype=float) if best is None else best
+
+
+def sustained_lead(
+    panel: pd.DataFrame,
+    column: str,
+    rule: str,
+    threshold: float,
+    base: pd.DataFrame | None = None,
+    sustain: int = SUSTAIN_MONTHS,
+) -> tuple[float, float]:
+    """Median months before NPA at which a signal fires **and stays fired**.
+
+    :func:`signal_lead` asks whether a signal ever crossed its threshold, which
+    was a fair question of the July 2026 panel and is not a fair question of
+    the SD-D4 one.  With measurement noise, seasonal confounders and transient
+    episodes in the data, *every* series crosses *every* threshold somewhere in
+    eighteen months — so "did it ever fire" measures the noise, not the chain.
+
+    A warning is therefore defined the way a bank would define one: the signal
+    is past its threshold for ``sustain`` consecutive months.  The lead is the
+    earliest month before NPA at which that is true.
+
+    Args:
+        panel: rows for one portfolio, ``account_id`` as strings.
+        column: the signal.
+        rule: ``"lt"``/``"gt"`` compare against ``threshold`` directly;
+            ``"rel_lt"``/``"rel_gt"`` compare against ``threshold`` times the
+            account's own baseline.
+        threshold: the level, or the multiple of the baseline.
+        base: per-account baselines, required for the relative rules.
+        sustain: consecutive months required.
+
+    Returns:
+        ``(median lead in months, share of defaulting accounts it fires for)``.
+    """
+    accounts = panel[
+        (panel.months_to_npa >= 1) & (panel.months_to_npa <= SLIDE_WINDOW)
+    ].account_id.nunique()
+    if not accounts:
+        return 0.0, 0.0
+    leads = sustained_leads_by_account(panel, column, rule, threshold, base, sustain)
+    hit = leads[leads > 0]
+    if not len(hit):
+        return 0.0, 0.0
+    return float(hit.median()), len(hit) / accounts
 
 
 def summarise(panel: pd.DataFrame) -> dict:

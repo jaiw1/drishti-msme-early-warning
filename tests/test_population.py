@@ -80,19 +80,22 @@ def test_business_portfolios_carry_real_constitutions(accounts) -> None:
 
 
 def test_gst_exists_exactly_where_a_gst_return_would(panel) -> None:
-    """The GST channel belongs to the business portfolios and nowhere else.
+    """The GST channel belongs to the business portfolios, and to their firms.
 
-    This is the structural half of the missingness story.  SD-D4 adds the
-    conditional half — an Individual borrower inside a GST-bearing portfolio
-    files no return — and it needs a portfolio with both constitutions to do
-    it, which is what LAP is for.
+    Two rules, and the panel now carries both.  The structural half is the
+    portfolio: a home loan has no GST channel at all, so the column is NaN for
+    every row.  The conditional half is SD-D4's: inside a portfolio that DOES
+    carry the channel, an Individual borrower files no return, so their rows
+    are NaN too.  LAP is where both meet, at roughly two in five borrowers.
     """
     for portfolio in PORTFOLIOS.values():
         rows = panel[panel.portfolio == portfolio.code]
-        if portfolio.has("gst"):
-            assert rows.gst_sales.notna().all(), portfolio.key
-        else:
+        if not portfolio.has("gst"):
             assert rows.gst_sales.isna().all(), portfolio.key
+            continue
+        filing = rows.constitution.astype(str) != "Individual"
+        assert rows.loc[filing, "gst_sales"].notna().all(), portfolio.key
+        assert rows.loc[~filing, "gst_sales"].isna().all(), portfolio.key
     lap = PORTFOLIOS["lap"]
     assert lap.has("gst")
     lap_rows = panel[panel.portfolio == lap.code]

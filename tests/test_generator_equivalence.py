@@ -1,5 +1,14 @@
 """The generator must still be a drop-in for the row-by-row July 2026 simulator.
 
+**Every panel in this suite is generated with ``noise=False``.**  SD-D4 adds
+silent defaulters, hard negatives that go past due, seasonal confounders,
+measurement noise and MAR missingness, all of which are supposed to move these
+distributions — that is the point of them.  The July fingerprint is what the
+generator produces with that block switched off, and keeping it reproducible is
+what makes SD-D4 an addition rather than a rewrite.  **The default is noise ON
+and the shipped dataset is the noisy one**; ``tests/test_noise.py`` is where
+that panel is held to its own contract.
+
 ``src/generator/`` replaced a per-account, per-month Python loop with
 per-portfolio ``(N, M)`` numpy arrays, and SD-D2/SD-D3 then grew the book from
 two MSME portfolios to eight and added the columns each new product is observed
@@ -63,7 +72,7 @@ def reference() -> dict:
 
 
 #: the July 2026 book, regenerated on its own out of the eight-portfolio registry
-MSME_ONLY = GeneratorConfig(portfolio_keys=MSME_KEYS)
+MSME_ONLY = GeneratorConfig(portfolio_keys=MSME_KEYS, noise=False)
 
 
 @pytest.fixture(scope="module")
@@ -86,7 +95,7 @@ def fingerprint(msme_panel: pd.DataFrame) -> dict:
 # --------------------------------------------------------------------------- #
 def test_same_seed_gives_identical_csv(tmp_path: Path) -> None:
     """One seed, one CSV — byte for byte."""
-    config = GeneratorConfig(n_accounts=1500)
+    config = GeneratorConfig(n_accounts=1500, noise=False)
     written = []
     for run in ("first", "second"):
         outdir = tmp_path / run
@@ -98,14 +107,14 @@ def test_same_seed_gives_identical_csv(tmp_path: Path) -> None:
 
 def test_different_seed_gives_different_panel() -> None:
     """The seed is actually wired through to every stage."""
-    first, _ = generate(GeneratorConfig(n_accounts=1500, seed=1))
-    second, _ = generate(GeneratorConfig(n_accounts=1500, seed=2))
+    first, _ = generate(GeneratorConfig(n_accounts=1500, seed=1, noise=False))
+    second, _ = generate(GeneratorConfig(n_accounts=1500, seed=2, noise=False))
     assert not first.equals(second)
 
 
 def test_config_is_honoured() -> None:
     """``--n`` and ``--months`` change the population, not the contract."""
-    frame, accounts = generate(GeneratorConfig(n_accounts=500, months=24))
+    frame, accounts = generate(GeneratorConfig(n_accounts=500, months=24, noise=False))
     assert len(accounts) == 500
     assert frame.month_idx.max() <= 23
     assert list(frame.columns) == list(PANEL_COLUMNS)
@@ -126,7 +135,9 @@ def test_every_old_column_survives(fingerprint: dict, reference: dict) -> None:
     columns = fingerprint["columns"]
     assert set(reference["columns"]) <= set(columns)
     assert [c for c in columns if c in reference["columns"]] == reference["columns"]
-    assert columns[-3:] == ["default_within_12m", "labelable", "months_to_npa"]
+    assert columns[-4:] == [
+        "default_within_12m", "sma2_within_6m", "labelable", "months_to_npa",
+    ]
 
 
 def test_new_columns_are_additions(fingerprint: dict, reference: dict) -> None:
@@ -135,7 +146,7 @@ def test_new_columns_are_additions(fingerprint: dict, reference: dict) -> None:
     assert added, "SD-D2/SD-D3 added no columns"
     assert set(added) <= set(PANEL_COLUMNS) - set(LEGACY_PANEL_COLUMNS)
     for expected in ("portfolio", "constitution", "secured", "collection_ratio",
-                     "balance", "bureau_score"):
+                     "balance", "bureau_score", "sma2_within_6m"):
         assert expected in added, expected
 
 
@@ -271,7 +282,7 @@ def test_absent_channels_are_blanked(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(registry.PORTFOLIOS, "salaried", salaried)
 
     frame, _ = generate(GeneratorConfig(
-        n_accounts=900, portfolio_keys=MSME_KEYS + ("salaried",)
+        n_accounts=900, portfolio_keys=MSME_KEYS + ("salaried",), noise=False
     ))
     blanked = frame.portfolio == "Salaried"
     assert blanked.any()
