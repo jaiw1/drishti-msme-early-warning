@@ -1,5 +1,5 @@
 import { inr } from '../lib/format'
-import { ShieldAlert, TriangleAlert, CircleCheck, IndianRupee, Clock } from 'lucide-react'
+import { ShieldAlert, TriangleAlert, CircleCheck, Clock } from 'lucide-react'
 
 function Card({ icon: Icon, tint, value, label, sub }) {
   return (

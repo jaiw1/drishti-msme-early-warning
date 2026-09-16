@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ReferenceLine, ReferenceArea, ComposedChart, Area, Legend,
@@ -8,6 +8,15 @@ import { inr, pct, RAG } from '../lib/format'
 
 export default function AccountDetail({ data, accountId, onClose }) {
   const [copied, setCopied] = useState(false)
+
+  // Escape closes the drawer: the backdrop is a mouse affordance only, so without this a
+  // keyboard user has to tab all the way to the close button.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   if (!accountId) return null
   const rec = data.portfolio.find((r) => r.account_id === accountId)
   const tl = data.timelines[accountId]
@@ -33,7 +42,7 @@ export default function AccountDetail({ data, accountId, onClose }) {
 
   return (
     <div className="fixed inset-0 z-40">
-      <div className="absolute inset-0 bg-slate-900/40" onClick={onClose} />
+      <div className="absolute inset-0 bg-slate-900/40" onClick={onClose} aria-hidden="true" />
       <div className="absolute right-0 top-0 h-full w-full max-w-[720px] bg-slate-50 shadow-2xl overflow-y-auto scroll-thin">
         {/* header */}
         <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex items-start gap-4">

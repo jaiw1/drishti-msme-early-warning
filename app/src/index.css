@@ -11,3 +11,11 @@ body { @apply bg-slate-100 text-slate-800 font-sans antialiased; }
 .scroll-thin::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full; }
 
 @keyframes fadeup { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+/* A visible focus ring is the floor, not the polish: every interactive element gets one
+   even when a component forgets its own focus-visible: classes. */
+:focus-visible { outline: 2px solid #02684F; outline-offset: 2px; border-radius: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
