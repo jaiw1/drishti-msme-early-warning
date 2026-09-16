@@ -986,7 +986,7 @@ def format_thresholds(block):
         return (f"  {label:<24s} amber {cell['amber']:.4f} / red {cell['red']:.4f}  "
                 f"G {b['green']['n']:>6d} A {b['amber']['n']:>6d} R {b['red']['n']:>5d}  "
                 f"red-prec {cell['red_band_precision']:.1%}  missed {cell['missed_npa_share']:.1%}  "
-                f"cost ₹{cell['expected_cost_inr']/1e7:.2f} cr  "
+                f"cost ₹{cell['expected_cost']/1e7:.2f} cr  "
                 f"DR-11 {admissible} ({cell['constraint_level']})")
 
     lines = [f"  method {block['method']} | applied {block['applied']} | "
@@ -996,7 +996,7 @@ def format_thresholds(block):
     if block.get("unconstrained"):
         lines.append(row("cost alone, unconstrained", block["unconstrained"]))
         lines.append(f"  {'':<24s} the pre-registered DR-11 constraint costs "
-                     f"₹{(block['constraint_cost_inr'] or 0)/1e7:.2f} cr on this book")
+                     f"₹{(block['constraint_cost'] or 0)/1e7:.2f} cr on this book")
     return lines
 
 

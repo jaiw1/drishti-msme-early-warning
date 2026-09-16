@@ -87,6 +87,7 @@ __all__ = [
     "expected_loss",
     "lgd_vector",
     "load_bank_rates",
+    "provenance_summary",
 ]
 
 # --------------------------------------------------------------------------- #
@@ -352,6 +353,26 @@ def cost_params(rates=None, rate_provenance=None, **overrides):
     return params, provenance
 
 
+def provenance_summary(provenance):
+    """The structured provenance flattened to one readable line per parameter.
+
+    The full block is nested because a reviewer needs the api id, the field and
+    the sandbox flag. A screen needs a sentence. Both are emitted rather than
+    making the UI choose which half of the truth to render.
+    """
+    summary = {}
+    for name, entry in provenance.items():
+        if name.startswith("_") or not isinstance(entry, dict):
+            continue
+        if entry.get("source") == BANK_API:
+            where = f"API {entry.get('api_id', '?')} {entry.get('field', '')}".strip()
+            flag = " (sandbox fixture)" if entry.get("sandbox_fixture") else " (live pull)"
+            summary[name] = f"{BANK_API} — {where}{flag}"
+        else:
+            summary[name] = f"{ASSUMPTION} — our judgement, no published source"
+    return summary
+
+
 # --------------------------------------------------------------------------- #
 # Per-account economics
 # --------------------------------------------------------------------------- #
@@ -593,8 +614,8 @@ def evaluate(amber, red, scores, went_bad, ead, secured, portfolio, params):
         # cannot band the book at all, and anything other than
         # "all_pre_registered" means it would fail the DR-11 gate somewhere
         constraint_level=_feasibility_level(scores, y, portfolio, amber, red),
-        expected_cost_inr=round(total, 2),
-        expected_cost_per_account_inr=round(total / max(scores.size, 1), 2),
+        expected_cost=round(total, 2),
+        expected_cost_per_account=round(total / max(scores.size, 1), 2),
         n=int(scores.size), n_defaulted=int(n_bad),
         bands=dict(green=cell(is_green), amber=cell(is_amber), red=cell(is_red)),
         red_band_precision=round(float(y[is_red].mean()), 4) if is_red.any() else 0.0,
@@ -721,22 +742,43 @@ def choose_thresholds(scores, went_bad, ead, secured, portfolio, *,
             seen.add(key)
             alternatives.append(dict(
                 amber=key[0], red=key[1],
-                expected_cost_inr=round(float(total.flat[f]), 2),
+                expected_cost=round(float(total.flat[f]), 2),
                 n_red=int(grid["ks"][r]), n_flagged=int(grid["ks"][a]),
             ))
             if len(alternatives) >= 6:
                 break
-        # the two one-dimensional slices through the chosen point: what the UI
-        # draws when it has to answer "why is the threshold HERE?"
+        # The two one-dimensional slices through the chosen point: what a UI
+        # draws when it has to answer "why is the threshold HERE?". Each point
+        # carries the trade-off in counts as well as rupees, because a cost
+        # curve on its own tells an officer nothing about what the move does to
+        # his queue.
+        order = np.argsort(-scores, kind="stable")
+        cum_n = np.arange(len(scores) + 1, dtype="float64")
+        cum_bad = _cumsum(y, order)
+        total_bad = float(y.sum())
         a_star = int(np.argmin(np.abs(grid["thresholds"] - chosen_amber)))
         r_star = int(np.argmin(np.abs(grid["thresholds"] - chosen_red)))
         for j in range(len(grid["thresholds"])):
+            k = int(grid["ks"][j])
             if grid["valid"][a_star, j]:
-                curve["red_sweep"].append(dict(red=round(float(grid["thresholds"][j]), 6),
-                                               expected_cost_inr=round(float(grid["total"][a_star, j]), 2)))
+                curve["red_sweep"].append(dict(
+                    red=round(float(grid["thresholds"][j]), 6),
+                    expected_cost=round(float(grid["total"][a_star, j]), 2),
+                    n_red=int(cum_n[k]), npas_in_red=int(cum_bad[k]),
+                    # NOT the same quantity as `missed_npa_share`, which counts
+                    # NPAs left in GREEN. This counts NPAs not in RED at this
+                    # cut-off, which is what moving the Red line trades against.
+                    npas_not_in_red=int(total_bad - cum_bad[k]),
+                    false_positives=int(cum_n[k] - cum_bad[k]),
+                ))
             if grid["valid"][j, r_star]:
-                curve["amber_sweep"].append(dict(amber=round(float(grid["thresholds"][j]), 6),
-                                                 expected_cost_inr=round(float(grid["total"][j, r_star]), 2)))
+                curve["amber_sweep"].append(dict(
+                    amber=round(float(grid["thresholds"][j]), 6),
+                    expected_cost=round(float(grid["total"][j, r_star]), 2),
+                    n_flagged=int(cum_n[k]),
+                    npas_in_green=int(total_bad - cum_bad[k]),
+                    false_positives=int(cum_n[k] - cum_bad[k]),
+                ))
 
     by_portfolio = []
     codes = np.asarray(portfolio, dtype=object)
@@ -753,7 +795,7 @@ def choose_thresholds(scores, went_bad, ead, secured, portfolio, *,
                                                              lgd[m], params).mean()), 2),
         ))
 
-    saved = cur["expected_cost_inr"] - chosen["expected_cost_inr"]
+    saved = cur["expected_cost"] - chosen["expected_cost"]
     return dict(
         amber=round(chosen_amber, 6), red=round(chosen_red, 6),
         method="cost_minimising",
@@ -778,19 +820,21 @@ def choose_thresholds(scores, went_bad, ead, secured, portfolio, *,
                   "DR-11 is never a candidate, and the level actually applied is recorded "
                   "above so a relaxation cannot pass unnoticed."),
         ),
+        currency="INR",
         cost_params={k: (round(float(v), 6) if isinstance(v, float) else v)
                      for k, v in params.__dict__.items()},
         provenance=provenance,
+        provenance_summary=provenance_summary(provenance),
         chosen=chosen,
         current=dict(cur, note="the hand-set thresholds the July 2026 build shipped"),
         unconstrained=(dict(unconstrained,
                             note="what cost ALONE would pick, ignoring the pre-registered constraints")
                        if unconstrained else None),
-        constraint_cost_inr=(round(chosen["expected_cost_inr"] - unconstrained["expected_cost_inr"], 2)
+        constraint_cost=(round(chosen["expected_cost"] - unconstrained["expected_cost"], 2)
                              if unconstrained else None),
         delta=dict(
-            expected_cost_inr=round(saved, 2),
-            expected_cost_pct=round(saved / cur["expected_cost_inr"], 4) if cur["expected_cost_inr"] else 0.0,
+            expected_cost=round(saved, 2),
+            expected_cost_pct=round(saved / cur["expected_cost"], 4) if cur["expected_cost"] else 0.0,
             missed_npa_share=round(chosen["missed_npa_share"] - cur["missed_npa_share"], 4),
             red_band_precision=round(chosen["red_band_precision"] - cur["red_band_precision"], 4),
             note=(

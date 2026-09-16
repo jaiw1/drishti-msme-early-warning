@@ -190,8 +190,8 @@ def test_dr_11_binds_on_the_toy_and_the_price_of_it_is_reported():
                                     params=TOY_PARAMS, sensitivity=False)
     assert block["chosen"]["bands"]["red"]["defaults"] < 50, (
         "some NPAs must be pushed out of Red for Amber's bad rate to clear Green's")
-    assert block["chosen"]["expected_cost_inr"] > block["unconstrained"]["expected_cost_inr"]
-    assert block["constraint_cost_inr"] > 0
+    assert block["chosen"]["expected_cost"] > block["unconstrained"]["expected_cost"]
+    assert block["constraint_cost"] > 0
 
 
 def test_no_other_candidate_pair_is_cheaper_than_the_one_chosen():
@@ -203,7 +203,7 @@ def test_no_other_candidate_pair_is_cheaper_than_the_one_chosen():
     grid = costs._search(scores, went, costs.band_costs(ead, went, lgd, TOY_PARAMS), portfolio)
     cheapest = float(np.min(np.where(grid["levels"][block["constraint_level"]],
                                      grid["total"], np.inf)))
-    assert block["chosen"]["expected_cost_inr"] == pytest.approx(cheapest, rel=1e-9)
+    assert block["chosen"]["expected_cost"] == pytest.approx(cheapest, rel=1e-9)
 
 
 def test_a_review_that_costs_more_than_the_loss_collapses_the_red_band():
@@ -276,9 +276,9 @@ def test_a_cheaper_pair_that_breaks_dr_11_is_declined():
     block = costs.choose_thresholds(scores, went, ead, secured, portfolio, sensitivity=False)
     free = block["unconstrained"]
     assert free is not None
-    assert block["chosen"]["expected_cost_inr"] >= free["expected_cost_inr"]
-    assert block["constraint_cost_inr"] == pytest.approx(
-        block["chosen"]["expected_cost_inr"] - free["expected_cost_inr"])
+    assert block["chosen"]["expected_cost"] >= free["expected_cost"]
+    assert block["constraint_cost"] == pytest.approx(
+        block["chosen"]["expected_cost"] - free["expected_cost"])
 
 
 def test_the_ladder_records_how_many_pairs_each_level_admits():
@@ -316,17 +316,17 @@ def test_the_block_is_json_and_carries_what_the_platform_needs():
     assert reloaded["override"]["table"] == "threshold_change"
     assert reloaded["override"]["api"] == "PUT /drishti/threshold"
     assert reloaded["alternatives"] and all(
-        {"amber", "red", "expected_cost_inr"} <= set(a) for a in reloaded["alternatives"])
+        {"amber", "red", "expected_cost"} <= set(a) for a in reloaded["alternatives"])
     assert reloaded["cost_curve"]["red_sweep"] and reloaded["cost_curve"]["amber_sweep"]
     assert reloaded["sensitivity"], "the most uncertain parameters must be swept and reported"
-    assert all(math.isfinite(row["expected_cost_inr"]) for row in reloaded["alternatives"])
+    assert all(math.isfinite(row["expected_cost"]) for row in reloaded["alternatives"])
 
 
 def test_alternatives_are_sorted_by_cost_and_distinct():
     scores, went, ead, secured, portfolio = _graded()
     alts = costs.choose_thresholds(scores, went, ead, secured, portfolio,
                                    sensitivity=False)["alternatives"]
-    assert [a["expected_cost_inr"] for a in alts] == sorted(a["expected_cost_inr"] for a in alts)
+    assert [a["expected_cost"] for a in alts] == sorted(a["expected_cost"] for a in alts)
     assert len({(a["amber"], a["red"]) for a in alts}) == len(alts)
 
 
@@ -363,7 +363,7 @@ def test_an_inadmissible_pair_is_labelled_so_a_cheaper_cost_cannot_mislead():
                                     params=TOY_PARAMS, sensitivity=False)
     assert block["chosen"]["constraint_level"] == block["constraint_level"]
     assert block["unconstrained"]["constraint_level"] != "all_pre_registered"
-    if block["delta"]["expected_cost_inr"] < 0:
+    if block["delta"]["expected_cost"] < 0:
         assert block["current"]["constraint_level"] != "all_pre_registered"
         assert "not admissible" in block["delta"]["note"]
 
@@ -383,3 +383,41 @@ def test_a_pair_that_cannot_band_the_book_has_no_level():
     portfolio = np.array(["Agri"] * 100, dtype=object)
     assert costs._feasibility_level(scores, went, portfolio, 0.9, 0.95) is not None
     assert costs._feasibility_level(scores, went, portfolio, 1.5, 1.6) is None
+
+
+def test_the_cost_curve_carries_the_trade_off_in_counts_not_only_rupees():
+    """A cost curve alone tells an officer nothing about what a move does to his queue."""
+    scores, went, ead, secured, portfolio = _graded()
+    curve = costs.choose_thresholds(scores, went, ead, secured, portfolio,
+                                    sensitivity=False)["cost_curve"]
+    reds = curve["red_sweep"]
+    assert all({"red", "expected_cost", "n_red", "npas_in_red", "npas_not_in_red",
+                "false_positives"} <= set(p) for p in reds)
+    # a lower Red cut-off catches more of them and reviews more healthy accounts
+    ordered = sorted(reds, key=lambda p: p["red"])
+    assert ordered[0]["npas_in_red"] >= ordered[-1]["npas_in_red"]
+    assert ordered[0]["false_positives"] >= ordered[-1]["false_positives"]
+    for point in reds:
+        assert point["n_red"] == point["npas_in_red"] + point["false_positives"]
+
+
+def test_the_curve_does_not_confuse_not_in_red_with_left_in_green():
+    """Two different quantities with two different names, deliberately."""
+    scores, went, ead, secured, portfolio = _graded()
+    block = costs.choose_thresholds(scores, went, ead, secured, portfolio, sensitivity=False)
+    at_chosen = min(block["cost_curve"]["red_sweep"],
+                    key=lambda p: abs(p["red"] - block["red"]))
+    left_in_green = block["chosen"]["missed_npa_share"] * block["chosen"]["n_defaulted"]
+    assert at_chosen["npas_not_in_red"] >= left_in_green, (
+        "NPAs outside Red must include the ones in Amber as well as the ones in Green")
+
+
+def test_provenance_is_emitted_both_structured_and_readable():
+    scores, went, ead, secured, portfolio = _graded()
+    block = costs.choose_thresholds(scores, went, ead, secured, portfolio, sensitivity=False)
+    summary = block["provenance_summary"]
+    assert block["currency"] == "INR"
+    assert set(summary) == {k for k in block["provenance"] if not k.startswith("_")}
+    assert all(isinstance(v, str) for v in summary.values())
+    assert "sandbox fixture" in summary["effective_rate_pa"]
+    assert summary["lgd_unsecured"].startswith(costs.ASSUMPTION)
