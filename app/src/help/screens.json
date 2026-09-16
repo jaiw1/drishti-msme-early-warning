@@ -1,0 +1,66 @@
+{
+  "watchlist": {
+    "title": "Borrower watch-list",
+    "summary": "Every account in the book, ranked by the model's 12-month probability of default and colour-banded so the work sorts itself.",
+    "sections": [
+      { "heading": "What the bands mean", "body": "Red is 'act now' — the account is above the red threshold a manager set on the Model & Metrics screen. Amber is 'watch'. Green is healthy at today's information. The threshold is a business decision, not a model output, and every change to it is audited." },
+      { "heading": "The Lead column", "body": "Projected months of runway before the risk score crosses the next threshold, fitted from the last six months of the account's own trajectory. It is a prioritisation horizon with a median error of about three months, not a promise." },
+      { "heading": "What you can do here", "body": "Open any row for the account's full story: risk over time, the cash-flow evidence behind it, plain-English reasons, and a drafted alert memo. Actions you record are written to the append-only audit log with your user id." }
+    ],
+    "caveat": "The model advises; the credit officer decides. Nothing on this screen changes a customer's facility."
+  },
+  "risk": {
+    "title": "Portfolio risk & impact",
+    "summary": "Where the stress sits across sectors, segments and lending portfolios, and what acting early is worth in provisioning terms.",
+    "sections": [
+      { "heading": "How to read the panels", "body": "Each panel groups the same book a different way. A tall red bar is a concentration, not a verdict — check the account count beside it before drawing a conclusion from a group of twelve." },
+      { "heading": "The what-if sliders", "body": "They estimate avoided provisioning under an assumed cure rate you choose. The cure rate is your assumption, not a measured result, and the figure moves with it — which is the point of exposing the slider rather than printing one number." }
+    ],
+    "caveat": "Impact figures are scenario arithmetic over the current book. They are not a forecast of recoveries."
+  },
+  "model": {
+    "title": "Model & metrics",
+    "summary": "The honest scorecard: discrimination, calibration, rank-ordering by band, lead time, and the leakage check.",
+    "sections": [
+      { "heading": "Why the headline is not 'accuracy'", "body": "With a ~3% annual default rate, a model that predicts 'no default' for everyone is 97% accurate and worthless. The numbers that matter are rank-ordering (do riskier bands actually default more?), precision in the red band, and how early the warning arrives." },
+      { "heading": "Rank-order by portfolio", "body": "The same check repeated inside each of the eight lending portfolios. One holistic model is only defensible if it orders risk correctly in every one of them separately — not just on the pooled book." },
+      { "heading": "The leakage check", "body": "Days-past-due is the strongest and least useful signal: by the time an account is late, the bank already knows. The ablation shows how much of the score comes from cash-flow behaviour instead." }
+    ],
+    "caveat": "Every figure here is reproducible from validation/report.json in the repository, against criteria committed before the first result was seen."
+  },
+  "real": {
+    "title": "Real-data validation",
+    "summary": "The same method applied to roughly 3,200 real Indian MSMEs with real credit-rating defaults.",
+    "sections": [
+      { "heading": "Why this tab exists", "body": "Synthetic data can be made arbitrarily learnable, so a high score on it proves very little. This is the number to trust: an honest AUC on real defaults, reported next to the synthetic figure so the gap is visible rather than hidden." }
+    ],
+    "caveat": "The real dataset carries no transaction-level cash-flow, so this run uses fewer features than the synthetic pipeline. It is a floor, not a like-for-like comparison."
+  },
+  "sources": {
+    "title": "Data sources & sync",
+    "summary": "Which IDBI Atlas APIs feed this screen, when each was last pulled, and which fields are simulated because no API supplies them.",
+    "sections": [
+      { "heading": "Why pending rows are shown", "body": "An API still awaiting the bank's subscription approval is listed with that status rather than hidden. Rendering the gap is the disclosure — a screen with no gaps would be the dishonest version." },
+      { "heading": "The sandbox caveat", "body": "The Atlas sandbox answers real endpoints with canned data shared across APIs. Fields marked 'Bank API · sandbox' were fetched over a real call whose values are not production numbers." }
+    ],
+    "caveat": "GST turnover, mutual-fund and equity holdings, external EMI outflows and campaign history have no sandbox API. They are simulated and labelled everywhere they appear."
+  },
+  "login": {
+    "title": "Signing in",
+    "summary": "DRISHTi uses bank-issued accounts. There is no self-service registration and no password recovery by email.",
+    "sections": [
+      { "heading": "First sign-in", "body": "Seed accounts are created with a forced password change. You will be sent to the change-password screen before anything else loads, and your new password must be at least 12 characters." },
+      { "heading": "If you are locked out", "body": "Five failed attempts within fifteen minutes locks the account for fifteen minutes. The message is the same whether the username exists or not, so the screen cannot be used to discover valid usernames." }
+    ],
+    "caveat": "Sessions end after 8 hours, or after 30 minutes of inactivity with a 2-minute warning."
+  },
+  "admin": {
+    "title": "Administration",
+    "summary": "Users and roles, batch runs, and the audit log with its hash-chain verification.",
+    "sections": [
+      { "heading": "The audit log", "body": "Append-only at the database level: UPDATE and DELETE are revoked and a trigger raises on any attempt. Each row carries the hash of the row before it, so removing or editing history breaks the chain and 'Verify' reports the first bad row." },
+      { "heading": "Batch runs", "body": "Scoring happens in a batch job, never in a request. A run that fails its pre-registered validation criteria stays a candidate and the live run is left untouched." }
+    ],
+    "caveat": "Admin actions are audited with your user id, the request id, and a hash of your client address."
+  }
+}
