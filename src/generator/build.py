@@ -149,8 +149,15 @@ ACCOUNT_COLUMNS: tuple[str, ...] = (
 
 #: decimal places each float column is rounded to before writing.  Rounding is
 #: not cosmetic here: at 45,000 x 48 it is most of the CSV's size.
+#: ``inflow`` and ``gst_sales`` carry ONE decimal place rather than none, and
+#: the reason is the writer, not the money.  They were float64 in the July 2026
+#: build and the equivalence suite pins their round-tripped dtype; pyarrow
+#: writes an integral float as ``11519`` where pandas wrote ``11519.0``, so
+#: whole-rupee rounding would flip both columns to int64 on the way back in.
+#: A tenth of a rupee is meaningless and costs 1% of the file; a silent dtype
+#: change in two columns the pipeline reads by name is not meaningless.
 _ROUNDING: dict[str, int] = {
-    "dpd": 1, "utilisation": 4, "inflow": 0, "gst_sales": 0, "dpd_max_6m": 1,
+    "dpd": 1, "utilisation": 4, "inflow": 1, "gst_sales": 1, "dpd_max_6m": 1,
     "util_avg_3m": 4, "util_max_6m": 4, "inflow_trend_3m": 4, "inflow_vs_6m_avg": 4,
     "sales_trend_3m": 4,
     "interest_rate_pa": 4,
