@@ -22,7 +22,7 @@ export default function PermissionDenied({ role, allowed, action, testId = 'stat
           <> This screen is for {allowedLabels.join(' and ')} accounts.</>
         )}
       </p>
-      <p className="mt-2 text-xs text-slate-400">
+      <p className="mt-2 text-xs text-slate-500">
         Nothing has been logged against you beyond the standard access record.
       </p>
     </Panel>

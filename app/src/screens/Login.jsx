@@ -104,7 +104,7 @@ export default function Login() {
           </div>
           <div>
             <div className="text-lg font-extrabold leading-tight text-slate-900">
-              DRISHT<span className="text-idbi-orange">i</span>
+              DRISHT<span className="text-idbi-orangetx">i</span>
             </div>
             <div className="text-xs leading-tight text-slate-500">MSME loan early-warning · IDBI Bank</div>
           </div>
@@ -130,7 +130,7 @@ export default function Login() {
             {error && (
               <p
                 data-testid="login-error"
-                className="flex items-start gap-2 rounded-lg border border-rag-red/30 bg-red-50 px-3 py-2 text-xs leading-relaxed text-rag-red"
+                className="flex items-start gap-2 rounded-lg border border-rag-red/30 bg-red-50 px-3 py-2 text-xs leading-relaxed text-rag-redtx"
               >
                 <TriangleAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
                 <span>
@@ -187,19 +187,19 @@ export default function Login() {
           <button
             type="submit"
             disabled={pending || locked}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-idbi-green px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-idbi-greenlt focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-idbi-green px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-idbi-greendk focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {pending ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <LockKeyhole size={15} aria-hidden="true" />}
             {pending ? 'Signing in…' : locked ? `Locked — ${countdownLabel(lockSeconds)}` : 'Sign in'}
           </button>
 
-          <p id="login-error-hint" className="text-[11px] leading-relaxed text-slate-400">
+          <p id="login-error-hint" className="text-[11px] leading-relaxed text-slate-500">
             Accounts are issued by the bank. Five failed attempts in fifteen minutes locks an account for
             fifteen minutes.
           </p>
         </form>
 
-        <p className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+        <p className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
           <ShieldCheck size={12} aria-hidden="true" />
           Sessions end after 8 hours, or 30 minutes idle.
         </p>

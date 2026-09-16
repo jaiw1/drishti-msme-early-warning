@@ -31,7 +31,7 @@ export default function ErrorState({
           <button
             type="button"
             onClick={onRetry}
-            className="inline-flex items-center gap-2 rounded-lg bg-idbi-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-idbi-greenlt focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green focus-visible:ring-offset-2"
+            className="inline-flex items-center gap-2 rounded-lg bg-idbi-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-idbi-greendk focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green focus-visible:ring-offset-2"
           >
             <RefreshCw size={15} aria-hidden="true" /> {retryLabel}
           </button>
@@ -40,7 +40,7 @@ export default function ErrorState({
     >
       <p>{text}</p>
       {requestId && (
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-xs text-slate-500">
           Reference <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px]">{requestId}</code>
         </p>
       )}

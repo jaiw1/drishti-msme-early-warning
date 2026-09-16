@@ -43,14 +43,14 @@ export const SOURCES = {
   [SOURCE.FIXTURE]: {
     label: 'Fixture',
     icon: Database,
-    className: 'bg-amber-50 text-rag-amber border-amber-200',
+    className: 'bg-amber-50 text-rag-ambertx border-amber-200',
     description:
       'A recorded response replayed from disk — used while the API subscription is pending approval or the endpoint is unreachable.',
   },
   [SOURCE.NOT_COLLECTED]: {
     label: 'Not collected',
     icon: CircleSlash,
-    className: 'bg-slate-100 text-slate-500 border-slate-200',
+    className: 'bg-slate-100 text-slate-600 border-slate-200',
     description:
       'Deliberately not collected. Nothing shown here was inferred from data the bank does not hold about this customer.',
   },

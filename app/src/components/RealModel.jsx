@@ -9,13 +9,13 @@ function Stat({ value, label, hint, tint = 'text-idbi-green' }) {
     <div className="bg-white rounded-xl border border-slate-200 p-4">
       <div className={`text-3xl font-extrabold ${tint}`}>{value}</div>
       <div className="text-sm font-semibold text-slate-700 mt-1">{label}</div>
-      <div className="text-xs text-slate-400">{hint}</div>
+      <div className="text-xs text-slate-500">{hint}</div>
     </div>
   )
 }
 
 export default function RealModel({ data, syntheticAuc }) {
-  if (!data) return <div className="text-slate-400 text-sm">Loading real-data validation…</div>
+  if (!data) return <div className="text-slate-500 text-sm">Loading real-data validation…</div>
   const m = data.metrics, meta = data.meta
   const feats = data.top_features.slice(0, 8).map((f) => ({ name: f.feature, v: f.importance }))
   const rel = (data.reliability || []).map((r) => ({ pred: Math.round(r.pred * 100), obs: Math.round(r.obs * 100) }))
@@ -34,7 +34,7 @@ export default function RealModel({ data, syntheticAuc }) {
           defaults</b> — where "default" is an actual credit-rating downgrade to 'D'. On real data it scores an honest
           <b> {m.auc}</b> — squarely in the realistic band. So the numbers you can trust are these, and the method behind the cockpit is sound.
         </p>
-        <p className="text-xs text-slate-400 mt-2">Source: {meta.source}. Predicts default within {meta.horizon_years} years from annual financials; no company appears in both training and test.</p>
+        <p className="text-xs text-slate-500 mt-2">Source: {meta.source}. Predicts default within {meta.horizon_years} years from annual financials; no company appears in both training and test.</p>
       </section>
 
       {/* headline stats */}
@@ -50,7 +50,7 @@ export default function RealModel({ data, syntheticAuc }) {
         {/* what drives real default */}
         <section className="bg-white rounded-xl border border-slate-200 p-5">
           <h3 className="font-bold text-slate-800">What predicts real default</h3>
-          <p className="text-xs text-slate-400 mt-1 mb-4">Most important financial signals the model learned from real Indian MSMEs.</p>
+          <p className="text-xs text-slate-500 mt-1 mb-4">Most important financial signals the model learned from real Indian MSMEs.</p>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={feats} layout="vertical" margin={{ top: 4, right: 30, left: 40, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" horizontal={false} />
@@ -67,7 +67,7 @@ export default function RealModel({ data, syntheticAuc }) {
         {/* calibration */}
         <section className="bg-white rounded-xl border border-slate-200 p-5">
           <h3 className="font-bold text-slate-800">Calibration on real data</h3>
-          <p className="text-xs text-slate-400 mt-1 mb-4">Predicted vs actual default rate by risk band — on the dashed line = trustworthy probabilities.</p>
+          <p className="text-xs text-slate-500 mt-1 mb-4">Predicted vs actual default rate by risk band — on the dashed line = trustworthy probabilities.</p>
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={rel} margin={{ top: 6, right: 12, left: -18, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" />
@@ -86,7 +86,7 @@ export default function RealModel({ data, syntheticAuc }) {
         <div className="p-4 border-b border-slate-100 flex items-center gap-2">
           <Building2 size={16} className="text-idbi-green" />
           <h3 className="font-bold text-slate-800">Real companies the model scored</h3>
-          <span className="text-xs text-slate-400">(anonymised — real financials &amp; outcomes)</span>
+          <span className="text-xs text-slate-500">(anonymised — real financials &amp; outcomes)</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -107,14 +107,14 @@ export default function RealModel({ data, syntheticAuc }) {
                 const bad = e.outcome.startsWith('Default')
                 return (
                   <tr key={e.id} className="border-t border-slate-50">
-                    <td className="px-4 py-2.5 font-semibold text-slate-800">{e.id}<span className="text-slate-400 font-normal"> · {e.obs_year}</span></td>
+                    <td className="px-4 py-2.5 font-semibold text-slate-800">{e.id}<span className="text-slate-500 font-normal"> · {e.obs_year}</span></td>
                     <td className="px-4 py-2.5 text-slate-500">{e.industry}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{e.interest_cover ?? '—'}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{e.debt_to_equity ?? '—'}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{e.pat_margin != null ? `${e.pat_margin}%` : '—'}</td>
-                    <td className={`px-4 py-2.5 text-right font-bold ${e.pd >= 0.5 ? 'text-rag-red' : e.pd >= 0.15 ? 'text-rag-amber' : 'text-rag-green'}`}>{Math.round(e.pd * 100)}%</td>
+                    <td className={`px-4 py-2.5 text-right font-bold ${e.pd >= 0.5 ? 'text-rag-redtx' : e.pd >= 0.15 ? 'text-rag-ambertx' : 'text-rag-greentx'}`}>{Math.round(e.pd * 100)}%</td>
                     <td className="px-4 py-2.5">
-                      <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${bad ? 'bg-red-50 text-rag-red' : 'bg-green-50 text-rag-green'}`}>
+                      <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${bad ? 'bg-red-50 text-rag-redtx' : 'bg-green-50 text-rag-greentx'}`}>
                         {bad ? <TriangleAlert size={12} /> : <CircleCheck size={12} />}{e.outcome}
                       </span>
                     </td>

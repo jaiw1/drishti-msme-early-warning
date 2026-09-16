@@ -50,12 +50,12 @@ export default function SessionBar({ className = '' }) {
   return (
     <div className={`flex items-center gap-2 ${className}`} data-testid="session-bar">
       <div className="hidden items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-xs sm:flex">
-        <UserRound size={13} className="text-slate-400" aria-hidden="true" />
+        <UserRound size={13} className="text-slate-600" aria-hidden="true" />
         <span className="font-semibold text-slate-700">{fullName || username}</span>
-        {role && <span className="text-slate-400">·</span>}
-        {role && <span className="text-slate-500">{role}</span>}
+        {role && <span className="text-slate-600">·</span>}
+        {role && <span className="text-slate-600">{role}</span>}
         {scope?.length > 0 && (
-          <span className="text-slate-400" title={`Scoped to: ${scope.join(', ')}`}>
+          <span className="text-slate-600" title={`Scoped to: ${scope.join(', ')}`}>
             · {scope.length} portfolio{scope.length === 1 ? '' : 's'}
           </span>
         )}
@@ -64,7 +64,7 @@ export default function SessionBar({ className = '' }) {
       {left && (
         <span
           className={`hidden items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold md:inline-flex ${
-            soon ? 'bg-rag-amber/10 text-rag-amber' : 'text-slate-400'
+            soon ? 'bg-rag-amber/10 text-rag-ambertx' : 'text-slate-500'
           }`}
           title="Time remaining on this sign-in session"
         >

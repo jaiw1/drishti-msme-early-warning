@@ -3,9 +3,9 @@
 
 export default function Panel({ tone = 'neutral', icon: Icon, title, children, actions, role, live, testId }) {
   const tones = {
-    neutral: 'bg-slate-100 text-slate-500',
-    warn: 'bg-rag-amber/10 text-rag-amber',
-    error: 'bg-rag-red/10 text-rag-red',
+    neutral: 'bg-slate-100 text-slate-600',
+    warn: 'bg-rag-amber/10 text-rag-ambertx',
+    error: 'bg-rag-red/10 text-rag-redtx',
     brand: 'bg-idbi-green/10 text-idbi-green',
   }
   return (

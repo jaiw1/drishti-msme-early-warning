@@ -68,7 +68,7 @@ export default function ScreenHelp({ screen, map = HELP, label = 'Help', compact
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Close help"
-                className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green"
+                className="rounded-lg p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green"
               >
                 <X size={18} aria-hidden="true" />
               </button>

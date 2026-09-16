@@ -91,7 +91,7 @@ export default function ChangePassword() {
         className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-idbi-green focus:ring-2 focus:ring-idbi-green/30"
       />
       {fieldErrors[describedBy] && (
-        <p id={`${id}-error`} className="mt-1 text-[11px] font-medium text-rag-red">{fieldErrors[describedBy]}</p>
+        <p id={`${id}-error`} className="mt-1 text-[11px] font-medium text-rag-redtx">{fieldErrors[describedBy]}</p>
       )}
     </div>
   )
@@ -129,7 +129,7 @@ export default function ChangePassword() {
             {formError && (
               <p
                 data-testid="change-password-error"
-                className="flex items-start gap-2 rounded-lg border border-rag-red/30 bg-red-50 px-3 py-2 text-xs leading-relaxed text-rag-red"
+                className="flex items-start gap-2 rounded-lg border border-rag-red/30 bg-red-50 px-3 py-2 text-xs leading-relaxed text-rag-redtx"
               >
                 <TriangleAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
                 <span>{formError}</span>
@@ -144,13 +144,13 @@ export default function ChangePassword() {
           <button
             type="submit"
             disabled={pending}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-idbi-green px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-idbi-greenlt focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-idbi-green px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-idbi-greendk focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {pending ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={15} aria-hidden="true" />}
             {pending ? 'Changing…' : 'Change password'}
           </button>
 
-          <p className="text-[11px] leading-relaxed text-slate-400">
+          <p className="text-[11px] leading-relaxed text-slate-500">
             Changing your password signs out every other session you have open. This one stays signed in.
           </p>
         </form>

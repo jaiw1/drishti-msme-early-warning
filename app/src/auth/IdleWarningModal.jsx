@@ -40,7 +40,7 @@ export default function IdleWarningModal({ open, secondsLeft, pinging, onStayAli
         className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
       >
         <div className="flex items-start gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-rag-amber/10 text-rag-amber">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-rag-amber/10 text-rag-ambertx">
             <Clock size={20} aria-hidden="true" />
           </div>
           <div className="min-w-0 flex-1">
@@ -72,7 +72,7 @@ export default function IdleWarningModal({ open, secondsLeft, pinging, onStayAli
             type="button"
             onClick={onStayAlive}
             disabled={pinging}
-            className="rounded-lg bg-idbi-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-idbi-greenlt focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green focus-visible:ring-offset-2 disabled:opacity-60"
+            className="rounded-lg bg-idbi-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-idbi-greendk focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green focus-visible:ring-offset-2 disabled:opacity-60"
           >
             {pinging ? 'Keeping you signed in…' : 'Stay signed in'}
           </button>

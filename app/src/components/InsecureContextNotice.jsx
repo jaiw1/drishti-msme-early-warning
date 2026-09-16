@@ -27,7 +27,7 @@ export default function InsecureContextNotice({ href }) {
       data-testid="insecure-notice"
     >
       <div className="w-full max-w-md space-y-4 rounded-xl border border-rag-red/30 bg-white p-6 text-center shadow-sm">
-        <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-rag-red/10 text-rag-red">
+        <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-rag-red/10 text-rag-redtx">
           <ShieldAlert size={24} aria-hidden="true" />
         </div>
         <h1 className="text-lg font-extrabold text-slate-900">This connection is not secure</h1>
@@ -37,11 +37,11 @@ export default function InsecureContextNotice({ href }) {
         </p>
         <a
           href={secure}
-          className="inline-block rounded-lg bg-idbi-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-idbi-greenlt focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green focus-visible:ring-offset-2"
+          className="inline-block rounded-lg bg-idbi-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-idbi-greendk focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green focus-visible:ring-offset-2"
         >
           Reload over HTTPS
         </a>
-        <p className="text-xs leading-relaxed text-slate-400">
+        <p className="text-xs leading-relaxed text-slate-500">
           If the certificate is self-signed, compare its SHA-256 fingerprint with the one published in
           the project README before accepting it.
         </p>
