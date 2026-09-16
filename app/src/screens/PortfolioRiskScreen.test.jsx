@@ -3,6 +3,11 @@ import { screen, within } from '@testing-library/react'
 import PortfolioRiskScreen from './PortfolioRiskScreen'
 import { renderScreen } from '../test/render'
 import { B, apiRoutes, envelope, fail, metrics, mockApi, ok, portfolio } from '../test/fixtures/api'
+// The real, committed export — array-shaped `by_portfolio`, `red_band_precision_8m`
+// spelled `{n, hits, precision, ci_lo, ci_hi}` — as opposed to the hand-written fixture
+// above, which uses the platform's `{value, ci_low, ci_high}` object-keyed spelling and
+// so never exercised the export's own key names.
+import demoData from '../../public/demo_data.json'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -27,6 +32,20 @@ describe('Portfolio risk', () => {
     expect(msme).toHaveTextContent('95% CI 51.0%–100.0%')
     expect(msme).toHaveTextContent('4 of 4')
     expect(within(cards).getByText('Housing').parentElement).toHaveTextContent('75.0%')
+  })
+
+  it('renders per-portfolio precision from the real committed export (`precision`, not `value`)', async () => {
+    const m = metrics()
+    m.data.metrics.rank_order = demoData.metrics.rank_order
+    mockApi(apiRoutes({ [`${B}/drishti/metrics`]: ok(m) }), { vi })
+    render()
+    const heading = await screen.findByText('Red-band precision, per portfolio')
+    const cards = heading.nextElementSibling
+    const msmeCc = within(cards).getByText('MSME-CC').parentElement
+    expect(msmeCc).not.toHaveTextContent('not reported')
+    expect(msmeCc).toHaveTextContent('94.6%')
+    expect(msmeCc).toHaveTextContent('95% CI 82.3%–98.5%')
+    expect(msmeCc).toHaveTextContent('35 of 37')
   })
 
   it('says a portfolio’s precision is not reported rather than inventing one', async () => {

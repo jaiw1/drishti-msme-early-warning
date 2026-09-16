@@ -66,7 +66,10 @@ function Slider({ label, value, set, min, max, step, fmt, id }) {
  */
 function PrecisionCard({ entry }) {
   const block = entry.red_band_precision_8m
-  const value = typeof block === 'number' ? block : block?.value
+  // `export_demo.py`'s rank-order exhibit cell spells this `precision` (it reuses the
+  // by-band row's own vocabulary); the platform's object-keyed shape spells it `value`.
+  // Read either so the card renders regardless of which one produced this run.
+  const value = typeof block === 'number' ? block : (block?.value ?? block?.precision)
   const lo = block?.ci_low ?? block?.ci_lo
   const hi = block?.ci_high ?? block?.ci_hi
   const red = entry.by_band?.find((b) => b.band === 'Red')
