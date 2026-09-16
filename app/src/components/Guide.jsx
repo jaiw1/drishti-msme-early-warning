@@ -14,7 +14,7 @@ const STEPS = [
   { view: 'risk', icon: PieChart, tint: 'bg-idbi-green/10 text-idbi-green', title: '3 · Portfolio risk',
     body: 'See which sectors and segments are most stressed, and drag the what-if sliders to estimate the ₹ provisioning the bank saves by acting on the flags early.' },
   { view: 'analytics', icon: LineChart, tint: 'bg-idbi-green/10 text-idbi-green', title: '4 · Model & Metrics',
-    body: 'The honest scorecard: how early we catch trouble, calibration, and a leakage check proving the warnings come from cash-flow — not just "already late on payments".' },
+    body: 'The honest scorecard: realised NPA rate by risk band over 8 months, how early we catch trouble, calibration, and a leakage check proving the warnings come from cash-flow — not just "already late on payments".' },
   { view: 'real', icon: BadgeCheck, tint: 'bg-idbi-green/10 text-idbi-green', title: '5 · Real-data model',
     body: 'The proof: the same method run on ~3,200 REAL Indian MSMEs with real defaults — an honest 0.81. On synthetic data the score looks high; this is the number to trust.' },
   { view: 'portfolio', icon: CheckCircle2, tint: 'bg-idbi-green/10 text-idbi-green', title: 'You’re all set',
