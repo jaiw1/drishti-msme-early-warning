@@ -185,12 +185,18 @@ generator's own number would be exactly the dishonest move this whole mechanism 
 prevent. `filings` (GST turnover, adverse remarks) is *always* `SIMULATED` — no Atlas API in
 the 25-endpoint catalogue supplies it at all.
 
-**The sandbox itself is a static mock.** Each Atlas endpoint serves its own structured mock
-record — verified on 17 Sep 2026 by calling all 23 readable approved APIs — and serves the same
-one regardless of the request; API 433 is the exception, returning a composite record carrying a
-slice for every API. Either way the data is mock, so a pull is `BANK_API` **with**
-`sandbox_fixture: true`, and nothing in this build has ever scored, thresholded, or banded a real
-bank record (`MODEL_CARD.md` §15, "BR-6a").
+**The sandbox is a small keyed store, not a static mock that ignores you.** Each Atlas endpoint
+serves its own structured record — verified on 17 Sep 2026 by calling all 23 readable approved
+APIs — and it really does look the key up: an id it does not hold answers
+`{"message": "Data not found", "sentKey": "acctId#SANDBOX-ACCT-3"}`. API 433 is the exception that
+misled us, returning a composite record carrying a slice for every API. What the store holds is a
+**handful** of sample customers and accounts. A pull on 17 Sep 2026 walked every documented
+identifier and found real records for accounts `SANDBOX-ACCT-1`, `SANDBOX-ACCT-2` and `SANDBOX-ACCT-5`
+(API 365; 441 and 391 for the first two) and for customers `SANDBOX-CIF-1` and `SANDBOX-CIF-2` (402, 442,
+456, 394) — nine accounts and CIFs in total, against a synthetic panel of 45,000. So a pull is
+`BANK_API` **with** `sandbox_fixture: true`, every band and threshold in this build is computed
+on the synthetic panel, and nothing here has ever scored, thresholded or banded a real bank
+record (`MODEL_CARD.md` §15, "BR-6a").
 
 **DRISHTi ingests 15 of the 25 requested APIs** (`data/bank/SCHEMA.md`): 391 (loan details),
 402 (overdue/DPD), 404 (demanded vs collected), 441 (drawing power), 442 (CIF exposure, account
@@ -198,17 +204,25 @@ manager), 362 (liens), **433 (product-level rates, no customer id — the first 
 zero dependency on a real customer)**, 473 (repayment schedule), 538 (payoff/penal split), 393
 (statement), 365/394 (account/CIF enquiry), 456 (dedupe — the only place GSTIN appears), 408
 (CIBIL, permitted for credit monitoring), and 508 (HRMS) — **which the bank rejected**, so no
-RM roster or branch data reaches this build from it. The remaining
+RM roster or branch data reaches this build from it, and the platform's `app/atlas/policy.py`
+now refuses it outright so no pull can call it by accident. The remaining
 10 are SANKET's own surface (AA consent lifecycle, CRM write-back) or 415 (CKYC, subscribed but
 deliberately never scored on).
 
 **API 433's rate is what feeds the cost model.** `effective_rate_pa` (12.75%) and
 `penal_rate_pa` (2.0%) in the threshold cost calculation are tagged `BANK_API` — a real captured
 field from the sandbox's own contract — but every value derived from them carries
-`sandbox_fixture: true`, because the sandbox returns the same mock record to every caller
-whatever the request:
-these are real *field values from the bank's own API contract*, not real *rates for our
+`sandbox_fixture: true`, because the sandbox's rate card describes its own sample book and not
+ours: these are real *field values from the bank's own API contract*, not real *rates for our
 borrowers*. `MODEL_CARD.md` §10.
+
+**API 473 does answer, and it is an amortisation engine.** It was recorded here — and in the
+platform's own adapter — as an endpoint that returns nothing. That was wrong; it is absent from
+API 433's composite record, and absence from that record was mistaken for absence from the
+sandbox. Given a principal, a rate and an instalment count it returns the level instalment and a
+row per month. DRISHTi does not price instalments, so nothing in this build changed on the
+strength of it; SANKET's `emi_source` now reads `BANK_API_473_schedule`
+(`../sanket/MODEL_CARD.md` §13).
 
 ## Validation
 
