@@ -393,10 +393,17 @@ python3 -m pytest -q                        # unit tests (repo root)
 ## Team, licence
 
 **Team RR Squad** — Yuvraj Kundargi, Jai Wadhwa. IDBI Innovate 2026, Track 4 (Default
-Prediction Model). Licensed under MIT (see [`LICENSE`](LICENSE)); the raw licensed financial
-data used to build the real-data validation model is **not** part of this repository — only
-derived aggregate metrics and anonymised examples (`data/real_model.json`) are included. No
-AI-generated content is attributed anywhere in this repository or its commit history.
+Prediction Model).
+
+**All rights reserved.** No licence is granted. This repository is published so that the
+evaluators of IDBI Innovate 2026 can read and assess the work; it is not offered for reuse.
+Materials produced for the hackathon are subject to the non-disclosure agreement executed with
+IDBI Bank on 31 August 2026, which governs ownership of the deliverables.
+
+The raw licensed financial data used to build the real-data validation model is **not** part of
+this repository — only derived aggregate metrics and anonymised examples
+(`data/real_model.json`) are included. No AI-generated content is attributed anywhere in this
+repository or its commit history.
 
 ---
 
