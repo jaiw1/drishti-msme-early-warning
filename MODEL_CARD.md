@@ -403,6 +403,15 @@ with exactly one of three sources, per one of **eight families** (`identity`, `e
 shown beside the score itself — is the *weakest* of the other seven, per account. This is
 `data/bank/SCHEMA.md`'s own rule and the platform's `app/fixtures/common.py::weakest`.
 
+**`BANK_API` on an account means the bank answered about *that account*.** A family is
+`BANK_API` at **run** level once its endpoint answers; that is a statement about the call,
+not about any particular row. Because the sandbox holds only a handful of sample accounts,
+the two levels say different true things, and `src/bank.py` keeps them apart: it records
+the identifiers the pull actually came back with and awards a row `BANK_API` only if it is
+one of them. The sandbox's sample ids and this panel's generated ids are disjoint, so no
+account row in this build carries `BANK_API` — the genuine bank data is the run-level
+endpoint block, badged where it is.
+
 **What `--bank` actually overlays, and what it never touches.** Only the `identity` family
 (`cif_id`, `foracid`, branch, RM) is ever substituted with a real fixture/live value on an
 account record — it is pure display metadata that never reaches the model. The other six

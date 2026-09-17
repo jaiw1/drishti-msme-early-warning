@@ -177,6 +177,16 @@ Every value the platform export carries is tagged with exactly one of three sour
 | `FIXTURE` | Sourced from the committed `data/bank/fixture.json` (160 accounts) when a live pull is unavailable or a family's account is outside its coverage. |
 | `SIMULATED` | Produced by the synthetic generator — no Atlas API supplies this at all, or this build never substituted anything for it. |
 
+**`BANK_API` on a row means the bank answered about *that row*, not that the endpoint
+answered.** The two are easy to conflate and the conflation is the dishonest one: the
+sandbox holds only a handful of sample accounts, so an endpoint can answer 200 while
+nothing at all was fetched for the account being displayed. `src/bank.py` records the
+identifiers the pull actually came back with and badges an account `BANK_API` only if it
+is one of them; every other account degrades to `FIXTURE` or `SIMULATED` exactly as it did
+before any pull existed. The sandbox's sample ids and this panel's generated ids are
+disjoint, so **no account row in this build carries `BANK_API`** — the real bank data in a
+`--bank` export is the run-level endpoint block, which is carried and badged separately.
+
 **Only the `identity` family (CIF, account number, branch, RM) is ever overlaid with a
 real/fixture value.** Every other family — `dpd`, `outstanding`, `bureau_score`, and every
 other model input — is always `SIMULATED`, even on a `--bank` run: the model trains and scores
