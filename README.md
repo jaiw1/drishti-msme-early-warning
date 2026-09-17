@@ -197,13 +197,13 @@ the 25-endpoint catalogue supplies it at all.
 
 **The sandbox is a small keyed store, not a static mock that ignores you.** Each Atlas endpoint
 serves its own structured record — verified on 17 Sep 2026 by calling all 23 readable approved
-APIs — and it really does look the key up: an id it does not hold answers
-`{"message": "Data not found", "sentKey": "acctId#SANDBOX-ACCT-3"}`. API 433 is the exception that
-misled us, returning a composite record carrying a slice for every API. What the store holds is a
-**handful** of sample customers and accounts. A pull on 17 Sep 2026 walked every documented
-identifier and found real records for accounts `SANDBOX-ACCT-1`, `SANDBOX-ACCT-2` and `SANDBOX-ACCT-5`
-(API 365; 441 and 391 for the first two) and for customers `SANDBOX-CIF-1` and `SANDBOX-CIF-2` (402, 442,
-456, 394) — nine accounts and CIFs in total, against a synthetic panel of 45,000. So a pull is
+APIs — and it really does look the key up: an id it does not hold answers a
+`{"message": "Data not found", "sentKey": "acctId#<the id sent>"}` shaped error. API 433 is the
+exception that misled us, returning a composite record carrying a slice for every API. What the
+store holds is a **handful** of sample customers and accounts. A pull on 17 Sep 2026 walked every
+documented identifier and found real records for three sandbox accounts (API 365; two of the
+three also answered 441 and 391) and two sandbox customers (402, 442, 456, 394) — nine accounts
+and CIFs in total, against a synthetic panel of 45,000. So a pull is
 `BANK_API` **with** `sandbox_fixture: true`, every band and threshold in this build is computed
 on the synthetic panel, and nothing here has ever scored, thresholded or banded a real bank
 record (`MODEL_CARD.md` §15, "BR-6a").
