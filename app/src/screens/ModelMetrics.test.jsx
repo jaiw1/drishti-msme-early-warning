@@ -28,6 +28,22 @@ describe('criteriaRows', () => {
     const rows = criteriaRows({ criteria: [{ id: 'A', status: 'passed' }, { id: 'B', result: 'failed' }, { id: 'C', passed: true }] })
     expect(rows.map((r) => r.status)).toEqual(['pass', 'fail', 'pass'])
   })
+
+  it('with no states argument, behaves exactly as before — the regression guard for old runs', () => {
+    const report = { criteria: [{ id: 'DR-01', status: 'pass' }, { id: 'DR-11', status: 'fail' }, { id: 'DR-12', status: 'fail' }] }
+    expect(criteriaRows(report).map((r) => r.status)).toEqual(['pass', 'fail', 'fail'])
+  })
+
+  it('with a states map, turns accepted_failure into accepted and blocking_failure into fail', () => {
+    const report = { criteria: [{ id: 'DR-01', status: 'pass' }, { id: 'DR-11', status: 'fail' }, { id: 'DR-12', status: 'fail' }] }
+    const rows = criteriaRows(report, { 'DR-01': 'pass', 'DR-11': 'blocking_failure', 'DR-12': 'accepted_failure' })
+    expect(rows.map((r) => r.status)).toEqual(['pass', 'fail', 'accepted'])
+  })
+
+  it('falls through to statusOf for any state that is not one of the three known values', () => {
+    const report = { criteria: [{ id: 'DR-01', status: 'pass' }] }
+    expect(criteriaRows(report, { 'DR-01': 'warn' })[0].status).toBe('pass')
+  })
 })
 
 describe('Model & Metrics', () => {
@@ -113,5 +129,115 @@ describe('Model & Metrics', () => {
     }), { vi })
     render()
     expect(await screen.findByText('No model run is published')).toBeInTheDocument()
+  })
+})
+
+describe('an accepted validation failure', () => {
+  const REASON = 'Bureau history is too sparse at this segment size to move the metric further.'
+
+  const acceptedFailures = {
+    accepted: ['DR-12'],
+    criteria: [{
+      id: 'DR-12',
+      metric: 'feature_stability',
+      severity: 'medium',
+      status: 'fail',
+      value: 0.41,
+      threshold: 0.6,
+      op: '>=',
+      n: 812,
+      detail: 'Feature interaction stability check.',
+      reason: REASON,
+    }],
+    still_blocking: ['DR-11'],
+    listed_but_passing: [],
+    listed_not_in_report: [],
+    recorded_at: '2026-09-16T10:00:00+00:00',
+    source: 'operator',
+    note: 'These criteria failed and were accepted in advance, before this run published. Nothing was re-graded.',
+  }
+
+  const acceptedRun = () => ok(envelope({
+    published: true,
+    criteria_sha: 'abc123def4567890',
+    verify_result: { status: 'ok' },
+    available: true,
+    note: null,
+    criteria_states: { 'DR-01': 'pass', 'DR-11': 'blocking_failure', 'DR-12': 'accepted_failure' },
+    accepted_failure_ids: ['DR-12'],
+    accepted_failures: acceptedFailures,
+    report: {
+      criteria: [
+        { id: 'DR-01', description: 'Grouped AUC in band', status: 'pass', observed: 0.891, expected: '0.82–0.92' },
+        { id: 'DR-11', description: 'Bands monotone in every portfolio', status: 'fail', observed: '5/8', expected: '8/8' },
+        { id: 'DR-12', description: 'Feature interaction stability', status: 'fail', observed: 0.41, expected: '≥ 0.6' },
+      ],
+    },
+  }))
+
+  it('renders it as a failure, never a pass, and keeps it out of the pass count', async () => {
+    mockApi(apiRoutes({ [`${B}/drishti/validation`]: acceptedRun() }), { vi })
+    render()
+    const table = await screen.findByRole('table', { name: /validation criteria/i })
+    const row = within(table).getByRole('rowheader', { name: 'DR-12' }).closest('tr')
+    expect(row).toHaveTextContent('Fail')
+    expect(row).toHaveTextContent('accepted')
+    expect(row).not.toHaveTextContent('Pass')
+    // Only DR-01 is a clean pass — DR-12 must not have been folded into this count.
+    expect(screen.getByText('1 pass')).toBeInTheDocument()
+    expect(screen.getByText('1 fail — accepted')).toBeInTheDocument()
+  })
+
+  it('renders visually distinct from a blocking failure that is still unaccepted', async () => {
+    mockApi(apiRoutes({ [`${B}/drishti/validation`]: acceptedRun() }), { vi })
+    render()
+    const table = await screen.findByRole('table', { name: /validation criteria/i })
+    const acceptedRow = within(table).getByRole('rowheader', { name: 'DR-12' }).closest('tr')
+    const blockingRow = within(table).getByRole('rowheader', { name: 'DR-11' }).closest('tr')
+    expect(blockingRow).toHaveTextContent('Fail')
+    expect(blockingRow).not.toHaveTextContent('accepted')
+    // Different row tint and a different icon/label mark the two apart at a glance.
+    expect(acceptedRow.className).not.toBe(blockingRow.className)
+  })
+
+  it("shows the criterion's own pre-registered reason for the acceptance", async () => {
+    mockApi(apiRoutes({ [`${B}/drishti/validation`]: acceptedRun() }), { vi })
+    render()
+    expect(await screen.findByText(new RegExp(REASON))).toBeInTheDocument()
+  })
+
+  it('names the recorded acceptance near the table, without claiming anything was re-graded', async () => {
+    mockApi(apiRoutes({ [`${B}/drishti/validation`]: acceptedRun() }), { vi })
+    render()
+    // The panel's own factual line (singular "was", since only one criterion is accepted here).
+    expect(await screen.findByText(/1 criterion failed and was accepted in advance/i)).toBeInTheDocument()
+    expect(screen.getByText(/2026-09-16T10:00:00\+00:00/)).toBeInTheDocument()
+    // Plus the API's own explanatory note, verbatim — never a claim this code invented.
+    expect(screen.getByText(acceptedFailures.note)).toBeInTheDocument()
+  })
+
+  it('renders exactly as before when a run carries none of the acceptance fields at all', async () => {
+    const legacy = envelope({
+      published: true,
+      criteria_sha: 'abc123def4567890',
+      verify_result: { status: 'ok' },
+      available: true,
+      note: null,
+      report: {
+        criteria: [
+          { id: 'DR-01', description: 'Grouped AUC in band', status: 'pass', observed: 0.891, expected: '0.82–0.92' },
+          { id: 'DR-11', description: 'Bands monotone in every portfolio', status: 'fail', observed: '5/8', expected: '8/8' },
+        ],
+      },
+    })
+    mockApi(apiRoutes({ [`${B}/drishti/validation`]: ok(legacy) }), { vi })
+    render()
+    const table = await screen.findByRole('table', { name: /validation criteria/i })
+    expect(within(table).getByRole('rowheader', { name: 'DR-01' }).closest('tr')).toHaveTextContent('Pass')
+    expect(within(table).getByRole('rowheader', { name: 'DR-11' }).closest('tr')).toHaveTextContent('Fail')
+    expect(screen.getByText('1 pass')).toBeInTheDocument()
+    expect(screen.getByText('1 fail')).toBeInTheDocument()
+    expect(screen.queryByText(/accepted in advance/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/fail — accepted/i)).not.toBeInTheDocument()
   })
 })

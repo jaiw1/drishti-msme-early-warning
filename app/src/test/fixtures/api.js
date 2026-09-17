@@ -242,12 +242,15 @@ export const metrics = ({ byPortfolioAsArray = false, honesty = true } = {}) => 
   })
 }
 
-export const validation = ({ available = true } = {}) => envelope(available ? {
+export const validation = ({ available = true, criteriaStates = null, acceptedFailures = null } = {}) => envelope(available ? {
   published: true,
   criteria_sha: 'abc123def4567890',
   verify_result: { status: 'ok' },
   available: true,
   note: null,
+  criteria_states: criteriaStates || {},
+  accepted_failure_ids: acceptedFailures?.accepted || [],
+  accepted_failures: acceptedFailures,
   report: {
     criteria: [
       { id: 'DR-01', description: 'Grouped AUC in band', status: 'pass', observed: 0.891, expected: '0.82–0.92' },
@@ -258,6 +261,7 @@ export const validation = ({ available = true } = {}) => envelope(available ? {
   },
 } : {
   published: true, report: null, criteria_sha: null, verify_result: null, available: false,
+  criteria_states: {}, accepted_failure_ids: [], accepted_failures: null,
   note: 'No validation report has been loaded for this run.',
 })
 

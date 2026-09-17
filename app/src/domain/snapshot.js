@@ -163,6 +163,12 @@ export function snapshotValidation() {
     criteria_sha: null,
     verify_result: null,
     available: false,
+    // Honest empties, not omissions: the live API's shape carries these three fields, and a
+    // screen that reads them should see the same "nothing here" shape from the frozen
+    // bundle rather than have to special-case a missing key.
+    criteria_states: {},
+    accepted_failure_ids: [],
+    accepted_failures: null,
     note: 'The validation report lives in the platform database and is attached to a published model run. This frozen bundle has no backend to read it from.',
   }
 }
