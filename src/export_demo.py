@@ -1164,10 +1164,17 @@ def main(argv=None):
           f"flag nobody and you score {m['raw_accuracy_8m']['flag_nobody_baseline']:.1%}")
 
     recall10 = next(r["recall"] for r in m["recall_at_budget"] if r["budget"] == 0.10)
+    # Every internal-shaped payload this run writes, so the DR-11/DR-12 report at the end
+    # can read each one back and confirm it still carries its own gate verdict. The
+    # `--out` contract export is deliberately not in this list: its schema declares
+    # `rank_order` `additionalProperties: false`, so `export_contract` strips `gate` from
+    # it on purpose (see that module) and there is nothing there to read back.
+    written_payloads = []
     with open(OUT, "w") as f:
         # allow_nan=False is the guard, not a nicety: json.dump would otherwise write
         # bare `NaN` literals, which are not JSON and which the cockpit cannot parse.
         json.dump(out, f, allow_nan=False)
+    written_payloads.append(OUT)
     print(f"recall@10% budget: {recall10:.0%} | wrote {OUT} ({len(json.dumps(out))/1024:.0f} KB)")
 
     # DM-6 — the sampled file the SPA fetches at runtime. Metrics/thresholds/rank_order
@@ -1179,6 +1186,7 @@ def main(argv=None):
         Path(DEMO_PUBLIC).parent.mkdir(parents=True, exist_ok=True)
         with open(DEMO_PUBLIC, "w") as f:
             json.dump(demo, f, allow_nan=False)
+        written_payloads.append(DEMO_PUBLIC)
         ds = demo["_demo_sample"]
         print(f"demo sample: {ds['sampled']}/{ds['full_panel']} accounts -> {DEMO_PUBLIC} "
               f"({len(json.dumps(demo))/1024:.0f} KB) — DO NOT COMMIT this file")
@@ -1211,12 +1219,96 @@ def main(argv=None):
               "specifies an OBJECT keyed by portfolio code. BE-7 flagged this exact API-vs-"
               "export mismatch already — see src/export_contract.py's module docstring.")
 
-    # DR-11 / DR-12 gate, LAST: the file and the table are written first so a failure
-    # arrives with the evidence that caused it and the other lanes still have a shape to
-    # build against — but the process exits non-zero, and the payload it wrote says
-    # `rank_order.gate.passed == false`, so a failing panel can never quietly ship.
-    assert_rank_order(rank_order)
+    # ----------------------------------------------------------------------------- #
+    # DR-11 / DR-12, LAST — REPORTED HERE, GATED ELSEWHERE.
+    #
+    # The files and the table are written first, so a failure arrives with the evidence
+    # that caused it and the other lanes still have a shape to build against. That has
+    # not changed. What has changed is the exit code.
+    #
+    # This exporter used to raise on a violation, so the process exited non-zero. Two
+    # independent, permanent vetoes then stood between DRISHTi and a deployment: this
+    # one, and the platform's verify stage, which keeps any run with a failing criterion
+    # as a candidate. DR-12 is one of four criteria that fail, that are real properties
+    # of this model, and that were ruled to be reported honestly and never tuned away.
+    # A permanent veto over a permanent, deliberate failure is not a safety property —
+    # it is a deadlock, and double-gating in the exporter is what created it.
+    #
+    # `validation/run.py` is the authority on the pre-registered criteria. It grades
+    # every DR-*, including these two, against `validation/criteria.yaml`; the platform
+    # reads its report and publishes a failing criterion only when that criterion has
+    # been named in advance and the acceptance recorded on the run. Re-grading DR-11 and
+    # DR-12 here adds no check that runner does not already make. All it added was a
+    # second veto with nowhere to record an acceptance against it.
+    #
+    # So the violations are printed — loudly, to stderr, every string verbatim — the
+    # payloads keep `rank_order.gate.passed == false` and the same violation strings they
+    # already carried, and the exit code is 0, because producing the export succeeded.
+    #
+    # Non-zero is now reserved for a GENUINE failure: no valid payload. That explicitly
+    # includes a payload that has lost its own verdict — if a file we just wrote cannot
+    # be read back, or reads `gate.passed: true` while violations exist, or has shed the
+    # violation strings, then a failing panel really could ship quietly, and THAT is the
+    # error worth an exit code.
+    # ----------------------------------------------------------------------------- #
+    return _report_rank_order_gate(rank_order, written_payloads)
+
+
+def _gate_readback_error(path, violations):
+    """`None` if `path` carries the verdict just computed, else why it does not.
+
+    Read back off the file, not off the in-memory dict: the claim being checked is about
+    the artefact somebody will ship, and only the file can support that claim.
+    """
+    try:
+        with open(path) as f:
+            gate = json.load(f)["metrics"]["rank_order"]["gate"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return f"{path}: cannot read back metrics.rank_order.gate ({type(exc).__name__}: {exc})"
+    if not isinstance(gate, dict):
+        return f"{path}: metrics.rank_order.gate is not an object"
+    if gate.get("passed") is not (not violations):
+        return (f"{path}: gate.passed is {gate.get('passed')!r} with "
+                f"{len(violations)} violation(s) computed")
+    if list(gate.get("violations") or []) != list(violations):
+        return f"{path}: gate.violations is not the list of violations just computed"
+    return None
+
+
+def _report_rank_order_gate(exhibit, payload_paths):
+    """Print the DR-11/DR-12 verdict; return the process exit code.
+
+    0 when the export is sound, whether or not the criteria passed. Non-zero only when a
+    written payload does not carry the verdict, which is the one outcome that would let a
+    failing panel ship without saying so.
+    """
+    violations = rank_order_violations(exhibit)
+    broken = [problem for problem in
+              (_gate_readback_error(path, violations) for path in payload_paths)
+              if problem]
+
+    if violations:
+        print(f"\nDR-11/DR-12 rank-order gate: FAILED at horizon "
+              f"{exhibit['horizon_months']} months ({len(violations)} violation(s)). "
+              f"REPORTED, NOT TUNED AWAY — the payloads carry gate.passed=false and these "
+              f"exact strings.", file=sys.stderr)
+        for violation in violations:
+            print(f"  {violation}", file=sys.stderr)
+        print("  The pre-registered criteria are graded by validation/run.py, and the "
+              "platform's verify stage decides what may publish. See MODEL_CARD.md and "
+              "README.md \"The four honest fails\".", file=sys.stderr)
+    else:
+        print(f"DR-11/DR-12 rank-order gate: passed at horizon "
+              f"{exhibit['horizon_months']} months.")
+
+    if broken:
+        print("\nEXPORT ERROR: a payload does not carry the verdict it was written with. "
+              "This is a broken artefact, not a failing criterion:", file=sys.stderr)
+        for problem in broken:
+            print(f"  {problem}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

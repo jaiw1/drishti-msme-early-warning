@@ -443,6 +443,77 @@ def test_payload_records_the_gate_verdict(payload):
     assert gate["passed"] is (gate["violations"] == [])
 
 
+# --------------------------------------------------------------------------- #
+# The exporter REPORTS the gate; it does not veto the build.
+#
+# DR-12 is one of four criteria that fail, that are real properties of this model, and
+# that were ruled to be reported and never tuned away. `validation/run.py` grades them
+# and the platform's verify stage decides what may publish. When this script ALSO exited
+# non-zero on them, the two vetoes together meant DRISHTi could never be deployed at all.
+# So the contract these tests pin down is: a written payload plus a failing verdict is a
+# SUCCESS, and only a payload that has lost its own verdict is an error.
+# --------------------------------------------------------------------------- #
+def _write_payload(path, exhibit, violations):
+    payload = {"metrics": {"rank_order": dict(
+        exhibit, gate=dict(criteria=["DR-11", "DR-12"], passed=not violations,
+                           violations=violations))}}
+    path.write_text(json.dumps(payload))
+    return path
+
+
+def _failing_exhibit():
+    """A book whose last portfolio ranks backwards — DR-11 fails, for real."""
+    good = [_ranked_book(p.code) for p in list(PORTFOLIOS.values())[:-1]]
+    broken_code = list(PORTFOLIOS.values())[-1].code
+    broken = _book([("green", broken_code, 0.1, 3)] * 40 + [("red", broken_code, 0.95, -1)] * 10)
+    return export_demo.rank_order_exhibit(pd.concat(good + [broken], ignore_index=True))
+
+
+def test_a_failing_gate_exits_zero_with_the_payload_still_marked_failed(tmp_path, capsys):
+    exhibit = _failing_exhibit()
+    violations = export_demo.rank_order_violations(exhibit)
+    assert violations, "this fixture is only useful if it really fails"
+    written = _write_payload(tmp_path / "demo_data.json", exhibit, violations)
+
+    assert export_demo._report_rank_order_gate(exhibit, [written]) == 0
+
+    # the artefact still says it failed, in the same words
+    gate = json.loads(written.read_text())["metrics"]["rank_order"]["gate"]
+    assert gate["passed"] is False
+    assert gate["violations"] == violations
+    # and the run said so out loud rather than exiting quietly
+    err = capsys.readouterr().err
+    assert "FAILED" in err
+    for violation in violations:
+        assert violation in err
+
+
+def test_a_passing_gate_exits_zero_and_says_so(tmp_path, capsys):
+    exhibit = export_demo.rank_order_exhibit(
+        pd.concat([_ranked_book(p.code) for p in PORTFOLIOS.values()], ignore_index=True))
+    assert export_demo.rank_order_violations(exhibit) == []
+    written = _write_payload(tmp_path / "demo_data.json", exhibit, [])
+    assert export_demo._report_rank_order_gate(exhibit, [written]) == 0
+    assert "passed" in capsys.readouterr().out
+
+
+def test_a_payload_that_lost_its_verdict_is_a_real_error(tmp_path, capsys):
+    """The one thing still worth a non-zero exit: an artefact that hides its own failure."""
+    exhibit = _failing_exhibit()
+    violations = export_demo.rank_order_violations(exhibit)
+    lying = _write_payload(tmp_path / "demo_data.json", exhibit, [])   # claims it passed
+
+    assert export_demo._report_rank_order_gate(exhibit, [lying]) == 1
+    assert "EXPORT ERROR" in capsys.readouterr().err
+    assert violations, "sanity: the exhibit really does violate"
+
+
+def test_a_payload_that_was_never_written_is_a_real_error(tmp_path):
+    exhibit = _failing_exhibit()
+    missing = tmp_path / "never-written.json"
+    assert export_demo._report_rank_order_gate(exhibit, [missing]) == 1
+
+
 def test_payload_exhibit_covers_every_portfolio_in_the_book(payload):
     exhibit = payload["metrics"]["rank_order"]
     in_book = {r["portfolio"] for r in payload["portfolio"]}
