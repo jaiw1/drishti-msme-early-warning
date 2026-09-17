@@ -36,6 +36,18 @@ reflects that: an account outside the fixture reads ``SIMULATED`` for a family
 the *aggregate* run reports as ``FIXTURE``, because nothing was actually
 substituted for it.
 
+**An endpoint answering is not the same as it answering about you.** The sandbox
+holds a handful of sample accounts, so a family whose API answered is
+``BANK_API`` at **run** level — the call was made, the shape came back — while
+essentially every account in this panel had nothing fetched for it. Conflating
+the two would stamp a bank badge on a generated row, which is the one thing this
+module exists to prevent, so :attr:`bank_keys` records the ids the pull actually
+came back with and :meth:`provenance_for` awards ``BANK_API`` only to an account
+among them. The sandbox's sample ids and this panel's generated ids are disjoint
+today, so no account row claims ``BANK_API``; the genuine bank data in a
+``--bank`` export is the run-level endpoint block, which is carried and badged
+separately.
+
 **What actually gets overlaid.** Only the ``identity`` family's fields
 (``cif_id``, ``foracid``, ``branch_code``, ``branch_name``, ``ifsc``, ``rm_ein``,
 ``rm_name``, ``reporting_manager_ein``, ``account_manager_ein``) are literal
@@ -127,6 +139,47 @@ def _answered_apis(pulled: dict) -> set[str]:
     return {str(k) for k, v in apis.items() if isinstance(v, dict) and v.get("provenance") == "BANK_API"}
 
 
+#: Fields the bank echoes back naming *which* account or customer a record is about. A
+#: pull is keyed by these, so they are what a panel account has to match to have genuinely
+#: been fetched rather than merely covered by an endpoint that answered for someone else.
+_ID_FIELDS: tuple[str, ...] = ("acctId", "accountNumber", "accountNo", "accountId",
+                               "account_id", "custCifId", "cifId", "cif_id", "customerID",
+                               "custId", "customerId", "foracid")
+
+
+def _ids_in(node: Any, out: set[str], depth: int = 0) -> None:
+    """Every identifier value anywhere in one answered record, recursively."""
+    if depth > 8:
+        return
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k in _ID_FIELDS and isinstance(v, (str, int)) and str(v).strip():
+                out.add(str(v).strip())
+            else:
+                _ids_in(v, out, depth + 1)
+    elif isinstance(node, list):
+        for v in node[:200]:
+            _ids_in(v, out, depth + 1)
+
+
+def _answered_keys(pulled: dict) -> frozenset[str]:
+    """The account and customer ids the sandbox actually returned records for.
+
+    The difference between "the identity APIs answered" and "the identity APIs answered
+    about this account". Only the second earns an account row a ``BANK_API`` badge.
+    """
+    apis = pulled.get("apis", {})
+    if not isinstance(apis, dict):
+        return frozenset()
+    found: set[str] = set()
+    for entry in apis.values():
+        if not isinstance(entry, dict) or entry.get("provenance") != "BANK_API":
+            continue
+        for rec in entry.get("records") or []:
+            _ids_in(rec, found)
+    return frozenset(found)
+
+
 def _fixture_by_account(fixture: dict | None) -> dict[str, dict]:
     if not fixture:
         return {}
@@ -146,6 +199,17 @@ class BankContext:
     provenance_raw: dict[str, Any] | None = None
     fixture_meta: dict[str, Any] | None = None
     reason: str = ""
+    #: The account and customer ids the pull actually came back with. Held apart from
+    #: :attr:`families`, because a family can be ``BANK_API`` for the run while this set
+    #: is disjoint from the whole panel — which is exactly the sandbox's situation.
+    bank_keys: frozenset[str] = frozenset()
+
+    def fetched_for(self, account_id: str, cif_id: str | None = None) -> bool:
+        """Did the pull actually come back with a record about *this* account?"""
+        if not self.bank_keys:
+            return False
+        return (str(account_id) in self.bank_keys
+                or (cif_id is not None and str(cif_id) in self.bank_keys))
 
     def overlay_for(self, account_id: str) -> dict:
         """The identity-only overlay for ``account_id``, or ``{}`` if not covered.
@@ -162,10 +226,11 @@ class BankContext:
     def provenance_for(self, account_id: str) -> dict[str, str]:
         """Per-account family provenance — honest about partial fixture coverage.
 
-        The aggregate :attr:`families` says what the *run* achieved; a single
-        account only actually got substituted data if it is one of the
-        fixture's 160 (or, on a live pull, if the API genuinely answered for
-        it). Every other account reads ``SIMULATED`` for that family
+        The aggregate :attr:`families` says what the *run* achieved: the endpoint
+        was called and answered. A single account only actually got substituted
+        data if it is one of the fixture's 160, or if the pull came back about
+        *it* (:meth:`fetched_for`) — an endpoint answering for somebody else is
+        not evidence about this row. Every other account reads ``SIMULATED`` for that family
         regardless of what the run's summary says, because nothing was
         actually overlaid for it. Only ``identity`` is ever overlaid (see
         :meth:`overlay_for`); the other five non-``filings``/``model``
@@ -179,6 +244,9 @@ class BankContext:
         out: dict[str, str] = {}
         # identity is the only family this module actually overlays a value for
         agg = self.families.get("identity", "SIMULATED")
+        # ... and "the identity APIs answered" is not "they answered about this account".
+        if agg == "BANK_API" and not self.fetched_for(account_id):
+            agg = "FIXTURE" if covered else "SIMULATED"
         out["identity"] = agg if (agg == "BANK_API" or covered) else "SIMULATED"
         for fam in ("exposure", "repayment", "cashflow", "bureau", "profile"):
             out[fam] = "SIMULATED"
@@ -218,9 +286,13 @@ def build_context(data_dir: Path | str, enabled: bool) -> BankContext:
             else:
                 families[fam] = "SIMULATED"
         fell_back = sorted(f for f, s in families.items() if s == "FIXTURE")
+        n_keys = len(_answered_keys(pulled))
         reason = (f"data/bank/pulled.json present; APIs answered: {sorted(answered) or 'none'}."
                   + (f" Families {', '.join(fell_back)} fell back to data/bank/fixture.json."
-                     if fell_back else ""))
+                     if fell_back else "")
+                  + f" Those answers name {n_keys} bank identifier(s) between them; an account"
+                    " row is badged BANK_API only if it is one of them, so a family that is"
+                    " BANK_API for the run can still be SIMULATED for every account here.")
     elif fixture_by_account:
         for fam in FAMILY_APIS:
             families[fam] = "FIXTURE"
@@ -247,7 +319,8 @@ def build_context(data_dir: Path | str, enabled: bool) -> BankContext:
     return BankContext(enabled=True, mode=mode, families=families,
                        fixture_by_account=fixture_by_account, pulled=pulled,
                        provenance_raw=provenance_raw,
-                       fixture_meta=(fixture or {}).get("_meta"), reason=reason)
+                       fixture_meta=(fixture or {}).get("_meta"), reason=reason,
+                       bank_keys=_answered_keys(pulled) if pulled is not None else frozenset())
 
 
 __all__ = ["BankContext", "build_context", "weakest", "FAMILIES", "ALWAYS_SIMULATED",

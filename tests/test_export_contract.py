@@ -58,9 +58,20 @@ def contract_no_bank(internal_payload):
 
 
 @pytest.fixture(scope="module")
-def fixture_bank_ctx():
-    ctx = bank.build_context(REPO_DATA, enabled=True)
-    assert ctx.pulled is None, "expected no data/bank/pulled.json in this checkout"
+def fixture_bank_ctx(tmp_path_factory):
+    """The whole-fixture fallback, isolated from whatever this checkout happens to hold.
+
+    ``data/bank/pulled.json`` is gitignored: absent on a clean clone, present the moment the
+    platform's batch runs an enrichment pass here. These tests are about what ``--bank`` does
+    with the committed fixture, so they build against a directory holding that fixture and
+    nothing else, and mean the same thing on either kind of checkout.
+    """
+    bank_dir = tmp_path_factory.mktemp("fixture-only") / "bank"
+    bank_dir.mkdir()
+    (bank_dir / bank.FIXTURE_NAME).write_bytes(
+        (REPO_DATA / "bank" / bank.FIXTURE_NAME).read_bytes())
+    ctx = bank.build_context(bank_dir.parent, enabled=True)
+    assert ctx.pulled is None
     return ctx
 
 

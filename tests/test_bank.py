@@ -69,11 +69,21 @@ def test_disabled_context_never_overlays_anything():
 # --bank passed, no pulled.json: whole-fixture fallback (this repo's real state today)
 # --------------------------------------------------------------------------- #
 @pytest.fixture(scope="module")
-def fixture_ctx():
-    ctx = bank.build_context(REPO_DATA, enabled=True)
-    # this repo has no live pull captured — assert the fixture-fallback branch is
-    # actually what is under test, so the rest of this module means what it says
-    assert ctx.pulled is None, "expected no data/bank/pulled.json in this checkout"
+def fixture_ctx(tmp_path_factory):
+    """The whole-fixture fallback, isolated from whatever this checkout happens to hold.
+
+    ``data/bank/pulled.json`` is gitignored: absent on a clean clone, present the moment
+    the platform's batch runs an enrichment pass here. Reading ``data/`` directly made
+    this fixture mean one thing before a pull and another after it, so it builds against
+    a directory holding the real, committed ``fixture.json`` and nothing else. The branch
+    under test is then the branch named, on any checkout.
+    """
+    bank_dir = tmp_path_factory.mktemp("fixture-only") / "bank"
+    bank_dir.mkdir()
+    (bank_dir / bank.FIXTURE_NAME).write_bytes(
+        (REPO_DATA / "bank" / bank.FIXTURE_NAME).read_bytes())
+    ctx = bank.build_context(bank_dir.parent, enabled=True)
+    assert ctx.pulled is None
     return ctx
 
 
@@ -218,3 +228,59 @@ def test_no_pull_and_no_fixture_degrades_to_fully_simulated(tmp_path):
     assert all(v == "SIMULATED" for v in ctx.families.values())
     assert ctx.overlay_for("anything") == {}
     assert ctx.provenance_for("anything") == {f: "SIMULATED" for f in bank.FAMILIES}
+
+
+# --------------------------------------------------------------------------- #
+# a live pull answering is not the same as it answering about YOU
+# --------------------------------------------------------------------------- #
+def _pull_naming(account_id: str) -> dict:
+    """A pulled.json whose identity API answered, with one record about ``account_id``."""
+    return dict(apis={"442": dict(provenance="BANK_API", http_status=200, n_records=1,
+                                  records=[dict(customerSummary=dict(acctId=account_id,
+                                                                     customerName="SAMPLE"))])})
+
+
+def test_bank_keys_are_the_ids_the_pull_actually_came_back_with(tmp_path):
+    bank_dir = tmp_path / "bank"
+    bank_dir.mkdir()
+    _write(bank_dir / bank.PULLED_NAME, _pull_naming("SAMPLE-0001"))
+    ctx = bank.build_context(tmp_path, enabled=True)
+    assert ctx.bank_keys == frozenset({"SAMPLE-0001"})
+    assert ctx.fetched_for("SAMPLE-0001") is True
+    assert ctx.fetched_for("MSME00001") is False
+
+
+def test_an_account_the_sandbox_answered_about_reads_bank_api(tmp_path):
+    bank_dir = tmp_path / "bank"
+    bank_dir.mkdir()
+    _write(bank_dir / bank.PULLED_NAME, _pull_naming("SAMPLE-0001"))
+    ctx = bank.build_context(tmp_path, enabled=True)
+    assert ctx.families["identity"] == "BANK_API"          # the run: the call was answered
+    assert ctx.provenance_for("SAMPLE-0001")["identity"] == "BANK_API"
+
+
+def test_an_account_the_sandbox_never_answered_about_is_not_badged_bank_api(tmp_path):
+    """The honesty rule the live enrichment pass forced.
+
+    The sandbox holds a handful of sample accounts. Before this, one answered endpoint
+    stamped ``identity: BANK_API`` on every account in the panel — tens of thousands of
+    generated rows wearing a bank badge because a call about somebody else came back 200.
+    A row is real or it is not, and only the pull's own ids decide which.
+    """
+    bank_dir = tmp_path / "bank"
+    bank_dir.mkdir()
+    _write(bank_dir / bank.PULLED_NAME, _pull_naming("SAMPLE-0001"))
+    _write(bank_dir / bank.FIXTURE_NAME, dict(accounts=[dict(account_id="X00001",
+                                                             cif_id="C1")]))
+    ctx = bank.build_context(tmp_path, enabled=True)
+    # covered by the fixture, but the bank never answered about it -> FIXTURE, not BANK_API
+    assert ctx.provenance_for("X00001")["identity"] == "FIXTURE"
+    # neither fetched nor covered -> SIMULATED, exactly as before any pull existed
+    assert ctx.provenance_for("MSME44000")["identity"] == "SIMULATED"
+
+
+def test_the_real_pull_on_this_checkout_badges_no_panel_account_bank_api():
+    """Whatever is on this checkout, a panel id must never inherit someone else's 200."""
+    ctx = bank.build_context(REPO_DATA, enabled=True)
+    for account_id in (COVERED_ID, UNCOVERED_ID, "MSME00160"):
+        assert ctx.provenance_for(account_id)["identity"] != "BANK_API"
