@@ -185,23 +185,28 @@ generator's own number would be exactly the dishonest move this whole mechanism 
 prevent. `filings` (GST turnover, adverse remarks) is *always* `SIMULATED` — no Atlas API in
 the 25-endpoint catalogue supplies it at all.
 
-**The sandbox itself is a static mock.** Every Atlas endpoint this build has actually reached
-returns one canned response regardless of the request — nothing in this build has ever scored,
-thresholded, or banded a real bank record (`MODEL_CARD.md` §15, "BR-6a").
+**The sandbox itself is a static mock.** Each Atlas endpoint serves its own structured mock
+record — verified on 17 Sep 2026 by calling all 23 readable approved APIs — and serves the same
+one regardless of the request; API 433 is the exception, returning a composite record carrying a
+slice for every API. Either way the data is mock, so a pull is `BANK_API` **with**
+`sandbox_fixture: true`, and nothing in this build has ever scored, thresholded, or banded a real
+bank record (`MODEL_CARD.md` §15, "BR-6a").
 
 **DRISHTi ingests 15 of the 25 requested APIs** (`data/bank/SCHEMA.md`): 391 (loan details),
 402 (overdue/DPD), 404 (demanded vs collected), 441 (drawing power), 442 (CIF exposure, account
 manager), 362 (liens), **433 (product-level rates, no customer id — the first live call with
 zero dependency on a real customer)**, 473 (repayment schedule), 538 (payoff/penal split), 393
 (statement), 365/394 (account/CIF enquiry), 456 (dedupe — the only place GSTIN appears), 408
-(CIBIL, permitted for credit monitoring), 508 (HRMS, for RM roster/branch data). The remaining
+(CIBIL, permitted for credit monitoring), and 508 (HRMS) — **which the bank rejected**, so no
+RM roster or branch data reaches this build from it. The remaining
 10 are SANKET's own surface (AA consent lifecycle, CRM write-back) or 415 (CKYC, subscribed but
 deliberately never scored on).
 
 **API 433's rate is what feeds the cost model.** `effective_rate_pa` (12.75%) and
 `penal_rate_pa` (2.0%) in the threshold cost calculation are tagged `BANK_API` — a real captured
 field from the sandbox's own contract — but every value derived from them carries
-`sandbox_fixture: true`, because the sandbox returns the same canned response to every caller:
+`sandbox_fixture: true`, because the sandbox returns the same mock record to every caller
+whatever the request:
 these are real *field values from the bank's own API contract*, not real *rates for our
 borrowers*. `MODEL_CARD.md` §10.
 
@@ -343,9 +348,10 @@ python3 -m pytest -q                        # unit tests (repo root)
   real Indian MSMEs) is `src/real_model.py`'s independent, frozen July 2026 output, embedded
   verbatim — a separate proof-of-method on a different (real, annual, not monthly) data source,
   never blended into or used to fine-tune the synthetic-panel model this README describes.
-- **The bank sandbox is a static mock, not a live data source.** Every Atlas endpoint this build
-  has reached returns one canned response regardless of the request; nothing here has ever
-  scored, thresholded, or banded a real bank record.
+- **The bank sandbox is a static mock, not a live data source.** Each Atlas endpoint returns its
+  own structured mock record, and returns the same one regardless of the request (API 433 is the
+  exception: a composite record with a slice for every API). Nothing here has ever scored,
+  thresholded, or banded a real bank record.
 - **Enumeration — finding a real account without already knowing one — is not proven live.**
   API 404's `selRangeLoanAcctId` range plus paging is the leading candidate route
   (`data/bank/SCHEMA.md`), but as of this writing it has not been exercised against a live,
