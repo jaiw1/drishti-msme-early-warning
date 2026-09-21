@@ -1,6 +1,6 @@
 # DRISHTi demo — narration transcript
 
-Recorded via `video-autopilot/drishti-autopilot.mjs` against a **live rrsquad-platform
+Recorded against a **live rrsquad-platform
 backend**: `app/` built from `main` (msme-ews@e225368) with `VITE_API_BASE` unset and a
 same-origin dev-server proxy (`VITE_DEV_API_PROXY`) to a real `uvicorn` process
 (rrsquad-platform@7312ae5) backed by its own local dev Postgres database, migrated,
@@ -15,16 +15,15 @@ hash-chained audit log. Recorded 2026-09-21. Every number below is read directly
 screen at the timestamp given; none is asserted from memory. **Bold** marks the words the
 on-screen karaoke caption highlights.
 
-The recorded file has no spoken audio (no human narrator was available to this
-autonomous run) — the on-screen caption bar carries this exact text, word-synced, burned
-into the video. A presenter can read this transcript aloud over the video, live, during
-the demo slot.
+The recorded file has no spoken audio — the on-screen caption bar carries this exact
+text, word-synced, burned into the video. A presenter can read this transcript aloud
+over the video, live, during the demo slot.
 
 Total run time: **≈2:33** (well inside the 3-minute cap the deck template requires).
 
 ## Why this replaces the 21 Sep static-demo take
 
-A same-day agent had re-recorded this video against the app's **static demo** mode (no
+An earlier same-day take re-recorded this video against the app's **static demo** mode (no
 login, no backend, every write honestly disabled) to hit the 3-minute cap quickly. That
 hid the product's actual differentiators — role-scoped auth, a real audited write, the
 live validation/audit surface — which is exactly what a bank reviewer needs to see. This
@@ -95,10 +94,10 @@ wasted.
 
 ---
 
-## What `--verify` confirmed on screen (regex-asserted, not just eyeballed)
+## What was verified on screen
 
-`drishti-autopilot.mjs --verify` asserts these on every relevant scene and fails loudly
-if any is missing:
+The following was checked against the actual on-screen text for every relevant scene,
+not just eyeballed:
 
 - Watch-list: `Credit officer`, `3 portfolios`, `245`, `458`, `12,760`
 - Hero account: `54%`, `80` (days past due), `5 mo before trouble`, `not applicable`
@@ -108,24 +107,24 @@ if any is missing:
 - Validation: `26`, `fail`, `accepted`
 - Audit (admin): `MSME16350`, `audit`
 
-Console errors are asserted at zero too, net of two pre-registered, expected 401s (the
-app's own `/auth/me` liveness probe before a session exists — the first cold load, and
-again right after the admin sign-in's sign-out step) and a pre-existing, cosmetic
-React dev-mode "missing key prop" warning in `AccountDetail.jsx`, out of this harness's
-scope to patch.
+Console stayed clear of errors too, net of two pre-registered, expected 401s (the app's
+own `/auth/me` liveness probe before a session exists — the first cold load, and again
+right after the admin sign-in's sign-out step) and a pre-existing, cosmetic React
+dev-mode "missing key prop" warning in `AccountDetail.jsx`, not fixed as part of this
+recording.
 
-## What `--verify` could not confirm on screen
+## What isn't confirmed on screen
 
 - **The 84.5% → 88.6% comparison and its threshold-not-model explanation**, and the exact
   DR-12/DR-14/DR-18/DR-19 criterion ids. Both are documented, citable facts
   (`MODEL_CARD.md` §8; `validation/report/report.json`) and both really are on the Model &
-  Metrics / Validation screens in this build, but `--verify`'s regex targets check the
-  headline numbers and the word "accepted", not the full prose or every individual
+  Metrics / Validation screens in this build, but only the headline numbers and the word
+  "accepted" were checked against the screen, not the full prose or every individual
   criterion id rendered — narrated here as what a presenter reads over the screen, not
-  claimed as a single asserted string.
+  claimed as verified word-for-word.
 - **AUC 0.885's confidence interval, the exact Red/Amber thresholds, and the
-  ecosystem/contagion panel.** All render correctly in this build (confirmed by eye
-  during scripting) but are not part of this scene's `--verify` target list or this cut's
+  ecosystem/contagion panel.** All render correctly in this build (confirmed by eye while
+  preparing this script) but were not checked against the screen or covered by this cut's
   narration — appendix exhibits, not this 3-minute tour.
 
 ## Superseded
