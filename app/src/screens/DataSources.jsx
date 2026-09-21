@@ -11,9 +11,16 @@
 // API" and "these are the bank's numbers" are different claims, and a row that was answered
 // by the sandbox says **bank sandbox (mock, static)** rather than borrowing the credibility
 // of a live pull.
+//
+// A second, newer distinction: `served_from_cache`. A night tonight's call failed, this
+// platform can serve the last good response the same request got on an earlier night
+// (`app/atlas/lastgood.py`). That row says **Bank API · last good pull** — the bytes are
+// still the bank's, `last_success_at` says when they really arrived, and it is never
+// counted as a live pull. `last_success_at` and `records` themselves are untouched by any
+// of this: they stay the live figures the docstring in `app/routers/meta.py` says they are.
 
 import {
-  Activity, CircleCheck, CircleSlash, Clock, Database, Plug, TriangleAlert,
+  Activity, CircleCheck, CircleSlash, Clock, Database, History, Plug, TriangleAlert,
 } from 'lucide-react'
 import AppShell from '../components/AppShell'
 import DataTable from '../components/DataTable'
@@ -30,13 +37,16 @@ export const SYNC_STATE = {
   never: { label: 'Never called', icon: CircleSlash, className: 'text-slate-600', row: '' },
   pending: { label: 'Subscription pending', icon: Clock, className: 'text-rag-ambertx', row: 'bg-amber-50/50' },
   ok: { label: 'OK', icon: CircleCheck, className: 'text-rag-greentx', row: '' },
+  cached: { label: 'Bank API · last good pull', icon: History, className: 'text-idbi-green', row: '' },
   sandbox: { label: 'Bank sandbox (mock, static)', icon: Database, className: 'text-rag-ambertx', row: '' },
   error: { label: 'Error', icon: TriangleAlert, className: 'text-rag-redtx', row: 'bg-red-50/60' },
 }
 
 /**
- * One row's state, from the five fields `metaSync` publishes.
- * Order matters: an error is an error even if the subscription is also pending.
+ * One row's state, from the fields `metaSync` publishes.
+ * Order matters: an error is an error even if the subscription is also pending, and a
+ * cached reuse is checked before the sandbox/live split — `served_from_cache` and
+ * `last_mode: 'cached'` are their own disclosure, not another flavour of sandbox.
  */
 export function syncState(row) {
   const status = String(row?.last_status ?? '').toLowerCase()
@@ -46,6 +56,7 @@ export function syncState(row) {
     if (subscription && subscription !== 'approved' && subscription !== 'active') return 'pending'
     return 'never'
   }
+  if (row?.served_from_cache || row?.last_mode === 'cached') return 'cached'
   if (row?.last_mode === 'sandbox_fixture' || row?.sandbox_fixture === true) return 'sandbox'
   if (row?.live === false) return 'sandbox'
   return 'ok'
@@ -219,6 +230,18 @@ export default function DataSources() {
                 {meta.gateway.reason && <> — {meta.gateway.reason}</>}
               </p>
             )}
+            {provenance.data?.cached?.apis?.length > 0 && (
+              <p className="mt-2 flex items-center gap-1.5 text-xs leading-relaxed text-slate-600">
+                <History size={12} className="shrink-0 text-idbi-green" aria-hidden="true" />
+                <span>
+                  <b>{provenance.data.cached.apis.length}</b> API{provenance.data.cached.apis.length === 1 ? '' : 's'}{' '}
+                  answered tonight from a cached last-good pull
+                  {provenance.data.cached.last_reused_at && (
+                    <>, most recently {new Date(provenance.data.cached.last_reused_at).toLocaleString('en-IN')}</>
+                  )}. The bytes are the bank’s; they are not counted as live.
+                </span>
+              </p>
+            )}
           </section>
 
           <Runs runs={meta.runs} />
@@ -281,6 +304,11 @@ export default function DataSources() {
                           <td className={`px-3 py-2 font-semibold ${spec.className}`}>
                             <span className="inline-flex items-center gap-1.5">
                               <Icon size={14} aria-hidden="true" /> {spec.label}
+                              {key === 'cached' && r.last_success_at && (
+                                <span className="font-normal text-slate-600">
+                                  {' '}({new Date(r.last_success_at).toLocaleString('en-IN')})
+                                </span>
+                              )}
                             </span>
                             {(r.error || r.note) && (
                               <span className="ml-1 font-normal text-slate-600">— {r.error || r.note}</span>
@@ -311,7 +339,7 @@ export default function DataSources() {
                       {Object.entries(entry.families || {}).map(([family, source]) => (
                         <li key={family} className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">
                           <span className="font-semibold">{family}</span>
-                          <SourceBadge {...badgeForFamilySource(source)} />
+                          <SourceBadge {...badgeForFamilySource(source, { cached: (entry.cached_families || []).includes(family) })} />
                         </li>
                       ))}
                     </ul>

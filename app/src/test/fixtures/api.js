@@ -364,6 +364,10 @@ export const provenanceEnvelope = (overrides = {}) => envelope({
   live_apis: [],
   live_records: 0,
   products: { drishti: { model_run_id: 'x', provenance_mode: 'fixture', families: PROVENANCE, status: 'published' } },
+  // Calls this platform served from an earlier night's answer because tonight's call
+  // failed (app/atlas/lastgood.py). Empty by default — most fixtures show a clean run —
+  // so a test that wants the disclosure line overrides just this block.
+  cached: { apis: [], calls: 0, last_reused_at: null, note: null },
   freshness: {
     drishti: {
       model_run_id: 'x', published_at: '2026-09-21T17:45:05Z', generated_at: '2026-09-21T15:49:29Z',

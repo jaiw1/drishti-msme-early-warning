@@ -7,13 +7,21 @@
 // The sandbox distinction matters: IDBI's Atlas sandbox answers real endpoints with one
 // canned blob shared across APIs, so "we called the bank's API" and "these are the bank's
 // numbers" are different claims. BANK_API+sandbox_fixture says the first without the second.
+//
+// A third distinction rides beside it: a night the sandbox call failed, this platform can
+// serve the last good answer that same request got on an earlier night
+// (`app/atlas/lastgood.py`). The bytes are still the bank's — the contract's provenance
+// enum stays closed at BANK_API|SIMULATED|FIXTURE and never gains a fourth value — but the
+// screen owes the reader the fact that tonight's call did not happen. BANK_API_CACHED is
+// this component's own vocabulary for that case, never a value the wire sends.
 
 import { useId, useState } from 'react'
-import { Beaker, CircleSlash, Database, FlaskConical, Landmark } from 'lucide-react'
+import { Beaker, CircleSlash, Database, FlaskConical, History, Landmark } from 'lucide-react'
 
 export const SOURCE = {
   BANK_API: 'BANK_API',
   BANK_API_SANDBOX: 'BANK_API+sandbox_fixture',
+  BANK_API_CACHED: 'BANK_API+cached',
   SIMULATED: 'SIMULATED',
   FIXTURE: 'FIXTURE',
   NOT_COLLECTED: 'NOT_COLLECTED',
@@ -32,6 +40,13 @@ export const SOURCES = {
     className: 'bg-idbi-green/10 text-idbi-green border-idbi-green/30',
     description:
       'Fetched from a real IDBI Atlas endpoint, but the sandbox returns canned data shared across APIs. The call and the shape are real; the values are not the bank’s production numbers.',
+  },
+  [SOURCE.BANK_API_CACHED]: {
+    label: 'Bank API · last good pull',
+    icon: History,
+    className: 'bg-idbi-green/10 text-idbi-green border-idbi-green/30',
+    description:
+      'The call tonight failed, so this is the last good response IDBI Atlas gave for the same request. The bytes are the bank’s; they are not from tonight’s run.',
   },
   [SOURCE.SIMULATED]: {
     label: 'Simulated',
@@ -56,13 +71,18 @@ export const SOURCES = {
   },
 }
 
-/** Accepts `('BANK_API', {sandbox:true})`, `'BANK_API+sandbox_fixture'`, or lower case. */
-export function normaliseSource(value, sandbox = false) {
+/**
+ * Accepts `('BANK_API', {sandbox:true})`, `'BANK_API+sandbox_fixture'`, `'BANK_API+cached'`,
+ * or lower case. `cached` wins over `sandbox` when both are set: a reused answer is the
+ * more specific — and more recent — disclosure.
+ */
+export function normaliseSource(value, sandbox = false, cached = false) {
   const raw = String(value ?? '').trim()
   if (!raw) return SOURCE.NOT_COLLECTED
   const upper = raw.toUpperCase().replace(/\s+/g, '')
+  if (upper === 'BANK_API+CACHED' || upper === 'BANK_API_CACHED') return SOURCE.BANK_API_CACHED
   if (upper === 'BANK_API+SANDBOX_FIXTURE' || upper === 'BANK_API_SANDBOX') return SOURCE.BANK_API_SANDBOX
-  if (upper === 'BANK_API') return sandbox ? SOURCE.BANK_API_SANDBOX : SOURCE.BANK_API
+  if (upper === 'BANK_API') return cached ? SOURCE.BANK_API_CACHED : sandbox ? SOURCE.BANK_API_SANDBOX : SOURCE.BANK_API
   if (upper === 'SIMULATED') return SOURCE.SIMULATED
   if (upper === 'FIXTURE') return SOURCE.FIXTURE
   if (upper === 'NOT_COLLECTED' || upper === 'NOTCOLLECTED') return SOURCE.NOT_COLLECTED
@@ -70,13 +90,14 @@ export function normaliseSource(value, sandbox = false) {
 }
 
 /**
- * @param {string} source   one of SOURCE, or 'BANK_API' with `sandbox`
+ * @param {string} source   one of SOURCE, or 'BANK_API' with `sandbox` and/or `cached`
  * @param {boolean} sandbox the Atlas sandbox caveat applies
+ * @param {boolean} [cached] tonight's call failed; this is a reused last-good answer
  * @param {string} [detail] extra sentence appended to the tooltip (e.g. "API 402, pulled 16 Sep")
  * @param {boolean} [iconOnly] compact form for dense tables
  */
-export default function SourceBadge({ source, sandbox = false, detail, iconOnly = false, className = '' }) {
-  const key = normaliseSource(source, sandbox)
+export default function SourceBadge({ source, sandbox = false, cached = false, detail, iconOnly = false, className = '' }) {
+  const key = normaliseSource(source, sandbox, cached)
   const spec = SOURCES[key]
   const Icon = spec.icon
   const tooltipId = useId()

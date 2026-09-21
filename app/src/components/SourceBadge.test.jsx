@@ -18,9 +18,19 @@ describe('normaliseSource', () => {
     expect(normaliseSource(value, sandbox)).toBe(expected)
   })
 
-  it('has copy for all five provenance states the plan requires', () => {
+  it.each([
+    ['BANK_API', false, false, SOURCE.BANK_API],
+    ['BANK_API', false, true, SOURCE.BANK_API_CACHED],
+    ['BANK_API', true, true, SOURCE.BANK_API_CACHED],
+    ['BANK_API+cached', false, false, SOURCE.BANK_API_CACHED],
+    ['bank_api_cached', false, false, SOURCE.BANK_API_CACHED],
+  ])('%s (sandbox=%s, cached=%s) -> %s', (value, sandbox, cached, expected) => {
+    expect(normaliseSource(value, sandbox, cached)).toBe(expected)
+  })
+
+  it('has copy for all six provenance states the plan requires', () => {
     expect(Object.keys(SOURCES)).toEqual([
-      'BANK_API', 'BANK_API+sandbox_fixture', 'SIMULATED', 'FIXTURE', 'NOT_COLLECTED',
+      'BANK_API', 'BANK_API+sandbox_fixture', 'BANK_API+cached', 'SIMULATED', 'FIXTURE', 'NOT_COLLECTED',
     ])
     for (const spec of Object.values(SOURCES)) {
       expect(spec.description.length).toBeGreaterThan(30)
@@ -41,6 +51,12 @@ describe('SourceBadge', () => {
 
     rerender(<SourceBadge source="BANK_API" sandbox />)
     expect(screen.getByRole('button')).toHaveTextContent('Bank API · sandbox')
+  })
+
+  it('renders the cached-reuse caveat distinctly, and never as "not collected"', () => {
+    render(<SourceBadge source="BANK_API" cached />)
+    expect(screen.getByRole('button')).toHaveTextContent('Bank API · last good pull')
+    expect(screen.getByRole('button')).not.toHaveTextContent('Not collected')
   })
 
   it('describes itself with a tooltip that is hidden until hover or focus', async () => {

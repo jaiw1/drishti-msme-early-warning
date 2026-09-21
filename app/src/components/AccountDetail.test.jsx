@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import AccountDetail, { arrearsLead, toSeries } from './AccountDetail'
 import { renderScreen } from '../test/render'
 import {
-  B, ROW_WITHOUT_LIMIT, ROW_WITH_LIMIT, apiRoutes, envelope, fail, memo, mockApi, ok,
+  B, ROW_WITHOUT_LIMIT, ROW_WITH_LIMIT, account, apiRoutes, envelope, fail, memo, mockApi, ok,
 } from '../test/fixtures/api'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -113,6 +113,39 @@ describe('Account detail', () => {
 
   it('says the band moved when the published one differs', async () => {
     mockApi(apiRoutes(), { vi })
+    render(ROW_WITH_LIMIT.account_id)
+    expect(await screen.findByText(/A manager has moved a threshold since/)).toBeInTheDocument()
+  })
+
+  it('says nothing about a live re-band when the account carries no bucket_source', async () => {
+    // ROW_WITH_LIMIT's fixture band still differs from its published one (the mismatch
+    // banner above), but that is a different fact from `bucket_source` — the two are
+    // independent signals and the hint below must not appear on the mismatch alone.
+    mockApi(apiRoutes(), { vi })
+    render(ROW_WITH_LIMIT.account_id)
+    await screen.findByText(/A manager has moved a threshold since/)
+    expect(screen.queryByText(/Live re-band/)).not.toBeInTheDocument()
+  })
+
+  it('shows a live re-band hint when the band was recomputed against a moved threshold', async () => {
+    const payload = account(ROW_WITH_LIMIT)
+    payload.data.scores.bucket_source = 'live'
+    mockApi(apiRoutes({ [`${B}/drishti/account/${ROW_WITH_LIMIT.account_id}`]: ok(payload) }), { vi })
+    render(ROW_WITH_LIMIT.account_id)
+    expect(await screen.findByText(/Live re-band · threshold change in force/)).toBeInTheDocument()
+  })
+
+  it('falls back to the timeline’s published_bucket when the account payload has none', async () => {
+    const accountPayload = account(ROW_WITH_LIMIT)
+    accountPayload.data.scores.published_bucket = null
+    const timelinePayload = envelope(
+      [{ date: '2026-09', pd: ROW_WITH_LIMIT.pd, pd_smooth: ROW_WITH_LIMIT.pd_smooth, bucket: ROW_WITH_LIMIT.bucket, utilisation: null, inflow: null, dpd: null }],
+      { total: 1, published_bucket: 'amber' },
+    )
+    mockApi(apiRoutes({
+      [`${B}/drishti/account/${ROW_WITH_LIMIT.account_id}`]: ok(accountPayload),
+      [`${B}/drishti/account/${ROW_WITH_LIMIT.account_id}/timeline`]: ok(timelinePayload),
+    }), { vi })
     render(ROW_WITH_LIMIT.account_id)
     expect(await screen.findByText(/A manager has moved a threshold since/)).toBeInTheDocument()
   })

@@ -27,6 +27,11 @@ describe('syncState', () => {
     expect(syncState({ calls: 0, subscription_status: 'pending', error: 'timeout' })).toBe('error')
     expect(syncState({ calls: 2, last_status: '502' })).toBe('error')
   })
+  it('calls a reused answer cached, not OK or sandbox', () => {
+    // "the bank said this" and "the bank said this last Tuesday" are different facts.
+    expect(syncState({ calls: 4, last_status: '200', served_from_cache: true })).toBe('cached')
+    expect(syncState({ calls: 4, last_status: '200', last_mode: 'cached' })).toBe('cached')
+  })
 })
 
 describe('Data sources & sync', () => {
@@ -99,6 +104,68 @@ describe('Data sources & sync', () => {
     }))
     render({ mode: 'static' })
     expect(await screen.findByText('This bundle has no backend to ask')).toBeInTheDocument()
+  })
+})
+
+describe('Data sources & sync — cached last-good pulls', () => {
+  const cachedSyncRow = {
+    api_id: '442', label: 'CIF exposure and rating', used_by: ['drishti'], calls: 6, records: 240,
+    last_status: '200', last_mode: 'cached', last_pulled_at: '2026-09-21T02:00:00Z',
+    last_success_at: '2026-09-16T02:00:00Z', subscription_status: 'approved',
+    endpoint: '/exposure', latency_ms: 190, error: null, note: null, live: false,
+    served_from_cache: true, cached_calls: 2,
+  }
+
+  it('renders a reused endpoint as "Bank API · last good pull", dated by last_success_at', async () => {
+    mockApi(apiRoutes({ [`${B}/meta/sync`]: ok(envelope([cachedSyncRow], { total: 1, runs: {}, real_data: false })) }), { vi })
+    render()
+    const table = await screen.findByRole('table', { name: /bank APIs/i })
+    const row = within(table).getByRole('rowheader', { name: '442' }).closest('tr')
+    const statusCell = row.querySelectorAll('td')[row.querySelectorAll('td').length - 1]
+    expect(statusCell).toHaveTextContent('Bank API · last good pull')
+    // Dated by last_success_at (16 Sep 2026), not last_pulled_at (21 Sep 2026).
+    expect(statusCell.textContent).toContain(new Date(cachedSyncRow.last_success_at).toLocaleString('en-IN'))
+    // Never mistaken for a live "OK" pull.
+    expect(statusCell).not.toHaveTextContent(/\bOK\b/)
+  })
+
+  it('adds a disclosure-strip line when the platform reused a cached answer', async () => {
+    mockApi(apiRoutes({
+      [`${B}/meta/provenance`]: ok(provenanceEnvelope({
+        cached: { apis: ['442', '408'], calls: 5, last_reused_at: '2026-09-21T02:00:00Z', note: 'reused' },
+      })),
+    }), { vi })
+    render()
+    const strip = (await screen.findByText(/No screen in this product is showing/)).closest('section')
+    expect(strip).toHaveTextContent(/2 APIs answered tonight from a cached last-good pull/)
+  })
+
+  it('says nothing about a cached reuse when none happened', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    const strip = (await screen.findByText(/No screen in this product is showing/)).closest('section')
+    expect(strip).not.toHaveTextContent(/cached last-good pull/)
+  })
+
+  it('badges a family as the cached-reuse variant in the frozen bundle when cached_families names it', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      if (String(url).endsWith('demo_data.json')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            meta: { provenance: { cashflow: 'BANK_API', model: 'BANK_API' }, cached_families: ['cashflow', 'model'] },
+            portfolio_summary: {}, portfolio: [], timelines: {}, memos: {},
+          }),
+        }
+      }
+      throw new Error(`unexpected fetch ${url}`)
+    }))
+    render({ mode: 'static' })
+    const heading = await screen.findByText('Provenance, by data family')
+    const section = heading.closest('section')
+    expect(within(section).getAllByRole('button', { name: 'Bank API · last good pull' }).length).toBeGreaterThan(0)
   })
 })
 

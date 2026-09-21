@@ -323,6 +323,16 @@ export default function AccountDetail({ accountId, live = true, thresholds: fall
   const rag = RAG[scores.bucket] || RAG.green
   const series = useMemo(() => toSeries(timeline.data, channels), [timeline.data, channels])
   const refMonth = timeline.meta?.reference_month || null
+  // The account's own published band, falling back to the timeline envelope's copy of it —
+  // the two are the same fact, published on two payloads, and a screen that only ever
+  // fetched the timeline should not have to treat the disclosure as missing.
+  const publishedBucket = scores.published_bucket ?? timeline.meta?.published_bucket ?? null
+  // `bucket_source` is `live` exactly when the band above was re-derived against thresholds
+  // a manager has moved since the run was published, rather than read off the frozen
+  // column the export shipped. That is true even when the recomputed band happens to match
+  // the published one for THIS account — which the published/bucket mismatch check below
+  // cannot see — so the hint is its own, independent signal.
+  const liveRebanded = scores.bucket_source === 'live'
   const utilState = renderField(rec?.utilisation, 'utilisation', channels, (v) => pct(v, 0))
   const hasUtil = series.some((p) => p.util !== null)
   const hasInflow = series.some((p) => p.inflowIdx !== null)
@@ -364,10 +374,15 @@ export default function AccountDetail({ accountId, live = true, thresholds: fall
               <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-600">12-month default probability</div>
             </div>
             <div className="min-w-0 flex-1 space-y-2">
-              {scores.published_bucket && scores.published_bucket !== scores.bucket && (
+              {liveRebanded && (
+                <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-rag-ambertx">
+                  Live re-band · threshold change in force
+                </span>
+              )}
+              {publishedBucket && publishedBucket !== scores.bucket && (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-rag-ambertx">
                   Band is <b>{scores.bucket}</b> under the thresholds in force; the model run published
-                  <b> {scores.published_bucket}</b>. A manager has moved a threshold since — the score is unchanged.
+                  <b> {publishedBucket}</b>. A manager has moved a threshold since — the score is unchanged.
                 </p>
               )}
               {scores.bucket === 'green' ? (

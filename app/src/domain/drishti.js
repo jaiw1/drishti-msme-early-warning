@@ -269,6 +269,11 @@ export async function loadProvenance({ live, signal } = {}) {
     return { data, meta: meta || {}, source: SOURCE_KIND.API }
   }
   const snapshot = await loadSnapshot(signal)
+  // `cached_families` is `provenance.json`'s own name for "this family's bank data is
+  // entirely a reuse of an earlier night's pull" (batch/enrich.py). The bundled export can
+  // carry it at the top of `meta`, or nested under `meta.sandbox_sync` — either is read,
+  // and an absent field is simply an empty list, which badges nothing as cached.
+  const cachedFamilies = snapshot.meta?.cached_families || snapshot.meta?.sandbox_sync?.cached_families || []
   return {
     data: {
       real_data: false,
@@ -280,6 +285,7 @@ export async function loadProvenance({ live, signal } = {}) {
           provenance_mode: 'snapshot',
           generated_from: 'app/public/demo_data.json',
           families: snapshot.meta?.provenance || null,
+          cached_families: cachedFamilies,
           status: 'frozen_bundle',
         },
       },

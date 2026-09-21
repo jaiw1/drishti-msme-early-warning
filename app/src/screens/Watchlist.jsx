@@ -161,6 +161,14 @@ export default function Watchlist() {
         <Loading label="Loading the watch-list…" />
       ) : (
         <>
+          {listing.meta?.bucket_source === 'live' && (
+            <p className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-semibold leading-relaxed text-rag-ambertx">
+              <Info size={14} className="shrink-0" aria-hidden="true" />
+              Live re-band · threshold change in force — the bands below are recomputed against the thresholds a
+              manager has moved since this run was published, not the run’s own published book.
+            </p>
+          )}
+
           {overview.data?.summary && <Kpis summary={overview.data.summary} metrics={overview.data.metrics} />}
 
           <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

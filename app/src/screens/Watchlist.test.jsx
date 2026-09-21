@@ -133,6 +133,21 @@ describe('Watch-list', () => {
   })
 })
 
+describe('Watch-list — live re-band', () => {
+  it('says nothing about a live re-band when the run’s own published book is in force', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    await settled()
+    expect(screen.queryByText(/Live re-band/)).not.toBeInTheDocument()
+  })
+
+  it('flags a live re-band when a manager has moved a threshold since the run published', async () => {
+    mockApi(apiRoutes({ [`${B}/drishti/portfolio`]: ok(portfolio(undefined, { bucket_source: 'live' })) }), { vi })
+    render()
+    expect(await screen.findByText(/Live re-band · threshold change in force/)).toBeInTheDocument()
+  })
+})
+
 describe('Watch-list — counting honestly', () => {
   it('describes the server’s page when no client filter is on', async () => {
     mockApi(apiRoutes(), { vi })
