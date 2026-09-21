@@ -232,11 +232,34 @@ a second valid reading.** Its operating point was chosen by reading the future o
 very book it is measured on (§6), so its precision, missed-NPA share, workload and band
 monotonicity are not an untouched evaluation of that point. The right column is the same model
 and the same held-out book, with the thresholds and the calibrator fitted on a borrower-disjoint
-policy fold and frozen first. Precision went **up** (88.6% vs 84.5%) and missed-NPA **down**
-(16.1% vs 17.6%) — the honest measurement is not the pessimistic one here, which is worth saying
-plainly: the point of the change is that the number now means what it says, not that it moved in
-a flattering direction. AUC fell 0.902 → 0.885, which is the cost of training on ~49% of
-accounts instead of ~70% so the policy fold could exist.
+policy fold and frozen first.
+
+**Why Red precision rose 84.5% → 88.6%, and why that is NOT evidence the model improved.**
+The two figures are measured at different operating points, so they are not comparable as they
+stand. Red now starts at **0.3437** instead of **0.2720**: a higher bar flags fewer accounts
+(283 → 245 Red) and the ones it still flags are the riskiest, which raises precision
+arithmetically whatever the model does. Holding the thresholds fixed separates the two effects
+on the shipped book:
+
+| book | Red threshold | Red n | Red precision @8m |
+|---|---|---|---|
+| old model, old thresholds | 0.2720 | 283 | 84.5% [79.8–88.2] (239/283) |
+| **new** model, **old** thresholds | 0.2720 | 288 | **82.3% [77.5–86.3]** (237/288) |
+| new model, new thresholds (**shipped**) | 0.3437 | 245 | 88.6% [84.0–92.0] (217/245) |
+
+So the model/fold change on its own moved precision **down** 2.2pp (84.5 → 82.3), consistent
+with AUC falling 0.902 → 0.885 from training on ~49% of accounts instead of ~70% so the policy
+fold could exist. The entire +4.1pp headline gain, and more, is the threshold moving up
+(82.3 → 88.6). Read the headline as "this is what the frozen policy delivered", never as "the
+model got better" — it did not. What did improve is that the number is now measured at an
+operating point the book had no part in choosing.
+
+Missed-NPA also fell (17.6% → 16.1%) despite Red being stricter, because Amber widened
+(310 → 458) and `missed_npa_share` counts NPAs left in **Green**; total workload rose 4.7% →
+5.5% of the book, which is the real price of that.
+
+Every figure in the table above is re-derivable from `data/demo_data.json` by re-banding
+`decision_score` at the two threshold pairs — nothing here is a second model run.
 
 **The headline, derived and asserted in-script (`assert_honesty`), never typed:**
 > "88.6% of Red-flagged accounts went NPA within 8 months (95% CI 84.0%–92.0%, n=245)" — 45k, shipped.

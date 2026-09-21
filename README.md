@@ -69,6 +69,14 @@ These are measured on a held-out book whose outcomes played no part in choosing 
 thresholds — see "Thresholds and cost model". The previous build's 84.5% / n=283 figure was
 measured at an operating point selected on that same book, and is superseded, not corrected.
 
+**The rise from 84.5% to 88.6% is not the model getting better.** The two numbers sit at
+different operating points: Red now starts at 0.3437 rather than 0.2720, so fewer accounts are
+flagged Red (283 → 245) and the survivors are the riskiest, which lifts precision arithmetically.
+Re-banding the *new* book at the *old* thresholds gives **82.3%** (237/288) — i.e. the model and
+fold change on their own moved precision **down** 2.2pp, in line with AUC falling 0.902 → 0.885
+(training on ~49% of accounts instead of ~70% so a policy fold could exist). The whole headline
+gain is the threshold move. `MODEL_CARD.md` §8 carries the three-row decomposition.
+
 **Why not accuracy.** A model that flagged nothing at all would score 97.3% raw accuracy,
 because only 2.7% of the book reaches NPA within 8 months — that figure tracks the base rate,
 not the model. Raw accuracy (98.8%) is carried in the export *for contrast, never as the
