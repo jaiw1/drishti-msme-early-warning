@@ -1,0 +1,351 @@
+{
+ "experiment": "disclosed_failures",
+ "artefact": {
+  "policy_version": "drishti-policy-2.0",
+  "split_seed": 7,
+  "policy_fold_fraction": 0.3,
+  "smooth_window": 4,
+  "reference_month_idx": 24,
+  "policy_month_idx": 24,
+  "horizon_months": 8,
+  "panel": "data/msme_loan_panel.csv",
+  "panel_sha256": "7e0e3ab0855a25d0c3569f6911b76c8889458fc69eece9f4e297eacec1809332",
+  "panel_rows": 2039678,
+  "panel_accounts": 45000,
+  "n_fit_accounts": 22050,
+  "n_policy_accounts": 9450,
+  "n_test_accounts": 13500,
+  "n_fit_rows_used": 762376,
+  "eligibility": "labelable == 1",
+  "thresholds": {
+   "amber": 0.069298,
+   "red": 0.343723,
+   "applied": "cost_minimising"
+  },
+  "shipped_thresholds": {
+   "amber": 0.069298,
+   "red": 0.343723
+  },
+  "reproduces_shipped_thresholds": true,
+  "versions": {
+   "lightgbm": "4.6.0",
+   "scikit_learn": "1.8.0",
+   "numpy": "2.4.4",
+   "pandas": "3.0.2"
+  },
+  "note": "Trained by validation/experiments/artefact.py with the exporter's own CAT/DROP/split/hyperparameters, imported rather than restated. `reproduces_shipped_thresholds` records whether this fit lands on the same operating point the committed export shipped; a False there means the two have diverged and every experiment below is describing a different model from the one in the cockpit."
+ },
+ "grades_nothing": "No criteria.yaml band is read or written here. DR-12, DR-14, DR-18 and DR-19 remain failures on the pre-registered arithmetic; this explains what they are, it does not tune them away.",
+ "a_decile_stability": {
+  "criterion": "DR-12",
+  "question": "Is the decile reversal a material failure, or sparse-cell sampling noise?",
+  "observed_literal": 0.8889,
+  "observed_ci_aware": 1.0,
+  "band": 0.9,
+  "bootstrap": {
+   "n": 400,
+   "resampled": "accounts, with replacement",
+   "literal_mean": 0.8692,
+   "literal_p05": 0.7778,
+   "literal_p95": 1.0,
+   "literal_range": [
+    0.6667,
+    1.0
+   ],
+   "literal_share_passing": 0.1125,
+   "ci_aware_mean": 0.9942,
+   "ci_aware_share_passing": 0.9475
+  },
+  "deciles": [
+   {
+    "decile": 1,
+    "n": 46761,
+    "bad_rate": 0.001,
+    "ci": [
+     0.0007,
+     0.0013
+    ]
+   },
+   {
+    "decile": 2,
+    "n": 46762,
+    "bad_rate": 0.0015,
+    "ci": [
+     0.0012,
+     0.0019
+    ]
+   },
+   {
+    "decile": 3,
+    "n": 46762,
+    "bad_rate": 0.0025,
+    "ci": [
+     0.0021,
+     0.003
+    ]
+   },
+   {
+    "decile": 4,
+    "n": 46761,
+    "bad_rate": 0.003,
+    "ci": [
+     0.0025,
+     0.0035
+    ]
+   },
+   {
+    "decile": 5,
+    "n": 46762,
+    "bad_rate": 0.0028,
+    "ci": [
+     0.0023,
+     0.0033
+    ]
+   },
+   {
+    "decile": 6,
+    "n": 46762,
+    "bad_rate": 0.0029,
+    "ci": [
+     0.0025,
+     0.0034
+    ]
+   },
+   {
+    "decile": 7,
+    "n": 46761,
+    "bad_rate": 0.0036,
+    "ci": [
+     0.0031,
+     0.0042
+    ]
+   },
+   {
+    "decile": 8,
+    "n": 46762,
+    "bad_rate": 0.0048,
+    "ci": [
+     0.0042,
+     0.0055
+    ]
+   },
+   {
+    "decile": 9,
+    "n": 46762,
+    "bad_rate": 0.0071,
+    "ci": [
+     0.0064,
+     0.0079
+    ]
+   },
+   {
+    "decile": 10,
+    "n": 46762,
+    "bad_rate": 0.2017,
+    "ci": [
+     0.198,
+     0.2053
+    ]
+   }
+  ],
+  "reading": "The literal statistic swings across resamples of the SAME model on the SAME book, which is the signature of a statistic dominated by sampling rather than by ranking. The CI-aware variant \u2014 which counts a step down only when the two deciles' Wilson intervals are disjoint \u2014 is stable and passes. DR-12 as written measures how finely the deciles happen to split a book where nearly all realised risk sits in the top tenth; it is not evidence that risk is mis-ranked. It is still reported as a failure, because it was pre-registered as written."
+ },
+ "b_cohort_aging": {
+  "criterion": "DR-14",
+  "question": "Is max feature CSI 3.63 a population change, or a closed cohort ageing?",
+  "band": 0.25,
+  "cut_month": 17,
+  "n_train_rows": 756134,
+  "n_test_rows": 801471,
+  "n_replenished_rows": 20291,
+  "time_split": {
+   "max": 0.0743,
+   "binding": "sales_trend_3m",
+   "top": [
+    {
+     "feature": "sales_trend_3m",
+     "csi": 0.0743
+    },
+    {
+     "feature": "ltv",
+     "csi": 0.0641
+    },
+    {
+     "feature": "ltv_vs_schedule",
+     "csi": 0.0521
+    },
+    {
+     "feature": "inflow_vs_6m_avg",
+     "csi": 0.049
+    },
+    {
+     "feature": "inflow_trend_3m",
+     "csi": 0.0324
+    },
+    {
+     "feature": "salary_vs_6m_avg",
+     "csi": 0.0196
+    }
+   ]
+  },
+  "random_split_control": {
+   "max": 0.0001,
+   "binding": "gst_sales",
+   "top": [
+    {
+     "feature": "gst_sales",
+     "csi": 0.0001
+    },
+    {
+     "feature": "util_avg_3m",
+     "csi": 0.0001
+    },
+    {
+     "feature": "inflow_trend_3m",
+     "csi": 0.0001
+    },
+    {
+     "feature": "sales_trend_3m",
+     "csi": 0.0001
+    },
+    {
+     "feature": "interest_rate_pa",
+     "csi": 0.0001
+    },
+    {
+     "feature": "min_balance_6m",
+     "csi": 0.0001
+    }
+   ]
+  },
+  "replenished_cohort": {
+   "max": 0.0676,
+   "binding": "sales_trend_3m",
+   "top": [
+    {
+     "feature": "sales_trend_3m",
+     "csi": 0.0676
+    },
+    {
+     "feature": "inflow_vs_6m_avg",
+     "csi": 0.0551
+    },
+    {
+     "feature": "ltv_vs_schedule",
+     "csi": 0.0471
+    },
+    {
+     "feature": "inflow_trend_3m",
+     "csi": 0.0428
+    },
+    {
+     "feature": "tenor_months",
+     "csi": 0.0223
+    },
+    {
+     "feature": "interest_rate_pa",
+     "csi": 0.0214
+    }
+   ]
+  },
+  "reading": "Under a RANDOM split of one window \u2014 where no account can age relative to any other \u2014 the same features are stable, so the machinery is not manufacturing drift. Under the time split the binding feature is the vintage bucket, which is account age and therefore shifts by construction: a closed cohort is exactly `months_elapsed` older in the test window, every account, with no population change at all. Resampling the test window to the train window's vintage mix \u2014 a REPLENISHED book, which is what a real lending book is \u2014 collapses the maximum. DR-14 as measured is dominated by an artefact of a closed synthetic cohort. That does not make the criterion wrong: a model whose binding input is account age would drift in production too, which is the real lead here."
+ },
+ "c_feature_alternatives": {
+  "criteria": [
+   "DR-18",
+   "DR-19"
+  ],
+  "question": "Does dropping borrower-profile features really BUY accuracy, on the full population and on a split this model has never seen?",
+  "population": "45,000 accounts, eligible rows only",
+  "split_seed": 4271,
+  "n_profile_features": 13,
+  "profile_features": [
+   "business_age_years",
+   "city_tier",
+   "constitution",
+   "loan_type",
+   "nic_group",
+   "portfolio",
+   "promoter_age_group",
+   "qualification",
+   "region",
+   "sector",
+   "segment",
+   "state",
+   "vintage_band"
+  ],
+  "variants": {
+   "shipped": {
+    "n_features": 62,
+    "auc": 0.884,
+    "params": {
+     "num_leaves": 48,
+     "min_child_samples": 80
+    },
+    "auc_gain_vs_shipped": 0.0
+   },
+   "profile_free": {
+    "n_features": 49,
+    "auc": 0.8849,
+    "params": {
+     "num_leaves": 48,
+     "min_child_samples": 80
+    },
+    "auc_gain_vs_shipped": 0.0009
+   },
+   "regularized": {
+    "n_features": 62,
+    "auc": 0.8854,
+    "params": {
+     "num_leaves": 24,
+     "min_child_samples": 200,
+     "reg_alpha": 1.0,
+     "reg_lambda": 10.0
+    },
+    "auc_gain_vs_shipped": 0.0014
+   }
+  },
+  "reading": "DR-19's 0.0123 gain was measured on the 9,000 x 36 diagnostic book. Repeated here on the full 45,000-account population with a split seed the shipped model has never used, the profile-free variant's gain is the number in the table \u2014 read it against DR-19's, not instead of it. A regularized full-feature variant is fitted alongside, because 'the profile features hurt' and 'the model is over-fitting them' are different diagnoses with different fixes, and only the second is addressed by dropping columns."
+ },
+ "d_lead_time": {
+  "question": "How much warning arrives before the borrower is already delinquent, as opposed to before the NPA date?",
+  "n_defaulters": 1646,
+  "lead_before_npa": {
+   "median": 8.0,
+   "mean": 6.84,
+   "share_6m_plus": 0.7369,
+   "share_zero": 0.1094,
+   "never_flagged": 180
+  },
+  "lead_before_first_delinquency": {
+   "n": 1410,
+   "median": 3.0,
+   "mean": 1.17,
+   "share_positive": 0.6596,
+   "definition": "months between the account's FIRST amber-or-worse month and its first month with any DPD > 0. Positive means the model spoke first; zero or negative means the arrears were already visible when it did."
+  },
+  "recall_by_warning_horizon": [
+   {
+    "bucket": "1-3 mo",
+    "n": 127,
+    "share": 0.0772
+   },
+   {
+    "bucket": "4-6 mo",
+    "n": 301,
+    "share": 0.1829
+   },
+   {
+    "bucket": "7-9 mo",
+    "n": 640,
+    "share": 0.3888
+   },
+   {
+    "bucket": "10-12 mo",
+    "n": 398,
+    "share": 0.2418
+   }
+  ],
+  "reading": "Lead time before NPA is the number the card reports and it is real. Lead time before the FIRST missed payment is the harder and more useful one, because an alert raised after a borrower is already in arrears is telling a collections team something it can see on its own screen. Both are reported here; the share of defaulters flagged with zero sustained lead is the population the product does not help at all, and it is stated rather than averaged away."
+ }
+}

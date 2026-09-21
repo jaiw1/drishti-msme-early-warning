@@ -460,7 +460,18 @@ python3 -m pytest -q                        # unit tests (repo root)
 
   **What it is evidence of.** That a two-year, financial-statement model has real signal on
   real Indian MSMEs — **complementary evidence**, not external validation of the model this
-  README describes. DRISHTi's shipped model is a twelve-month *behavioural* model on monthly
+  README describes.
+
+  **And 0.81 is the most permissive of four designs** (experiment E3,
+  `validation/report/experiments/real_data_scoping/`). The shipped figure comes from a
+  company-grouped *random* split, which lets a 2019 row help predict a 2019 outcome at another
+  company — something a forward-looking user cannot do. Tested forwards instead: temporal
+  holdout **0.7968** [0.740, 0.838]; temporal *and* company-disjoint **0.7214** [0.657, 0.775];
+  and with the outcome window pushed out a year to stand in for filing lag (the source carries
+  no filing-availability date at all) **0.781** [0.750, 0.811]. The strictest design is also
+  the smallest training set, so part of that drop is less data rather than a harder test — but
+  the direction is consistent and 0.81 should be read as the ceiling of the range, not its
+  centre. DRISHTi's shipped model is a twelve-month *behavioural* model on monthly
   account conduct; this one is an annual *balance-sheet* model on filed statements. Different
   horizon, different features, different unit of observation, different population. It does
   not transfer, and it is not offered as though it does. The company-clustered bootstrap

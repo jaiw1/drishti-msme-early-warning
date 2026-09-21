@@ -1,0 +1,136 @@
+{
+ "experiment": "real_data_scoping",
+ "question": "What exactly do the real-data numbers count, and does the signal survive a temporal holdout and a filing-availability lag?",
+ "what_this_is": "Complementary evidence that a TWO-YEAR FINANCIAL-STATEMENT model has signal on real Indian MSMEs. It is not external validation of DRISHTi's twelve-month behavioural model: different horizon (2 years vs 12 months), different observation unit (company-year vs account-month), different features (filed balance-sheet ratios vs monthly account conduct), different population. A number measured on one is not a number earned by the other.",
+ "source_model": "src/real_model.py (frozen July 2026 artefact; imported, not modified)",
+ "horizon_years": 2,
+ "censoring_last_year": 2026,
+ "denominators": {
+  "companies": 3171,
+  "company_years": 17031,
+  "positive_rows": 1284,
+  "positive_companies": 851,
+  "rows_per_positive_company": 1.509,
+  "why_they_differ": "The target is default within the next 2 financial years, so ONE default event labels up to 2 preceding company-years. 1284 positive ROWS come from 851 distinct COMPANIES. Neither number is a count of 'real defaults': the event count is the company count, and the row count is an observation count.",
+  "observation_coverage": {
+   "years_per_company": {
+    "1": 414,
+    "2": 205,
+    "3": 129,
+    "4": 130,
+    "5": 204,
+    "6": 345,
+    "7": 1742,
+    "8": 2
+   },
+   "median_years": 7.0,
+   "mean_years": 5.37,
+   "note": "A company contributing six company-years carries six times the weight of one contributing one, in every unclustered statistic. This is why the AUC intervals here are bootstrapped over COMPANIES."
+  },
+  "censoring": {
+   "last_year": 2026,
+   "horizon_years": 2,
+   "rule": "a non-defaulter's row is kept only when its outcome window ends at or before 2026 (obs_year + 2 <= 2026); a defaulter's rows at or after its default year are dropped entirely, so no row is observed after the event it predicts",
+   "obs_year_range": [
+    2018,
+    2025
+   ],
+   "rows_by_obs_year": {
+    "2018": 3039,
+    "2019": 2680,
+    "2020": 2524,
+    "2021": 2410,
+    "2022": 2302,
+    "2023": 2174,
+    "2024": 1900,
+    "2025": 2
+   },
+   "positive_rate_by_obs_year": {
+    "2018": 0.1777,
+    "2019": 0.0951,
+    "2020": 0.0634,
+    "2021": 0.0548,
+    "2022": 0.0447,
+    "2023": 0.0299,
+    "2024": 0.0142,
+    "2025": 1.0
+   }
+  }
+ },
+ "rating_event_timing": {
+  "n_default_events": 15675,
+  "n_with_parseable_month": 0,
+  "n_without": 15675,
+  "by_month": {},
+  "note": "`real_model.yr()` keeps only the YEAR of a rating action, so a default in January and one in December are treated as the same event date. Every row is labelled against a financial YEAR, so the effective lead time varies by up to eleven months across the positive class and is not recoverable from the label. Using exact dates would let lead time be measured rather than assumed; it is not done here because the frozen artefact must stay as it shipped."
+ },
+ "designs": {
+  "company_grouped_random": {
+   "design": "the shipped design: 30% of COMPANIES held out at random, all years pooled",
+   "caveat": "company-disjoint but not time-disjoint \u2014 a 2019 row may be used to predict a 2019 outcome at another company, which a forward-looking user cannot do",
+   "auc": 0.8112,
+   "auc_ci": [
+    0.7843,
+    0.8348
+   ],
+   "pr_auc": 0.3225,
+   "n_train_rows": 11916,
+   "n_test_rows": 5115,
+   "n_train_companies": 2219,
+   "n_test_companies": 952,
+   "n_test_positive_rows": 395,
+   "n_test_positive_companies": 261
+  },
+  "temporal": {
+   "design": "train on obs_year <= 2022, test on obs_year > 2022 \u2014 forwards, as it would be used",
+   "caveat": "companies may appear in both halves, in different years",
+   "cut_year": 2022,
+   "auc": 0.7968,
+   "auc_ci": [
+    0.7401,
+    0.8384
+   ],
+   "pr_auc": 0.1343,
+   "n_train_rows": 12955,
+   "n_test_rows": 4076,
+   "n_train_companies": 3167,
+   "n_test_companies": 2180,
+   "n_test_positive_rows": 94,
+   "n_test_positive_companies": 70
+  },
+  "temporal_and_company_disjoint": {
+   "design": "train on obs_year <= 2022 AND on companies absent from the test window; test on obs_year > 2022",
+   "caveat": "the strictest of the three, and the smallest training set",
+   "cut_year": 2022,
+   "auc": 0.7214,
+   "auc_ci": [
+    0.6574,
+    0.7748
+   ],
+   "pr_auc": 0.068,
+   "n_train_rows": 2335,
+   "n_test_rows": 4076,
+   "n_train_companies": 991,
+   "n_test_companies": 2180,
+   "n_test_positive_rows": 94,
+   "n_test_positive_companies": 70
+  },
+  "extra_filing_lag": {
+   "design": "the same model with the outcome window pushed out one year (horizon 2 -> 3), standing in for statements that are not readable until a year after the financial year they describe",
+   "caveat": "an approximation: the source carries no filing-availability date at all, so the true lag is unknown and this brackets it rather than measuring it",
+   "auc": 0.781,
+   "auc_ci": [
+    0.75,
+    0.811
+   ],
+   "pr_auc": 0.342,
+   "n_train_rows": 10675,
+   "n_test_rows": 4483,
+   "n_train_companies": 2218,
+   "n_test_companies": 951,
+   "n_test_positive_rows": 518,
+   "n_test_positive_companies": 276
+  }
+ },
+ "bootstrap": "95% CI by resampling COMPANIES with replacement, 500 draws"
+}

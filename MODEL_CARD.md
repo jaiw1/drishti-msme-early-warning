@@ -523,6 +523,14 @@ can and cannot be trusted to say:
   companies that defaulted (851), and why neither number is a count of "real defaults". The
   bootstrap around AUC 0.81 is clustered by company for the same reason.
 
+  Its headline AUC 0.81 comes from a company-grouped RANDOM split, which is the most permissive
+  of the four designs tested in experiment E3
+  (`validation/report/experiments/real_data_scoping/`): temporal holdout **0.7968**
+  [0.740, 0.838], temporal *and* company-disjoint **0.7214** [0.657, 0.775], extra filing lag
+  **0.781** [0.750, 0.811]. Every stricter design lands lower. The strictest is also the
+  smallest training set, so data volume and design difficulty are not separated — but 0.81 is
+  the top of the range, not the middle of it. All intervals are bootstrapped over COMPANIES.
+
   It is **complementary evidence that a two-year financial-statement model has signal on real
   MSMEs** — not external validation of the twelve-month behavioural model this card describes.
   The two differ in horizon (2 years vs 12 months), in observation unit (company-year vs

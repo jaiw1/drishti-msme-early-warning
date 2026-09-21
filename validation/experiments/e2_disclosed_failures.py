@@ -120,18 +120,60 @@ def a_decile_stability(test: pd.DataFrame, decision: np.ndarray, art: A.Artefact
 
 # --------------------------------------------------------------------------- B
 def _csi(expected: pd.Series, actual: pd.Series, bins: int = 10) -> float:
-    """Characteristic Stability Index between two samples of one feature."""
-    e, a = pd.to_numeric(expected, errors="coerce"), pd.to_numeric(actual, errors="coerce")
-    if e.dtype.kind not in "if" or a.dtype.kind not in "if":
-        levels = sorted(set(expected.dropna().astype(str)) | set(actual.dropna().astype(str)))
-        pe = np.array([(expected.astype(str) == v).mean() for v in levels])
-        pa = np.array([(actual.astype(str) == v).mean() for v in levels])
-    else:
-        edges = np.unique(np.quantile(e.dropna(), np.linspace(0, 1, bins + 1)))
-        if len(edges) < 3:
+    """Characteristic Stability Index between two samples of one feature.
+
+    Two things this gets right that a naive version does not.
+
+    **Missingness is a level, not a gap to drop.** Five of the eight portfolios have no
+    credit limit, so `utilisation` is NaN for most of the book; and a feed that degrades
+    from 8% missing to 24% missing IS drift, arguably the most operationally important
+    kind. Both branches therefore carry an explicit `__missing__` bucket rather than
+    silently comparing two differently-sized populations of observed values.
+
+    **Type is read off the dtype, not guessed by coercion.** `pd.to_numeric(errors=
+    "coerce")` on a categorical of strings returns all-NaN, which would send every
+    categorical feature down the numeric branch and compare empty arrays.
+    """
+    def parts(series, edges=None):
+        n = len(series)
+        if not n:
+            return None, 0
+        miss = float(series.isna().mean())
+        return miss, n
+
+    is_cat = (isinstance(expected.dtype, pd.CategoricalDtype)
+              or expected.dtype == object or expected.dtype == bool)
+    e_miss, n_e = parts(expected)
+    a_miss, n_a = parts(actual)
+    if n_e == 0 or n_a == 0:
+        return 0.0
+
+    if is_cat:
+        e_obs, a_obs = expected.dropna().astype(str), actual.dropna().astype(str)
+        levels = sorted(set(e_obs.unique()) | set(a_obs.unique()))
+        if not levels:
             return 0.0
-        pe = np.histogram(e.dropna(), bins=edges)[0] / max(e.notna().sum(), 1)
-        pa = np.histogram(a.dropna(), bins=edges)[0] / max(a.notna().sum(), 1)
+        pe = np.array([(e_obs == v).sum() for v in levels], dtype="float64") / n_e
+        pa = np.array([(a_obs == v).sum() for v in levels], dtype="float64") / n_a
+    else:
+        e_obs = pd.to_numeric(expected, errors="coerce").dropna()
+        a_obs = pd.to_numeric(actual, errors="coerce").dropna()
+        # too few observed values on either side to bin meaningfully: the only signal
+        # left is the missing share, which the term below still captures
+        if len(e_obs) < bins or len(a_obs) < bins:
+            pe = np.array([], dtype="float64")
+            pa = np.array([], dtype="float64")
+        else:
+            edges = np.unique(np.quantile(e_obs, np.linspace(0, 1, bins + 1)))
+            if len(edges) < 3:
+                pe = pa = np.array([], dtype="float64")
+            else:
+                edges[0], edges[-1] = -np.inf, np.inf
+                pe = np.histogram(e_obs, bins=edges)[0] / n_e
+                pa = np.histogram(a_obs, bins=edges)[0] / n_a
+
+    pe = np.append(pe, e_miss)
+    pa = np.append(pa, a_miss)
     pe, pa = np.clip(pe, 1e-6, None), np.clip(pa, 1e-6, None)
     return float(np.sum((pa - pe) * np.log(pa / pe)))
 
