@@ -1,136 +1,151 @@
 # DRISHTi demo — narration transcript
 
-Recorded via `video-autopilot/drishti-autopilot.mjs` (cloned from the SANKET lane's
-autopilot — same Playwright 1.61.1 / chromium 1228 install, same cursor+karaoke rig)
-against the real running app: real FastAPI backend (`rrsquad-platform`, `uvicorn` on
-:8001), real Postgres, real sessions, served through `e2e/static-server.js` on
-`127.0.0.1:4173/drishti/` — not a static bundle, not `vite dev`. Recorded 2026-09-17.
-Every number below is read directly off the screen at the timestamp given; none is
-asserted from memory. **Bold** marks the words the on-screen karaoke caption highlights.
+Recorded via `video-autopilot/drishti-autopilot.mjs` against the **static demo build**:
+`app/` built from `main` with no `VITE_API_BASE`, served by a plain static file server
+that answers every `/api/*` request with an immediate 404 and proxies nothing (see
+`video-autopilot/static-only-server.js`) — no `rrsquad-platform`, no Postgres, no login.
+`src/lib/mode.js::resolveMode()` sees the failed health check and resolves to
+`MODE.STATIC`, the app's own first-class "frozen demo bundle" mode (the same one shipped
+at `https://drishti-ews.vercel.app`): every read comes straight from the committed
+`app/public/demo_data.json`, and every mutating control (record an action, change a
+threshold, the admin audit log) is honestly disabled or unavailable, with its own
+on-screen explanation, rather than faked. Recorded 2026-09-21, against `main`
+(msme-ews@28204bd). Every number below is read directly off the screen at the timestamp
+given; none is asserted from memory. **Bold** marks the words the on-screen karaoke
+caption highlights.
 
 The recorded file has no spoken audio (no human narrator was available to this
 autonomous run) — the on-screen caption bar carries this exact text, word-synced, burned
 into the video. A presenter can read this transcript aloud over the video, live, during
 the demo slot.
 
-Total run time: **≈3:46** (inside the 4-minute cap).
+Total run time: **≈2:35** (well inside the 3-minute cap the deck template requires).
 
-## One-time environment setup this run performed (not itself part of the recording)
+## Why this is a shorter, simpler recording than the 17 Sep take
 
-1. `rrsquad-platform`: `docker start rrsquad-pg-dev`; `MIGRATION_DATABASE_URL=... alembic
-   upgrade head`; `DATABASE_URL=... uvicorn app.main:app --port 8001`.
-2. `DATABASE_URL=... python -m app.seeds --reset-passwords` (seeded every demo user to
-   `must_change_password`), then all three demo users used in this video — `a.deshmukh`
-   (admin), `r.venkataraman` (manager), `s.kulkarni` (credit officer) — completed the
-   forced password change once, out of camera, before recording.
-3. `DATABASE_URL=... python -m app.fixtures load --product drishti --file
-   ../msme-ews/data/export/drishti_export.json` (12,760 rows loaded as the active model
-   run).
-4. `msme-ews/app`: `VITE_API_BASE=/api/v1 npm run build -- --base /drishti/`, then served
-   via `E2E_BASE=/drishti E2E_PORT=4173 E2E_API=http://127.0.0.1:8001 node
-   e2e/static-server.js dist`.
-5. **One setup-only threshold change**, applied by the manager via the API before
-   recording, purely so the watch-list has a genuine published-vs-in-force divergence to
-   show on camera (moved Red from the cost-minimising 27.20% to 22.00%, Amber from 7.47%
-   to 6.00%): *"L12 submission-lane setup: pre-seeding a threshold move ... purely so the
-   demo video and screenshots can show the published-vs-in-force distinction on the
-   watch-list before the on-camera threshold-change demo. Not a policy change."* This is
-   stored in the audited change history exactly as written — nothing hidden.
+The bank's numbers changed today (Red-band precision rose to 88.6% on a re-fit policy
+fold — see below), and the deck template now requires a video under 3 minutes, not 4. The
+17 Sep recording drove a real backend (login, three roles, live writes: record an action,
+change a threshold, verify the audit chain) and ran ≈3:46. Re-doing that same tour and
+also cutting a minute would have meant speaking over it faster, which is not how this
+project narrates honest numbers. Instead this take uses the app's own **static demo**
+mode — no backend needed at all, and every screen already degrades honestly when a write
+isn't possible, which is most of what the login/role tour existed to demonstrate anyway.
+Concretely, this means:
 
-## Three known data/app gaps, worked around at the network layer only (no repo file
-touched — see `drishti-autopilot.mjs`'s header comment for the full explanation)
-
-1. **`/drishti/validation` reports no attached report.** `data/export/drishti_export.json`
-   (generated 2026-09-17 02:09) predates `validation/report/report.json` (committed
-   02:44 the same morning) — the export simply hasn't been regenerated since. Patched
-   in-flight with the real, current report (26 pre-registered criteria, 4 disclosed
-   fails: **DR-12, DR-14, DR-18, DR-19**), reshaped from its result-nested JSON to the
-   flat shape `ModelMetrics.jsx` reads. Flag for whoever next runs `export_contract.py`
-   to fold the report into the export for real.
-2. **Per-portfolio Red-band precision never renders** ("not reported" on every card,
-   live) because `export_demo.py` emits it as `{precision, ci_lo, ci_hi}` and
-   `export_contract.py` only reshapes the pooled (top-level) copy to `{value, ci_low,
-   ci_high}` — the nested per-portfolio copies pass through unreshaped. Patched by
-   aliasing the field names; same already-measured numbers.
-3. **The hero account's `utilisation` is a real `0.0`, not NULL**, for every account in
-   this fixture load (BE-7, already flagged by the L10 frontend lane), and
-   `channels_present` is derived from which raw DB columns happen to be non-null rather
-   than the portfolio's declared channel set — so the "not applicable" render path is
-   unreachable end-to-end against this fixture, on any account, exactly as
-   `e2e/account-null-utilisation.spec.js` already documented for Housing/Education.
-   Patched for MSME33100 only: `utilisation` set to null, `channels_present` corrected
-   to LAP's real, declared channel list (`meta.channels_by_portfolio.LAP`) — restoring
-   exactly what `export_demo.py`'s own generator intended for this exact account, not an
-   invented fact.
+- **No sign-in, no role switching.** Static mode has no session; every route is open.
+- **"Record action" is shown, not clicked.** The button is visibly disabled, with its own
+  on-screen text: *"This is the frozen demo bundle. There is no audit log to write to, so
+  the control is disabled rather than pretending to record something."*
+- **The threshold-change and admin/audit-log scenes are gone.** `Thresholds.jsx` does not
+  even render a "Change thresholds" button in static mode (`editable = live && ...`), and
+  `Admin.jsx` has no static fallback at all — it would show a live 404 error with no
+  backend. Neither is invented or patched around; both are simply not part of this tour.
+- **The account used on 17 Sep, MSME33100, is not in this build.**
+  `app/public/demo_data.json` carries a ~700-account *sample* of individual rows (the
+  aggregate metrics — 245/458/12,057 etc. — are the true full 12,760-account book).
+  MSME33100 isn't in the sample. The hero account below, **MSME16350**, is — and usefully
+  tells the same "not applicable" story (a LAP account has no revolving credit limit).
+- **The validation table is honestly empty.** `snapshotValidation()` returns
+  `available: false` on purpose — *"The validation report lives in the platform database
+  and is attached to a published model run. This frozen bundle has no backend to read it
+  from."* The 26-criteria breakdown (16 pass / 6 report-only / 4 disclosed fails) is real
+  and current (`validation/report/report.json`, unchanged by today's merge) but is not
+  narrated here as an on-screen figure, because it is not one in this build — see
+  `README.md` / `MODEL_CARD.md` for the citable version.
 
 ---
 
-**0:00–0:12 — Sign in (credit officer)**
-> This is DRISHTi — IDBI's MSME early-warning cockpit. One holistic model, scored
-> monthly, across all **eight** lending portfolios. I'm signing in as a credit officer.
+**0:00–0:12 — Watch-list overview**
+> This is DRISHTi's **static demo** build — no login, no backend — reading a frozen
+> snapshot of IDBI's **12,760**-account MSME book across all **eight** lending
+> portfolios: **245** in Red, **458** in Amber.
 
-**0:12–0:32 — Watch-list: scope + published-vs-in-force band**
-> My watch-list — scoped by the **server** to my three portfolios: MSME cash-credit,
-> MSME term-loan, and loan-against-property. And where a manager has moved a threshold
-> since the model ran, the board shows **both** bands — published and in force — never
-> silently swapping one for the other.
+**0:12–0:35 — Hero account: headline + not-applicable**
+> Account MSME16350 — loan against property, **₹15.4 lakh** sanctioned, a **54%** default
+> probability, **80 days** past due — first flagged **5 months** before that happened.
+> Credit-limit use itself reads **not applicable**: this product has no drawable limit,
+> so there is nothing to report — not a hidden zero.
 
-**0:32–1:10 — Account MSME33100: headline, not-applicable, channel strip**
-> Account MSME33100 — loan against property, **₹39.2 lakh** sanctioned, a **100%**
-> default probability, **75 days** past due — and first flagged **6 months** before that
-> happened. The channel strip says exactly what the bank can see: cash-flow, GST,
-> repayment, adverse filings, loan-to-value — and no credit-limit line at all, because
-> this product has no revolving limit to draw on. Not zero usage — **not applicable**.
+**0:35–0:51 — Reasons + memo**
+> Three reasons drove the flag: **79 days** past due, only **34%** of what was demanded
+> collected, a short collection pattern. A memo is already drafted — AI-generated, human
+> review required — recommending credit review and borrower engagement.
 
-**1:10–1:32 — Reasons, memo, record an action**
-> Three reasons drove the flag: an adverse filing, **74 days** past due, only **50%** of
-> what was demanded collected. A memo is already drafted — AI-generated, human review
-> required — and recording what the officer actually did is one audited click.
+**0:51–1:07 — What action: record (honestly disabled)**
+> Recording what the officer did would be one audited click. This frozen bundle is
+> honest about the limit instead: the control is **disabled** rather than pretending to
+> write to an audit log that does not exist here.
 
-**1:32–1:58 — Portfolio risk: per-portfolio Red-band precision**
+**1:07–1:26 — What the evidence supports: portfolio risk**
 > Portfolio risk, across all eight products. One model is only a real claim if it ranks
-> risk inside **every** one of them — so each portfolio carries its own Red-band
-> precision: from retail-unsecured's **71%** up to Education's and Auto's **100%** — on
-> Red bands as thin as six accounts, which is why each one carries its interval.
+> risk inside **every** one of them — Red-band precision runs from retail-unsecured's
+> **71%** up to Education's and Auto's **100%**, on bands as thin as six accounts, which
+> is why each one carries its interval.
 
-**1:58–2:40 — Model & Metrics: honesty headline, rank-order, validation**
-> The honesty headline, printed verbatim: **88.6%** of Red-flagged accounts went NPA
-> within eight months — n equals **245**. And the operating point that band comes from
-> was chosen on a separate fold, frozen before this book was ever scored — so that
-> number is a measurement, not a fit. We don't report raw accuracy — flagging nobody at
-> all would already score **97.3%**, because only **2.7%** of this book goes bad.
-> Rank-order holds inside every portfolio, not just pooled. **26** pre-registered
-> criteria, graded before results existed — the fails are published, not hidden.
+**1:26–1:48 — Honesty headline**
+> The honesty headline: **88.6%** of Red-flagged accounts went NPA within eight months, n
+> equals **245** — not raw accuracy; flagging nobody would already score **97.3%**, since
+> only **2.7%** of this book goes bad, beside the **16.1%** of NPAs this operating point
+> still missed.
 
-**2:40–3:12 — Switch to manager: cost rationale, a dry threshold change**
-> Switching to a manager. The Red and Amber lines are a **cost** decision, not a model
-> output — chosen to minimise expected rupee cost, not accuracy. Moving one writes an
-> audited change; **nothing is re-scored**. A dry run, on camera: tighten the line, give
-> a reason, apply — and it lands in the change history immediately.
+**1:48–2:04 — Why precision rose**
+> That rise from **84.5%** is the Red threshold moving up on a held-out policy fold, not
+> the model improving — held at the old threshold, this model's own precision actually
+> falls.
+>
+> *(This comparison — 84.5% vs 88.6%, and what moved and why — is MODEL_CARD.md §8's own
+> documented record, not a number this build's screen shows side by side; the screen
+> shows the current 88.6%/245 figure only. See "What --verify could not confirm on
+> screen" below.)*
 
-**3:12–3:24 — Data sources**
-> Data sources: every family here is a fixture or a **bank sandbox, mock and static** —
-> and every screen in the product says so.
+**2:04–2:16 — Validation, honestly unavailable**
+> Even the validation table is honest about its own limit here: the **26** pre-registered
+> criteria live on the platform database, so this frozen bundle says so rather than
+> faking a pass.
 
-**3:24–3:40 — Switch to admin: audit log, verify chain**
-> And the append-only audit log — hash-chained, so a tampered row breaks the chain at a
-> known id. Verifying it now: **chain intact**, every hash matches.
+**2:16–2:28 — Data sources**
+> Data sources: no screen in this product shows the bank's production numbers — every
+> family here is a **fixture or simulated**, and every screen says so.
 
-**3:40–3:46 — Sign-off**
+**2:28–2:34 — Sign-off**
 > DRISHTi advises. The credit officer decides.
 
 ---
 
-## What is not shown fully honestly here (flagged, not hidden)
+## What `--verify` confirmed on screen (regex-asserted, not just eyeballed)
 
-- The 6 "report-only" validation criteria (DR-02, DR-04, DR-07, DR-24, DR-25, DR-26 —
-  measured and disclosed, never meant to gate pass/fail) render as **"Skipped"** on the
-  Model & Metrics table, because `ModelMetrics.jsx`'s status vocabulary only has four
-  buckets (pass/fail/pending/skipped) and none of them means "measured, non-gating."
-  That is the app's own honest rendering of real data through a narrower vocabulary than
-  the validation schema has — not something this lane patched or invented, and not
-  narrated as a fifth thing in the video.
-- The setup-only threshold change (see above) is real and audited, but it exists purely
-  to make the published-vs-in-force mechanism demonstrable on a fresh fixture load —
-  the video's on-camera "dry run" threshold change (Scene 7) is the one meant to
-  represent the actual UI flow a manager uses.
+`drishti-autopilot.mjs --verify` asserts these on every relevant scene and fails loudly
+if any is missing:
+
+- Watch-list: `12,760`, `245`, `458`
+- Hero account: `₹15.4 L`, `54%`, `80` (days past due), `5 mo before trouble`, `not
+  applicable`
+- Portfolio risk: `71.4%` (Retail-Unsecured), `100.0%` (Education / Auto)
+- Model & Metrics: `88.6%`, `245`, `97.3%`, `2.7%`, `16.1%`, `No validation report is
+  attached`
+- Data sources: `No screen in this product is showing the bank`
+
+## What `--verify` could not confirm on screen
+
+- **The 84.5% → 88.6% comparison and its threshold-not-model explanation.** This is a
+  documented fact from `MODEL_CARD.md` §8 / `README.md` (the operating point moved from
+  0.2720 to 0.3437 on a held-out policy fold; holding the old threshold, the new model's
+  own precision is 82.3%, i.e. *down* 2.2pp) — but this build's Model & Metrics screen
+  shows only the current 88.6%/245 figure, not the 84.5% comparator or the "policy fold"
+  framing side by side with it. Spoken as context a presenter would reasonably add, not
+  asserted as a rendered pixel.
+- **The 16/6/4 validation criteria breakdown.** Real (`validation/report/report.json`,
+  unchanged since 2026-09-17) but genuinely not rendered anywhere in this static build —
+  see above.
+- **The exact Red/Amber thresholds (34.37% / 6.93%) and the ecosystem/contagion panel.**
+  Both render correctly in this build but are not part of this cut; the contagion lens is
+  now explicitly labelled "Illustrative" on screen as of msme-ews@28204bd (a same-day
+  merge), which this recording's build picked up but does not narrate — it is an appendix
+  exhibit, not covered in a 3-minute cut.
+
+## Superseded
+
+The 17 Sep recording is kept at `docs/demo/drishti-demo-2026-09-17.mp4` (≈3:46, real
+backend, MSME33100, old 84.5%/n=283 numbers, now stale). This file replaces it as the
+current demo video.
