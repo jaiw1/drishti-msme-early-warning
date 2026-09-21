@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { screen, within } from '@testing-library/react'
-import ModelMetrics, { criteriaRows } from './ModelMetrics'
+import ModelMetrics, { criteriaRows, formatObserved } from './ModelMetrics'
 import { renderScreen } from '../test/render'
 import { B, apiRoutes, envelope, fail, metrics, mockApi, ok, validation } from '../test/fixtures/api'
 
@@ -44,9 +44,80 @@ describe('criteriaRows', () => {
     const report = { criteria: [{ id: 'DR-01', status: 'pass' }] }
     expect(criteriaRows(report, { 'DR-01': 'warn' })[0].status).toBe('pass')
   })
+
+  // The harness nests the measurement under `result.value`; reading only the flat keys put
+  // an em dash in the Observed column of every row the platform actually serves.
+  it('reads the observed value the harness nests under result.value', () => {
+    const rows = criteriaRows({ criteria: [{ id: 'DR-01', result: { value: 0.8885, status: 'pass' } }] })
+    expect(rows[0].observed).toBe(0.8885)
+  })
+
+  it('prefers a flat observed/value over the nested one, so older reports are unchanged', () => {
+    const rows = criteriaRows({ criteria: [{ id: 'DR-01', observed: 0.5, result: { value: 0.9 } }] })
+    expect(rows[0].observed).toBe(0.5)
+  })
+
+  it('calls a reported-not-gated criterion "report", never "skipped"', () => {
+    const rows = criteriaRows({ criteria: [{ id: 'DR-02', result: { status: 'report', value: 0.88 } }] })
+    expect(rows[0].status).toBe('report')
+  })
+})
+
+describe('formatObserved', () => {
+  it('renders a band as a range rather than a comma-joined array', () => {
+    expect(formatObserved([0.82, 0.92])).toBe('0.82 – 0.92')
+  })
+
+  it('renders an object-valued criterion as its fields, never [object Object]', () => {
+    expect(formatObserved({ precision_at_5pct: 0.3546 })).toBe('precision at 5pct 0.3546')
+  })
+
+  it('leaves integers alone and trims float noise', () => {
+    expect(formatObserved(5)).toBe('5')
+    expect(formatObserved(0.900881234)).toBe('0.9009')
+  })
+
+  it('returns null for an absent value so the caller can print its own dash', () => {
+    expect(formatObserved(null)).toBeNull()
+    expect(formatObserved(undefined)).toBeNull()
+  })
 })
 
 describe('Model & Metrics', () => {
+  // The platform records ONE accepted-failure list for both products, so DRISHTi's banner
+  // was counting SANKET's ids too: "6 criterions" beside a tally that said 4.
+  it('counts only the accepted failures this report actually carries', async () => {
+    mockApi({
+      ...apiRoutes(),
+      [`${B}/drishti/validation`]: ok(validation({
+        criteriaStates: { 'DR-11': 'accepted_failure' },
+        acceptedFailures: {
+          accepted: ['DR-11', 'SK-04', 'SK-23'],
+          criteria: [{ id: 'DR-11', reason: 'INTERPRETATION — split into two criteria.' }],
+          recorded_at: '2026-09-21T16:56:55Z',
+        },
+      })),
+    }, { vi })
+    render()
+    const banner = await screen.findByText(/failed and was accepted in advance/)
+    expect(banner).toHaveTextContent('1 criterion failed and was accepted in advance')
+    expect(banner).toHaveTextContent('DR-11')
+    expect(banner).not.toHaveTextContent('SK-04')
+  })
+
+  it('never writes "criterions"', async () => {
+    mockApi({
+      ...apiRoutes(),
+      [`${B}/drishti/validation`]: ok(validation({
+        criteriaStates: { 'DR-11': 'accepted_failure', 'DR-15': 'accepted_failure' },
+        acceptedFailures: { accepted: ['DR-11', 'DR-15'], criteria: [], recorded_at: '2026-09-21T16:56:55Z' },
+      })),
+    }, { vi })
+    render()
+    expect(await screen.findByText(/2 criteria failed and were accepted in advance/)).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/criterions/)
+  })
+
   it('prints the export’s honesty block verbatim, rather than paraphrasing it', async () => {
     mockApi(apiRoutes(), { vi })
     render()

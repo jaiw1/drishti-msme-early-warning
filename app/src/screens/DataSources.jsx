@@ -13,7 +13,7 @@
 // of a live pull.
 
 import {
-  CircleCheck, CircleSlash, Clock, Database, Plug, TriangleAlert,
+  Activity, CircleCheck, CircleSlash, Clock, Database, Plug, TriangleAlert,
 } from 'lucide-react'
 import AppShell from '../components/AppShell'
 import DataTable from '../components/DataTable'
@@ -104,6 +104,80 @@ function Runs({ runs }) {
   )
 }
 
+const DRIFT_TONE = {
+  no_material_shift: 'text-rag-greentx',
+  moderate_shift: 'text-rag-ambertx',
+  significant_shift: 'text-rag-redtx',
+}
+
+const hours = (n) => (n == null ? '—' : n < 1 ? `${Math.round(n * 60)} min` : `${n.toFixed(1)} h`)
+
+/**
+ * How old the published run is, and how far its score distribution moved against the run it
+ * superseded. Both come straight from `GET /meta/provenance`; the screen used to drop them,
+ * which meant a stale run or a significant population shift was visible to the platform and
+ * to nobody looking at it.
+ */
+function Freshness({ freshness, drift }) {
+  const products = Array.from(new Set([...Object.keys(freshness || {}), ...Object.keys(drift || {})]))
+  if (products.length === 0) return null
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <h3 className="flex items-center gap-2 font-bold text-slate-800">
+        <Activity size={16} className="text-idbi-green" aria-hidden="true" /> Freshness and drift
+      </h3>
+      <p className="mb-3 mt-1 text-xs leading-relaxed text-slate-600">
+        How old the published run is, against the staleness limit the platform enforces, and how far its
+        score distribution has moved from the run it replaced. Drift is a flag to investigate, not a verdict.
+      </p>
+      <div className="grid gap-3 md:grid-cols-2">
+        {products.map((product) => {
+          const f = freshness?.[product]
+          const d = drift?.[product]
+          return (
+            <div key={product} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-bold uppercase text-slate-800">{product}</span>
+                {f && (
+                  <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${
+                    f.stale ? 'border-red-200 bg-red-50 text-rag-redtx' : 'border-green-200 bg-green-50 text-rag-greentx'
+                  }`}>
+                    {f.stale ? 'stale' : 'fresh'}
+                  </span>
+                )}
+              </div>
+              {f ? (
+                <p className="mt-1.5 text-xs leading-relaxed text-slate-700">
+                  Published <b>{hours(f.age_hours)}</b> ago
+                  {f.threshold_hours != null && <> · limit {f.threshold_hours} h</>}
+                  {f.n_rows != null && <> · {f.n_rows.toLocaleString('en-IN')} rows</>}
+                  {f.reason && <> — {f.reason}</>}
+                </p>
+              ) : (
+                <p className="mt-1.5 text-xs text-slate-600">No freshness recorded for this product.</p>
+              )}
+              {d?.available ? (
+                <p className="mt-1.5 text-xs leading-relaxed text-slate-700">
+                  Score drift (PSI) <b className={DRIFT_TONE[d.band] || 'text-slate-800'}>{d.psi}</b>
+                  {d.band && <> — {String(d.band).replace(/_/g, ' ')}</>}
+                  {d.score_field && <> on <code className="rounded bg-white px-1 font-mono text-[11px]">{d.score_field}</code></>}
+                  {d.previous_model_run_id && (
+                    <> · against run <code className="rounded bg-white px-1 font-mono text-[11px]">{String(d.previous_model_run_id).slice(0, 8)}</code></>
+                  )}
+                </p>
+              ) : (
+                <p className="mt-1.5 text-xs leading-relaxed text-slate-600">
+                  No drift figure: {d?.reason || 'the platform published none for this product'}.
+                </p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 export default function DataSources() {
   const { isStatic } = useAuth()
   const live = !isStatic
@@ -148,6 +222,8 @@ export default function DataSources() {
           </section>
 
           <Runs runs={meta.runs} />
+
+          <Freshness freshness={provenance.data?.freshness} drift={provenance.data?.drift} />
 
           <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 p-4">

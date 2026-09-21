@@ -72,7 +72,7 @@ function CostRationale({ cost }) {
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5">
-      <h3 className="font-bold text-slate-800">Why the lines sit where they do</h3>
+      <h2 className="font-bold text-slate-800">Why the lines sit where they do</h2>
       <p className="mb-4 mt-1 max-w-3xl text-xs leading-relaxed text-slate-600">
         A missed NPA costs the book far more than an officer reviewing an account that turns out fine, so the cut-off
         is chosen where expected cost is lowest — not where accuracy looks best. Moving the Red line left catches more

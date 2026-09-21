@@ -173,7 +173,7 @@ export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, onS
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="mb-1 flex items-center gap-2">
           <LayoutGrid size={16} className="text-idbi-green" aria-hidden="true" />
-          <h3 className="font-bold text-slate-800">Where is the risk concentrated? (by lending portfolio)</h3>
+          <h2 className="font-bold text-slate-800">Where is the risk concentrated? (by lending portfolio)</h2>
         </div>
         <p className="mb-4 mt-1 max-w-3xl text-xs leading-relaxed text-slate-600">
           One model scores all eight products. This is the cut that tests that claim: flagged exposure per portfolio,

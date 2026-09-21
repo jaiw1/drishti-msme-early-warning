@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { screen, within } from '@testing-library/react'
 import DataSources, { syncState } from './DataSources'
 import { renderScreen } from '../test/render'
-import { B, apiRoutes, envelope, fail, mockApi, ok } from '../test/fixtures/api'
+import { B, apiRoutes, envelope, fail, mockApi, ok, provenanceEnvelope } from '../test/fixtures/api'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -101,3 +101,33 @@ describe('Data sources & sync', () => {
     expect(await screen.findByText('This bundle has no backend to ask')).toBeInTheDocument()
   })
 })
+
+describe('Data sources & sync — freshness and drift', () => {
+  // `GET /meta/provenance` publishes both and this screen used to drop them, so a stale run
+  // or a significant population shift was visible to the platform and to nobody looking.
+  it('states how old the published run is against the platform’s own staleness limit', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    expect(await screen.findByText('Freshness and drift')).toBeInTheDocument()
+    expect(screen.getByText(/limit 36 h/)).toBeInTheDocument()
+    expect(screen.getByText('fresh')).toBeInTheDocument()
+  })
+
+  it('shows the score drift with its band, not just a bare number', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    expect(await screen.findByText(/no material shift/)).toBeInTheDocument()
+    expect(screen.getByText('0.0123')).toBeInTheDocument()
+  })
+
+  it('says why there is no drift figure rather than printing a dash', async () => {
+    mockApi(apiRoutes({
+      [`${B}/meta/provenance`]: ok(provenanceEnvelope({
+        drift: { drishti: { available: false, reason: 'the previous run carries no scores to compare against' } },
+      })),
+    }), { vi })
+    render()
+    expect(await screen.findByText(/the previous run carries no scores to compare against/)).toBeInTheDocument()
+  })
+})
+

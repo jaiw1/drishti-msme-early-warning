@@ -12,7 +12,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react'
 import {
-  Area, CartesianGrid, ComposedChart, Legend, Line, ReferenceArea, ReferenceLine,
+  Area, Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceArea, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import {
@@ -47,6 +47,25 @@ export function toSeries(points, channels) {
       bucket: p.bucket,
     }
   })
+}
+
+/**
+ * The first month this account was actually in arrears, and how many months before it the
+ * score first crossed the Amber line. The export now carries per-month `dpd`; without this
+ * the drawer had the arrears history in hand and drew nothing with it, so the "flagged N
+ * months early" claim could not be checked against anything on screen.
+ */
+export function arrearsLead(series, amberThr) {
+  const firstArrears = series.findIndex((p) => p.dpd != null && p.dpd > 0)
+  if (firstArrears < 0) return null
+  const cut = amberThr == null ? null : amberThr * 100
+  const firstFlag = cut == null ? -1 : series.findIndex((p) => p.pd != null && p.pd >= cut)
+  return {
+    month: series[firstArrears].date,
+    peak: Math.max(...series.map((p) => p.dpd ?? 0)),
+    monthsEarly: firstFlag >= 0 && firstFlag < firstArrears ? firstArrears - firstFlag : null,
+    flaggedMonth: firstFlag >= 0 ? series[firstFlag].date : null,
+  }
 }
 
 function ChannelStrip({ channels }) {
@@ -307,6 +326,8 @@ export default function AccountDetail({ accountId, live = true, thresholds: fall
   const utilState = renderField(rec?.utilisation, 'utilisation', channels, (v) => pct(v, 0))
   const hasUtil = series.some((p) => p.util !== null)
   const hasInflow = series.some((p) => p.inflowIdx !== null)
+  const hasDpd = series.some((p) => p.dpd != null)
+  const arrears = useMemo(() => arrearsLead(series, thresholds.amber_thr), [series, thresholds.amber_thr])
   const lastDate = series[series.length - 1]?.date
   const futureMonths = refMonth ? series.filter((p) => p.date > refMonth).length : 0
   const hasFuture = futureMonths >= 2
@@ -357,6 +378,32 @@ export default function AccountDetail({ accountId, live = true, thresholds: fall
                 <p className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${rag.soft}`}>
                   <CalendarClock size={16} aria-hidden="true" /> On the watch-list · {rag.label}
                   {scores.first_warning_lead ? ` · first flagged ${scores.first_warning_lead} mo before trouble` : ''}
+                </p>
+              )}
+              {/*
+                Whose book this is. The platform carries branch_name / ifsc / rm_name (and
+                the codes behind them) on every account; without them the officer cannot
+                tell which branch to call, which is the first thing they would ask.
+              */}
+              {(rec.branch_name || rec.branch_code || rec.rm_name || rec.rm_ein || rec.ifsc || rec.cif_id) && (
+                <p className="text-xs leading-relaxed text-slate-600">
+                  {(rec.branch_name || rec.branch_code) && (
+                    <>Branch <b className="text-slate-800">{rec.branch_name || rec.branch_code}</b>
+                      {rec.branch_name && rec.branch_code ? ` (${rec.branch_code})` : ''}
+                      {rec.ifsc ? <> · IFSC <code className="rounded bg-slate-100 px-1 font-mono text-[11px]">{rec.ifsc}</code></> : null}
+                    </>
+                  )}
+                  {(rec.rm_name || rec.rm_ein) && (
+                    <>{(rec.branch_name || rec.branch_code) ? ' · ' : ''}Relationship manager{' '}
+                      <b className="text-slate-800">{rec.rm_name || rec.rm_ein}</b>
+                      {rec.rm_name && rec.rm_ein ? ` (${rec.rm_ein})` : ''}
+                    </>
+                  )}
+                  {rec.cif_id && (
+                    <>{(rec.branch_name || rec.branch_code || rec.rm_name || rec.rm_ein) ? ' · ' : ''}CIF{' '}
+                      <code className="rounded bg-slate-100 px-1 font-mono text-[11px]">{rec.cif_id}</code>
+                    </>
+                  )}
                 </p>
               )}
               {rec.eco_red >= 1 && (
@@ -471,6 +518,56 @@ export default function AccountDetail({ accountId, live = true, thresholds: fall
                       {hasUtil && (
                         <Line yAxisId="r" type="monotone" dataKey="util" name="Credit-limit use %" stroke="#c2410c" strokeWidth={2} dot={false} isAnimationActive={false} connectNulls={false} />
                       )}
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                )}
+              </section>
+
+              {/*
+                Arrears, month by month. The model score above is a prediction; this is what
+                actually happened to the account. Shown as its own panel because mixing days
+                past due onto a percentage axis would make neither readable — and shown only
+                when the run published it, never drawn at zero to fill the space.
+              */}
+              <section className="rounded-xl border border-slate-200 bg-white p-4">
+                <h3 className="mb-1 text-sm font-bold text-slate-800">Arrears, month by month</h3>
+                <p className="mb-3 text-xs leading-relaxed text-slate-600">
+                  {hasDpd ? (
+                    <>
+                      Days past due as the core banking system recorded them — the outcome the score
+                      above was trying to get ahead of.
+                      {arrears && (
+                        <>
+                          {' '}First arrears in <b>{arrears.month}</b>, peaking at <b>{Math.round(arrears.peak)} days</b>
+                          {arrears.monthsEarly != null && (
+                            <>; the score had crossed Amber in <b>{arrears.flaggedMonth}</b>,{' '}
+                            <b>{arrears.monthsEarly} month{arrears.monthsEarly === 1 ? '' : 's'}</b> earlier</>
+                          )}.
+                        </>
+                      )}
+                      {!arrears && ' This account was never in arrears across the published window.'}
+                    </>
+                  ) : (
+                    <>
+                      <b>This model run published no month-by-month days-past-due.</b> The contract
+                      carries a per-month <code className="rounded bg-slate-100 px-1 font-mono text-[11px]">dpd</code>{' '}
+                      field and a run that fills it is drawn here; this one did not, so nothing is
+                      drawn rather than a flat line at zero.
+                      {rec.dpd != null && <> The account&rsquo;s DPD at the reference month is <b>{Math.round(rec.dpd)}</b>.</>}
+                    </>
+                  )}
+                </p>
+                {hasDpd && (
+                  <ResponsiveContainer width="100%" height={160}>
+                    <ComposedChart data={series} margin={{ top: 5, right: 8, left: -18, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748b' }} interval="preserveStartEnd" minTickGap={24} />
+                      <YAxis tick={{ fontSize: 10, fill: '#64748b' }} allowDecimals={false} />
+                      <Tooltip formatter={(v) => [`${v} days`, 'Days past due']} />
+                      {refMonth && <ReferenceLine x={refMonth} stroke="#0f172a" strokeDasharray="5 3" />}
+                      <ReferenceLine y={90} stroke="#b91c1c" strokeDasharray="4 4"
+                        label={{ value: '90 DPD', fontSize: 9, fill: '#b91c1c', position: 'insideTopRight' }} />
+                      <Bar dataKey="dpd" name="Days past due" fill="#c2410c" isAnimationActive={false} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 )}

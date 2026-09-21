@@ -5,7 +5,7 @@
 // been run yet is shown as pending rather than quietly dropped or counted as a pass — the
 // pending rows are the disclosure, and hiding them would be the dishonest move.
 
-import { CircleCheck, CircleSlash, Clock, ShieldAlert, TriangleAlert } from 'lucide-react'
+import { CircleCheck, CircleSlash, Clock, FileText, ShieldAlert, TriangleAlert } from 'lucide-react'
 import AppShell from '../components/AppShell'
 import Analytics from '../components/Analytics'
 import DataTable from '../components/DataTable'
@@ -25,6 +25,10 @@ const STATUS = {
   // tint so it never reads as either a plain fail (still blocking) or a pass.
   accepted: { label: 'Fail — accepted', icon: ShieldAlert, className: 'text-rose-700', row: 'bg-rose-100/70' },
   pending: { label: 'Pending', icon: Clock, className: 'text-rag-ambertx', row: 'bg-amber-50/50' },
+  // `report` is a verdict, not an absence: the criterion ran and its number is published
+  // with no pre-registered band to gate it. Rendering it as "Skipped" contradicted the
+  // criterion's own note ("REPORTED, NOT GATED") in the very next column.
+  report: { label: 'Report only', icon: FileText, className: 'text-slate-700', row: '' },
   skipped: { label: 'Skipped', icon: CircleSlash, className: 'text-slate-600', row: '' },
 }
 
@@ -34,7 +38,26 @@ const statusOf = (raw) => {
   if (key === 'passed' || key === 'ok' || key === 'true') return 'pass'
   if (key === 'failed' || key === 'false') return 'fail'
   if (key === 'not_run' || key === 'todo' || key === '' || key === 'null' || key === 'undefined') return 'pending'
+  if (key === 'report' || key === 'reported' || key === 'report_only') return 'report'
   return 'skipped'
+}
+
+/**
+ * One criterion's observed value, printed the way a reviewer reads it.
+ *
+ * The harness nests the measurement under `result.value`; a bare `[0.82, 0.92]` band
+ * rendered through `String()` came out as `0.82,0.92`, and an object-valued criterion
+ * (several are) came out as `[object Object]`.
+ */
+export function formatObserved(value) {
+  if (value === null || value === undefined) return null
+  if (Array.isArray(value)) return value.map((v) => formatObserved(v)).join(' – ')
+  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(4)))
+  if (typeof value === 'boolean') return value ? 'yes' : 'no'
+  if (typeof value === 'object') {
+    return Object.entries(value).map(([k, v]) => `${k.replace(/_/g, ' ')} ${formatObserved(v)}`).join(' · ')
+  }
+  return String(value)
 }
 
 /**
@@ -58,17 +81,23 @@ export function criteriaRows(report, states) {
     ))
   return entries.map((entry) => {
     const id = entry.id || entry.criterion || entry.name || '—'
-    const fallback = statusOf(entry.status ?? entry.result ?? entry.outcome ?? entry.passed)
+    // `entry.result` is an OBJECT in the shape the harness publishes, and feeding an object
+    // to `statusOf` stringified it to "[object object]" and fell through to "skipped" — so
+    // every reported-not-gated criterion the platform serves read "Skipped" beside its own
+    // note saying "REPORTED, NOT GATED".
+    const nested = entry.result && typeof entry.result === 'object' ? entry.result.status : entry.result
+    const fallback = statusOf(entry.status ?? nested ?? entry.outcome ?? entry.passed)
     const state = states?.[id]
     const status = state === 'accepted_failure' ? 'accepted'
       : state === 'blocking_failure' ? 'fail'
         : state === 'pass' ? 'pass'
-          : fallback
+          : state === 'report' ? 'report'
+            : fallback
     return {
       id,
       description: entry.description || entry.title || entry.metric || '',
       status,
-      observed: entry.observed ?? entry.value ?? entry.actual ?? null,
+      observed: entry.observed ?? entry.value ?? entry.actual ?? entry.result?.value ?? null,
       expected: entry.expected ?? entry.band ?? entry.threshold ?? null,
       note: entry.note || entry.reason || '',
     }
@@ -96,6 +125,12 @@ function ValidationSummary({ validation }) {
   // Each accepted row's own pre-registered rationale, keyed by criterion id — never
   // invented, only ever what `accepted_failures.criteria[].reason` actually says.
   const reasonById = new Map((data.accepted_failures?.criteria || []).map((c) => [c.id, c.reason]))
+  // `accepted_failures.accepted` is the whole `--accept-known-failures` list, and the
+  // platform records ONE list for both products — so DRISHTi's banner was counting
+  // SANKET's accepted failures too (6, beside a tally that said 4). Count only the ids
+  // this report actually carries.
+  const idsInReport = new Set(rows.map((r) => r.id))
+  const acceptedHere = (data.accepted_failures?.accepted || []).filter((id) => idsInReport.has(id))
 
   return (
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -109,7 +144,7 @@ function ValidationSummary({ validation }) {
           </p>
         </div>
         <ul className="flex flex-wrap gap-2 text-xs font-semibold">
-          {['pass', 'fail', 'accepted', 'pending', 'skipped'].map((key) => counts[key] ? (
+          {['pass', 'fail', 'accepted', 'pending', 'report', 'skipped'].map((key) => counts[key] ? (
             <li key={key} className={`rounded-full border border-slate-200 px-2.5 py-1 ${STATUS[key].className}`}>
               {counts[key]} {STATUS[key].label.toLowerCase()}
             </li>
@@ -117,12 +152,14 @@ function ValidationSummary({ validation }) {
         </ul>
       </div>
 
-      {data.accepted_failures && (
+      {data.accepted_failures && acceptedHere.length > 0 && (
         <div className="border-b border-rose-200 bg-rose-50/70 px-4 py-3 text-xs leading-relaxed text-slate-700">
           <p>
             <b>
-              {data.accepted_failures.accepted.length} criterion{data.accepted_failures.accepted.length === 1 ? '' : 's'} failed
-              and {data.accepted_failures.accepted.length === 1 ? 'was' : 'were'} accepted in advance
+              {acceptedHere.length === 1
+                ? '1 criterion failed and was accepted in advance'
+                : `${acceptedHere.length} criteria failed and were accepted in advance`}
+              {' '}({acceptedHere.join(', ')})
             </b>
             {data.accepted_failures.recorded_at && (
               <> — recorded on this published run at{' '}
@@ -162,9 +199,9 @@ function ValidationSummary({ validation }) {
                     <th scope="row" className="px-3 py-2 text-left font-mono text-xs font-semibold text-slate-800">{r.id}</th>
                     <td className="px-3 py-2 text-slate-700">{r.description || '—'}</td>
                     <td className="px-3 py-2 text-right font-semibold text-slate-800">
-                      {r.observed === null ? '—' : String(r.observed)}
+                      {formatObserved(r.observed) ?? '—'}
                     </td>
-                    <td className="px-3 py-2 text-right text-slate-600">{r.expected === null ? '—' : String(r.expected)}</td>
+                    <td className="px-3 py-2 text-right text-slate-600">{formatObserved(r.expected) ?? '—'}</td>
                     <td className={`px-3 py-2 font-semibold ${spec.className}`}>
                       <span className="inline-flex items-center gap-1.5">
                         <Icon size={14} aria-hidden="true" /> {spec.label}
@@ -181,7 +218,13 @@ function ValidationSummary({ validation }) {
 
       {data.verify_result && (
         <p className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-700">
-          Run verification: <b>{String(data.verify_result.status ?? data.verify_result.ok ?? 'recorded')}</b>
+          Run verification: <b>{String(
+            data.verify_result.status
+            ?? data.verify_result.ok
+            ?? (data.verify_result.passed === true ? 'passed'
+              : data.verify_result.passed === false ? 'failed' : 'recorded'),
+          )}</b>
+          {data.verify_result.reason && <> — {data.verify_result.reason}</>}
           {data.verify_result.note && <> — {data.verify_result.note}</>}
         </p>
       )}

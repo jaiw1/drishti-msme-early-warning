@@ -338,12 +338,25 @@ export const sync = () => envelope([
   },
 })
 
-export const provenanceEnvelope = () => envelope({
+export const provenanceEnvelope = (overrides = {}) => envelope({
   real_data: false,
   live_apis: [],
   live_records: 0,
   products: { drishti: { model_run_id: 'x', provenance_mode: 'fixture', families: PROVENANCE, status: 'published' } },
+  freshness: {
+    drishti: {
+      model_run_id: 'x', published_at: '2026-09-21T17:45:05Z', generated_at: '2026-09-21T15:49:29Z',
+      age_hours: 1.7, stale: false, reason: null, threshold_hours: 36, n_rows: 12760,
+    },
+  },
+  drift: {
+    drishti: {
+      available: true, psi: 0.0123, band: 'no_material_shift', score_field: 'pd_calibrated',
+      previous_model_run_id: 'abcdef12-0000-0000-0000-000000000000',
+    },
+  },
   note: 'Every family reported FIXTURE has not been pulled from a bank API.',
+  ...overrides,
 })
 
 export const users = () => envelope([

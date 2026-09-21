@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import AccountDetail, { toSeries } from './AccountDetail'
+import AccountDetail, { arrearsLead, toSeries } from './AccountDetail'
 import { renderScreen } from '../test/render'
 import {
   B, ROW_WITHOUT_LIMIT, ROW_WITH_LIMIT, apiRoutes, envelope, fail, memo, mockApi, ok,
@@ -11,6 +11,35 @@ afterEach(() => vi.unstubAllGlobals())
 
 const render = (accountId, opts) =>
   renderScreen(<AccountDetail accountId={accountId} live onClose={() => {}} />, opts)
+
+describe('arrearsLead — the per-month DPD the drawer used to drop', () => {
+  const at = (date, pd, dpd) => ({ date, pd, dpd })
+
+  it('finds the first month in arrears and how far ahead the score crossed Amber', () => {
+    const series = [
+      at('2026-01', 2, 0), at('2026-02', 9, 0), at('2026-03', 12, 0), at('2026-04', 30, 15),
+    ]
+    // Amber at 0.07 -> 7%, first crossed in 2026-02; arrears start in 2026-04.
+    expect(arrearsLead(series, 0.07)).toEqual({
+      month: '2026-04', peak: 15, monthsEarly: 2, flaggedMonth: '2026-02',
+    })
+  })
+
+  it('returns null when the run published no per-month DPD at all', () => {
+    expect(arrearsLead([at('2026-01', 2, null), at('2026-02', 9, null)], 0.07)).toBeNull()
+  })
+
+  it('returns null when the account was never in arrears, rather than claiming month one', () => {
+    expect(arrearsLead([at('2026-01', 2, 0), at('2026-02', 9, 0)], 0.07)).toBeNull()
+  })
+
+  it('reports the arrears without a lead time when the score never crossed Amber first', () => {
+    const out = arrearsLead([at('2026-01', 1, 30), at('2026-02', 40, 60)], 0.07)
+    expect(out.month).toBe('2026-01')
+    expect(out.peak).toBe(60)
+    expect(out.monthsEarly).toBeNull()
+  })
+})
 
 describe('toSeries — the null-utilisation bug', () => {
   const noLimit = ['cash_flow', 'repayment', 'salary']
@@ -185,3 +214,49 @@ describe('Account detail', () => {
     expect(screen.getByText(/no audit log to write to/)).toBeInTheDocument()
   })
 })
+
+describe('Account drawer — arrears panel', () => {
+  it('draws the month-by-month arrears the export now carries', async () => {
+    mockApi(apiRoutes(), { vi })
+    render(ROW_WITH_LIMIT.account_id)
+    expect(await screen.findByText('Arrears, month by month')).toBeInTheDocument()
+    expect(screen.getByText(/Days past due as the core banking system recorded them/)).toBeInTheDocument()
+  })
+
+  it('says the run published none rather than drawing a flat line at zero', async () => {
+    mockApi({
+      ...apiRoutes(),
+      [`${B}/drishti/account/${ROW_WITH_LIMIT.account_id}/timeline`]: ok(envelope(
+        ['2026-08', '2026-09'].map((date) => ({
+          date, pd: 0.4, pd_smooth: 0.4, bucket: 'red', utilisation: 0.5, inflow: 1000, dpd: null,
+        })),
+        { total: 2, reference_month: '2026-09' },
+      )),
+    }, { vi })
+    render(ROW_WITH_LIMIT.account_id)
+    expect(await screen.findByText(/published no month-by-month days-past-due/)).toBeInTheDocument()
+  })
+})
+
+describe('Account drawer — whose book it is', () => {
+  it('names the branch, the IFSC and the relationship manager when the platform sends them', async () => {
+    const account = apiRoutes()[`${B}/drishti/account/${ROW_WITH_LIMIT.account_id}`]
+    const body = JSON.parse(JSON.stringify(account.body ?? account))
+    mockApi({
+      ...apiRoutes(),
+      [`${B}/drishti/account/${ROW_WITH_LIMIT.account_id}`]: ok(envelope({
+        ...(body.data ?? body),
+        branch_name: 'Fort Branch',
+        branch_code: 'BR-0207',
+        ifsc: 'IBKL0000105',
+        rm_name: 'Sneha Kulkarni',
+        rm_ein: 'EIN-100358',
+      })),
+    }, { vi })
+    render(ROW_WITH_LIMIT.account_id)
+    expect(await screen.findByText('Fort Branch')).toBeInTheDocument()
+    expect(screen.getByText('IBKL0000105')).toBeInTheDocument()
+    expect(screen.getByText('Sneha Kulkarni')).toBeInTheDocument()
+  })
+})
+

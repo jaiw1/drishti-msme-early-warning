@@ -26,24 +26,49 @@ export default function RealModel({ data, syntheticAuc }) {
       {/* hero: the honesty centerpiece */}
       <section className="bg-idbi-green/5 border border-idbi-green/30 rounded-xl p-5">
         <div className="flex items-center gap-2 text-idbi-green mb-2">
-          <BadgeCheck size={20} /><h3 className="font-extrabold text-lg">Validated on REAL Indian MSME data</h3>
+          <BadgeCheck size={20} /><h2 className="font-extrabold text-lg">Validated on REAL Indian MSME data</h2>
         </div>
         <p className="text-sm text-slate-600 leading-relaxed max-w-4xl">
           The cockpit runs on synthetic data (its ~{Math.round((syntheticAuc || 0.95) * 100) / 100} score is illustrative, not a real-world claim).
           To prove the <b>method</b> holds up, we ran the <b>same modelling approach on {meta.n_companies.toLocaleString('en-IN')} real Indian
-          MSMEs</b> ({meta.n_company_years.toLocaleString('en-IN')} company-years, FY2018–FY2026) with <b>{meta.n_defaults.toLocaleString('en-IN')} real
-          defaults</b> — where "default" is an actual credit-rating downgrade to 'D'. On real data it scores an honest
+          MSMEs</b> ({meta.n_company_years.toLocaleString('en-IN')} company-years, FY2018–FY2026) with{' '}
+          <b>{meta.n_defaults.toLocaleString('en-IN')} positive company-year rows</b>
+          {meta.n_defaulting_companies ? <> across <b>{meta.n_defaulting_companies.toLocaleString('en-IN')} companies that defaulted</b></> : null}
+          {' '}— where &ldquo;default&rdquo; is an actual credit-rating downgrade to &lsquo;D&rsquo;. On real data it scores an honest
           <b> {m.auc}</b> — squarely in the realistic band. So the numbers you can trust are these, and the method behind the cockpit is sound.
+        </p>
+        {/*
+          Three denominators, and the difference matters. The target is "does this company
+          default in the next two financial years", so one default event labels up to two
+          preceding company-years: 1,284 counts ROWS, not companies and not default events.
+          Printing it as "real defaults" is the row count under the wrong noun.
+        */}
+        <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+          <b>Read the three denominators apart.</b> {meta.n_companies.toLocaleString('en-IN')} companies,{' '}
+          {meta.n_company_years.toLocaleString('en-IN')} company-year rows, and{' '}
+          {meta.n_defaults.toLocaleString('en-IN')} <i>positive rows</i>. Because one default labels up to
+          {' '}{meta.horizon_years} preceding company-years, the positive-row count is larger than the number of
+          companies that actually defaulted; it is a count of rows, never of defaults.
+        </p>
+        <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+          <b>And {m.auc} is the ceiling of a range, not a point estimate.</b> It comes from the most
+          permissive of four test designs — a company-grouped <i>random</i> split, which lets one year help
+          predict another year at a different company, something a forward-looking user cannot do. Tested
+          forwards instead the same model scores about 0.80 on a temporal holdout and about 0.72 when the
+          split is temporal <i>and</i> company-disjoint. The honest reading is <b>0.72–{m.auc}</b>, with{' '}
+          {m.auc} at the top of it.
         </p>
         <p className="text-xs text-slate-600 mt-2">Source: {meta.source}. Predicts default within {meta.horizon_years} years from annual financials; no company appears in both training and test.</p>
       </section>
 
       {/* headline stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Stat value={m.auc} label="Real-data ROC-AUC"
-              hint={m.auc_ci ? `95% CI ${m.auc_ci[0]}–${m.auc_ci[1]} · honest band ~0.75–0.85` : 'honest band ~0.75–0.85 — no synthetic inflation'} />
+        <Stat value={`≤ ${m.auc}`} label="Real-data ROC-AUC (ceiling)"
+              hint={m.auc_ci
+                ? `most permissive of four designs, 95% CI ${m.auc_ci[0]}–${m.auc_ci[1]}; ~0.72 on the strictest`
+                : 'most permissive of four designs; ~0.72 on the strictest'} />
         <Stat value={`${m.auc} vs ${m.logistic_auc}`} label="LightGBM vs logistic" hint="on real data, the model earns its keep" />
-        <Stat value={meta.n_companies.toLocaleString('en-IN')} label="Real companies" hint={`${meta.n_defaults.toLocaleString('en-IN')} real defaults · ${(meta.default_rate * 100).toFixed(1)}% of ${meta.n_company_years.toLocaleString('en-IN')} company-years`} />
+        <Stat value={meta.n_companies.toLocaleString('en-IN')} label="Real companies" hint={`${meta.n_defaults.toLocaleString('en-IN')} positive rows · ${(meta.default_rate * 100).toFixed(1)}% of ${meta.n_company_years.toLocaleString('en-IN')} company-years`} />
         <Stat value={m.brier} label="Brier score" hint="well-calibrated probabilities" tint="text-slate-900" />
       </div>
 

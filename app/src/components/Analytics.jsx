@@ -122,6 +122,23 @@ function Rigor({ rigor }) {
           </div>
         </div>
       </div>
+
+      {/*
+        These two cards and the headline ROC-AUC at the top of the screen are different
+        measurements, and a reader who does not know that reads the higher one as the
+        model's discrimination. Say which split each came from, once, underneath them.
+      */}
+      {(oot.auc != null || ladder.length > 0) && (
+        <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-700">
+          <b>Read these two beside the headline AUC, not instead of it.</b> The AUC in the
+          top row is measured on the untouched test book, at the operating point the bank
+          actually runs. The two figures here come from the run&rsquo;s separate rigor split
+          {oot.train_window ? <> ({oot.train_window} vs {oot.test_window})</> : null}
+          {' '}— a different split over a different set of rows, published to show the model
+          does not collapse out of time or depend on the choice of algorithm. They are not
+          alternative headline numbers.
+        </p>
+      )}
     </>
   )
 }
@@ -234,7 +251,7 @@ export function PrecisionCard({ metrics }) {
 
   return (
     <section className="rounded-xl border border-idbi-green/30 bg-idbi-green/5 p-5">
-      <h3 className="font-bold text-idbi-green">The number an officer actually acts on</h3>
+      <h2 className="font-bold text-idbi-green">The number an officer actually acts on</h2>
       {p?.value != null && (
         <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-1">
           <div className="text-4xl font-extrabold text-idbi-green">{pct(p.value, 1)}</div>
