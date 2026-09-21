@@ -196,6 +196,52 @@ def test_rag_bucket_thresholds():
 
 
 # ---------------------------------------------------------------------------
+# The DECISION score — what every band in this pack is derived from
+#
+# The operating thresholds are searched over a four-month trailing mean of the
+# per-month PD, so grading bands on the raw per-month probability grades a
+# different policy from the one the bank runs. The arithmetic is pinned here on
+# a hand-computed case, out of month order and with two accounts interleaved,
+# because a rolling mean that silently ignored the sort would still look
+# plausible on real data.
+# ---------------------------------------------------------------------------
+def test_decision_score_is_the_per_account_trailing_mean():
+    df = pd.DataFrame({
+        "account_id": ["B", "A", "A", "B", "A", "B"],
+        "month_idx": [1, 2, 0, 0, 1, 2],
+    })
+    p = np.array([0.5, 0.4, 0.1, 0.9, 0.2, 0.7])
+    # A over months 0,1,2 -> 0.1, 0.2, 0.4  =>  0.1, 0.15, 0.2333...
+    # B over months 0,1,2 -> 0.9, 0.5, 0.7  =>  0.9, 0.7,  0.7
+    expected = np.array([0.7, (0.1 + 0.2 + 0.4) / 3, 0.1, 0.9, 0.15, 0.7])
+    np.testing.assert_allclose(sh.decision_score(df, p), expected)
+
+
+def test_decision_score_window_matches_the_exporters():
+    """One smoothing spec. A pack grading a different window grades nothing."""
+    sh._ensure_src_on_path(REPO_ROOT)
+    import export_demo as ed
+
+    assert sh.SMOOTH_WINDOW == ed.SMOOTH_WINDOW
+
+
+def test_the_rank_order_population_bands_the_decision_score():
+    """DR-11/DR-12 grade the policy that is operated, not the raw score."""
+    df = pd.DataFrame({
+        "account_id": ["A", "A", "A", "A"],
+        "month_idx": [0, 1, 2, 3],
+        "months_to_npa": [-1, -1, -1, -1],
+        "portfolio": ["MSME-CC"] * 4,
+    })
+    # A single spike: raw 0.9 is Red at these thresholds, its trailing mean is not.
+    p = np.array([0.0, 0.0, 0.0, 0.9])
+    population = sh.build_rank_order_population(df, p, amber=0.04, red=0.40)
+    assert list(population["bucket"]) == ["green", "green", "green", "amber"]
+    assert population["pd"].iloc[-1] == 0.9, "the raw score is still carried, for the record"
+    np.testing.assert_allclose(population["decision_score"].iloc[-1], 0.225)
+
+
+# ---------------------------------------------------------------------------
 # DR-03 slippage ratio (runner 01) — hand-computed on a tiny accounts table
 # ---------------------------------------------------------------------------
 def test_slippage_windows_48_months():

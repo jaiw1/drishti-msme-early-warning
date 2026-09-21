@@ -14,7 +14,11 @@ function lsqSlope(vals) {
 
 export function runwayEstimate(timeline, refMonth, redThr) {
   if (!timeline?.length) return null
-  const hist = timeline.filter((p) => p.date <= refMonth).map((p) => p.pd_smooth ?? p.pd)
+  // The DECISION score: the threshold this projects at is a threshold on that score.
+  // `pd_smooth` is the same number under its older name; `pd` only as a last resort.
+  const hist = timeline
+    .filter((p) => p.date <= refMonth)
+    .map((p) => p.decision_score ?? p.pd_smooth ?? p.pd)
   if (hist.length < 7) return null
   const vals = hist.slice(-6)
   const cur = vals[vals.length - 1]

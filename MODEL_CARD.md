@@ -10,7 +10,17 @@ validated on
 `validation/runners/01`–`12`
 **Version:** DM-8 round 2 (plan §B/L5), 2026-09-17 — **the last permitted tuning round.** The
 plan allows two model-tuning rounds; this is round 2, and every number in this card from here
-on is reported as measured, not chased toward a band. §17 is round 2's own record: what changed,
+on is reported as measured, not chased toward a band.
+
+**Revision 2026-09-21 — not a tuning round.** No hyperparameter, feature, label, criterion or
+threshold band changed. What changed is *where* the operating point and the calibrator are
+fitted, and *which rows* are eligible to be fitted or graded: thresholds and the served-score
+calibrator now come from a borrower-disjoint **policy fold** carved out of the training side
+(§6), and every fit and metric is restricted to `labelable == 1` (§6). The export also names
+the one score every consumer must band on (`decision_score`, §7) — the platform API had been
+banding the raw single-month `pd`, which at the saved thresholds put 443 of 12,760 accounts in
+a different band from the book the model published. The headline moved 84.5% → **88.6%** and
+AUC 0.902 → **0.885**; §8 carries both columns side by side and says which is which. §17 is round 2's own record: what changed,
 what was tested and rejected, and the two DR-18/DR-12 findings that stay reported fails by
 design. This card describes the model as trained on the 9,000×36 and 45,000×48 populations
 `DATA_CARD.md` documents; both seed `20260709`.
@@ -121,6 +131,30 @@ FEATURES only (§3), not from the panel — as of round 2, so is `months_since_m
 - **Primary — grouped holdout.** `GroupShuffleSplit(test_size=0.30, random_state=7)`, grouped on
   `account_id`, so no account's months appear in both train and test. DR-01 gates on the AUC
   from this split.
+- **Policy fold (new, 2026-09-21).** The 70% training side is split again, borrower-disjoint, at
+  30%: **fit** (≈49% of accounts) trains the model, **policy** (≈21%) chooses the Amber/Red
+  thresholds and fits the served-score calibrator, and **test** (30%) is measured and exported.
+  The test groups are the same accounts the primary split has always selected —
+  `GroupShuffleSplit` shuffles the sorted unique groups, so carving the policy fold out of TRAIN
+  leaves the held-out book untouched and the same size (`export_demo.three_way_split`, pinned by
+  a test).
+
+  **Why.** Until this change, `choose_operating_thresholds` was handed the held-out TEST
+  snapshot, read its future `months_to_npa` outcomes to pick the cost-minimising pair, and the
+  same snapshot then reported that pair's Red-band precision, missed-NPA share, workload and
+  band monotonicity. That is threshold selection on the evaluation set: the classifier AUC was
+  unaffected, but the operating-point figures were not an untouched reading of a frozen policy,
+  and requiring per-portfolio monotonicity during the search made later monotonicity on the
+  same book partly a construction result. Thresholds are now chosen on a fold no exported
+  account appears in, frozen, and only then measured on the test book. `tests/test_export_demo.py`
+  asserts the invariant directly: rewrite every outcome in the test fold and the fitted
+  thresholds do not move (and asserts the perturbation reached the test fold, so the check
+  cannot pass vacuously).
+- **Eligibility (new, 2026-09-21).** Every fit and every metric is restricted to `labelable == 1`
+  — the rule `validation/criteria.yaml` states and the validation runners apply. Rows whose
+  12-month forward window runs off the end of the panel are **scored** (the cockpit must draw
+  them) and **never graded**. The exporter previously trained and measured on the whole panel,
+  which let the simulator expose outcomes a bank extract could not yet have observed.
 - **Out-of-time (DR-05).** Trained on months 0–17, tested on months 18+, a genuinely temporal
   split rather than a random one. Gate: OOT AUC ≥ 0.95 × grouped-holdout AUC. Both sizes clear
   it comfortably: 9k 0.933 (ratio 1.047), 45k 0.933 (ratio 1.006) — SD-D4/D5's measurement, on
@@ -141,14 +175,35 @@ portfolio without that observation channel never produces a reason, by construct
 float NaN and pandas nullable `Int64`'s NA, which raises rather than compares False on a bare
 `<`/`>` — a real bug DM-2/3 found and fixed once, in `reason_codes`, not per-rule).
 
-Calibration (`src/rigor.py`, DR-08–DR-10): isotonic regression fit on an inner 25% validation
-slice of train, applied to the held-out test predictions. **Brier(calibrated) < Brier(raw) is
-gated (DR-10)** — calibration must measurably help, not just re-shape the score. `pd` in the
-contract export is the raw single-month probability; `pd_smooth` (a 4-month trailing mean, the
-value bands are actually cut on — §10) is the trend an early-warning desk would act on, not a
-jittery single month. `pd_calibrated` exists in the contract shape as an optional field but is
-not populated in this build — the isotonic fit lives in the rigor pack's own held-out slice, not
-threaded back through the export's per-account scores.
+**Calibration of the rigour pack's own model** (`src/rigor.py`, DR-08–DR-10): isotonic
+regression fit on an inner 25% validation slice of train, applied to the held-out test
+predictions. **Brier(calibrated) < Brier(raw) is gated (DR-10)** — calibration must measurably
+help, not just re-shape the score. That fit is a property of *that* model and *that* score.
+
+**Calibration of the score DRISHTi actually serves** (new, 2026-09-21). A calibration measured
+on a separately fitted model, on the raw per-month probability, before smoothing, does not
+transfer to the exported model's smoothed decision score merely because both are called a PD —
+and until this change `pd_calibrated` was left empty while the deck implied a displayed 40%
+meant 40%. The exporter now fits an isotonic map on the **policy fold** (borrower-disjoint from
+both the training fold and the exported book), applies it to `decision_score`, writes the result
+to `scores.pd_calibrated`, and reports Brier and equal-count ECE for both the raw and the
+calibrated served score on the untouched test fold (`metrics.calibration_served`, with its
+reliability table). The calibrator never saw a test row; the model never saw a policy row.
+
+**Which score is which.**
+
+| field | what it is | decides anything? |
+|---|---|---|
+| `pd` | raw single-month probability at the reference month | no — transparency only |
+| `pd_smooth` | 4-month trailing mean of `pd` | no — kept under its old name for the chart |
+| **`decision_score`** | **the same trailing mean, under the name the thresholds were searched over** | **yes — every band, sort order, timeline band and memo** |
+| `pd_calibrated` | `decision_score` through the policy-fold isotonic map | no — read as a probability, not a band |
+
+`meta.policy_version` and `meta.decision_score` state the transform in the export itself, so a
+consumer cannot band a different quantity from the one the thresholds were chosen over without
+contradicting the file it loaded. It could before: the platform API banded raw `pd`, which at
+the saved thresholds put 443 of 12,760 accounts in a different band from the book the model
+published — 283 Red became 357.
 
 ## 8. Metrics, with confidence intervals, at both sizes
 
@@ -157,23 +212,35 @@ normal approximation because several cells are small and some have zero defaults
 normal interval collapses to a point. Source: DM-4/DM-5's reported table, both from the same
 frozen 8-month-horizon book at each size.
 
-| metric | 9k × 36 (DM-4/5, pre-round-2) | 45k × 48 (AUC 0.902, round 2, 2026-09-17) |
-|---|---|---|
-| **`red_band_precision_8m`** | **44.1% [35.4–53.1]** (52/118) | **84.5% [79.8–88.2]** (239/283) |
-| `missed_npa_share` | 13.9% [8.0–23.2] | 17.6% [13.9–21.9] |
-| `raw_accuracy_8m` / flag-nobody baseline | 96.3% / **96.9%** | 98.8% / 97.3% |
-| `base_rate_8m` / `base_rate_12m` | 3.1% / 3.9% | 2.7% / 3.9% |
-| `recall_at_10pct_budget` | 74.7% [64.1–83.0] | 86.5% [82.5–89.7%] |
-| `flagged_share` | 27.8% | 4.7% [4.3–5.0] |
+| metric | 9k × 36 (DM-4/5, pre-round-2) | 45k × 48, thresholds picked on the TEST book (superseded 2026-09-21) | 45k × 48, thresholds picked on the POLICY fold (**shipped**) |
+|---|---|---|---|
+| **`red_band_precision_8m`** | **44.1% [35.4–53.1]** (52/118) | 84.5% [79.8–88.2] (239/283) | **88.6% [84.0–92.0]** (217/245) |
+| `missed_npa_share` | 13.9% [8.0–23.2] | 17.6% [13.9–21.9] | 16.1% [12.6–20.4] |
+| `raw_accuracy_8m` / flag-nobody baseline | 96.3% / **96.9%** | 98.8% / 97.3% | 98.8% / 97.3% |
+| `base_rate_8m` / `base_rate_12m` | 3.1% / 3.9% | 2.7% / 3.9% | 2.7% / 3.9% |
+| `recall_at_10pct_budget` | 74.7% [64.1–83.0] | 86.5% [82.5–89.7] | 85.9% [81.8–89.1] |
+| `flagged_share` | 27.8% | 4.7% [4.3–5.0] | 5.5% [5.1–5.9] |
+| band counts (Red / Amber / Green) | — | 283 / 310 / 12,167 | 245 / 458 / 12,057 |
+| grouped-holdout AUC | — | 0.902 | 0.885 [0.8784–0.8928] |
+| ECE / Brier on the served score | — | not measured | 0.0056 / 0.0195 raw, **0.0008 / 0.0186** calibrated |
 
-The 9k column is DM-4/5's original run, not re-measured this round (round 2 touched no code path
-that changes the 9k demo book). The 45k column is round 2's own run (`src/export_demo.py`, the
-same frozen book DR-14/DR-19 discuss elsewhere in this card) — superseding the DM-4/5 45k figures
-this table carried before round 2, which moved with the panel regeneration + elapsed-time-band
-feature change (§3, §17), not with any threshold or label change.
+The 9k column is DM-4/5's original run, not re-measured (nothing since has touched a code path
+that changes the 9k demo book).
+
+**The middle column is kept because it is the one a reviewer will have seen, not because it is
+a second valid reading.** Its operating point was chosen by reading the future outcomes of the
+very book it is measured on (§6), so its precision, missed-NPA share, workload and band
+monotonicity are not an untouched evaluation of that point. The right column is the same model
+and the same held-out book, with the thresholds and the calibrator fitted on a borrower-disjoint
+policy fold and frozen first. Precision went **up** (88.6% vs 84.5%) and missed-NPA **down**
+(16.1% vs 17.6%) — the honest measurement is not the pessimistic one here, which is worth saying
+plainly: the point of the change is that the number now means what it says, not that it moved in
+a flattering direction. AUC fell 0.902 → 0.885, which is the cost of training on ~49% of
+accounts instead of ~70% so the policy fold could exist.
 
 **The headline, derived and asserted in-script (`assert_honesty`), never typed:**
-> "84.5% of Red-flagged accounts went NPA within 8 months (95% CI 79.8%–88.2%, n=283)" — 45k, round 2.
+> "88.6% of Red-flagged accounts went NPA within 8 months (95% CI 84.0%–92.0%, n=245)" — 45k, shipped.
+> Superseded: "84.5% ... (95% CI 79.8%–88.2%, n=283)" — 45k, thresholds picked on the test book.
 > At 9k (pre-round-2): "44.1% ... (95% CI 35.4%–53.1%, n=118)".
 
 **Why not "accuracy".** At 9k the model scores *below* the flag-nobody baseline on raw accuracy
@@ -198,9 +265,16 @@ testable. DR-11 (bands strictly monotone Green < Amber < Red) passes **pooled an
 portfolios at 45k** (5/8 at 9k, where three portfolios' Red bands are simply too thin — 1, 3, 3
 accounts — to be statistically informative, not evidence the model fails there).
 
+**Since 2026-09-21 that pass is an out-of-sample result.** DR-11 is also a *feasibility filter*
+inside the threshold search: a candidate pair that breaks per-portfolio monotonicity is not a
+candidate at all. While the search ran on the held-out book, monotonicity on that book was
+partly a construction — the pair had been required to produce it there. The search now runs on
+the policy fold (§6, §10), so the eight portfolios' monotonicity on the exported book is
+something the frozen pair *achieved*, not something it was selected to display.
+
 **Per-portfolio AUC — round 2's official measurement** (`validation/runners/01_holdout.py`,
-DR-06, 45k×48, seed 7 — the validation lane's own panel, independently generated from the main
-pipeline's, hence a slightly different pooled figure than §8's 0.902): pooled **0.8885**; every
+DR-06, 45k×48, seed 7 — the validation lane's own panel and its own split, independently
+generated from the main pipeline's, hence a different pooled figure from §8's 0.885): every
 portfolio clears the DR-06 floor of 0.78 on the point estimate:
 
 | Portfolio | AUC (round 2, DR-06) |
@@ -220,7 +294,8 @@ reproduced here to avoid two "current" tables.)
 
 **DR-12, literal vs CI-aware — the ruling this card records.** DR-12 (≥9/10 decile step-ups
 non-decreasing) is pre-registered on literal arithmetic and **fails at both sizes on the literal
-reading** (5/9 pooled at 9k; **round 2's official 45k run: 5/9 pooled, 0.5556**) — not because the
+reading** (5/9 at 9k; **the 2026-09-21 45k run: 6/9 in the worst portfolio, 0.6667** — 5/9 before
+the pack was switched to band the decision score) — not because the
 model doesn't rank risk, but because almost all realised risk concentrates in the top decile at
 this score's separation, leaving deciles 1–9 sitting at fractions of a percent where step-to-step
 ordering is statistical noise (one clear example from an earlier run: MSME-CC's 45k "reversal" was
@@ -243,8 +318,18 @@ breaks DR-11 is not a candidate at all, whatever it costs). Expected loss on a m
 `EAD × LGD + EAD × (effective_rate + penal_rate)/100 × reversal_months/12` — principal at risk
 plus RBI-IRAC income reversal.
 
-**Chosen pair, 45k:** amber **0.0741** / red **0.2364**, expected cost **₹10.36 cr**, vs the
-July 2026 hand-set 0.04/0.40 pair's ₹10.75 cr (both DR-11-admissible at this size).
+**The search runs on the POLICY fold, not on the book the export reports.** See §6. The cost,
+precision and missed-NPA figures below are therefore the policy fold's (8,933 accounts) and are
+not comparable to the rupee totals this card carried before 2026-09-21, which were priced on
+the 12,760-account test book. What the chosen pair then delivered on the untouched test book is
+§8's table.
+
+**Chosen pair, 45k:** amber **0.069298** / red **0.343723**, expected cost **₹6.68 cr** over the
+policy fold, vs the July 2026 hand-set 0.04/0.40 pair's ₹6.80 cr on the same fold — 1.7%
+cheaper. Both are DR-11-admissible at this size. Cost alone, with the DR-11 constraint lifted,
+would have picked 0.1515/0.1658 at ₹6.61 cr: the pre-registered constraint costs ₹0.07 cr on
+this book, and that price is emitted beside the pair (`thresholds.unconstrained`) rather than
+absorbed.
 **9k:** amber **0.0083** / red **0.0551**; the July pair is **not** DR-11-admissible at 9k (its
 Red band's default rate is not strictly the highest in every portfolio at that size), which the
 export labels explicitly (`constraint_level`) rather than letting the July pair look like a
@@ -354,6 +439,20 @@ can and cannot be trusted to say:
   frozen July 2026 output on real Indian MSME financials, embedded **verbatim** — it is a
   separate, independent proof-of-method on a different (real, smaller, annual-not-monthly) data
   source, never blended into or used to fine-tune the synthetic-panel model this card describes.
+
+  Its denominators, stated separately because they are three different things: **3,171
+  companies**, **17,031 company-year rows**, **1,284 positive company-year rows** spread over
+  **851 distinct companies**. The target is default within the next two financial years
+  (`src/real_model.py::build_table`, `horizon=2`), so a single default event labels up to two
+  preceding company-years — which is why the positive-row count (1,284) exceeds the count of
+  companies that defaulted (851), and why neither number is a count of "real defaults". The
+  bootstrap around AUC 0.81 is clustered by company for the same reason.
+
+  It is **complementary evidence that a two-year financial-statement model has signal on real
+  MSMEs** — not external validation of the twelve-month behavioural model this card describes.
+  The two differ in horizon (2 years vs 12 months), in observation unit (company-year vs
+  account-month), in features (filed balance-sheet ratios vs monthly account conduct) and in
+  population. A number measured on one is not a number earned by the other.
 - **The bank sandbox is a static mock.** Each Atlas endpoint returns its own structured mock
   record and returns the same one regardless of the request (`sandbox_fixture: true`, BR-6a;
   API 433 is the one endpoint that returns a composite record with a slice for every API) —
@@ -374,7 +473,7 @@ can and cannot be trusted to say:
   than engineered around.
 - **DR-12's literal-vs-CI-aware ruling (§9) is a recorded open question, not a resolution — and
   stays a reported fail both rounds.** Round 2's official 45k run: 5/9 pooled decile steps
-  non-decreasing (0.5556), in the same 5–7/9 range every earlier run has shown; every reversal
+  non-decreasing (0.6667 worst cell), in the same 5–8/9 range every earlier run has shown; every reversal
   recorded is a same-magnitude, low-count cell whose two Wilson intervals overlap (§9's MSME-CC
   example from an earlier run: 0.0077→0.0076, one account). Under the *reported, not gated*
   CI-aware reading, round 2 clears **9/9 — literally 1.0000 — pooled and in every one of the eight
@@ -509,7 +608,7 @@ elapsed-time-correlated feature, not a defect in this round's fix, and not chase
 | ID | Status | Metric | Value |
 |---|---|---|---|
 | DR-01 | pass | grouped AUC | 0.8885 |
-| DR-02 | report | red-band precision @8m | 72.9% (n=11,657) |
+| DR-02 | report | red-band precision @8m | 88.2% (n=8,176) — banded on the decision score since 2026-09-21; 72.9% (n=11,657) when the pack banded the raw per-month score |
 | DR-03 | pass | annual slippage | 3.31% |
 | DR-04 | report | label base rate (annual) | 3.63% |
 | DR-05 | pass | OOT/holdout AUC ratio | 1.0009 |
@@ -519,7 +618,7 @@ elapsed-time-correlated feature, not a defect in this round's fix, and not chase
 | DR-09 | pass | per-cut ECE | all cells ≤ 0.04 |
 | DR-10 | pass | Δ Brier (cal − raw) | −0.000068 |
 | DR-11 | pass | band monotonicity | pooled + 8/8 portfolios |
-| **DR-12** | **fail** | monotone decile-step fraction | **0.5556** (literal); 1.0000 pooled + 8/8 CI-aware |
+| **DR-12** | **fail** | monotone decile-step fraction | **0.6667** (literal, worst cell); 1.0000 pooled + 8/8 CI-aware |
 | DR-13 | pass | score PSI | 0.0006 |
 | **DR-14** | **fail** | max feature CSI | **3.6344** (binding: `vintage_band`) |
 | DR-15 | pass | DPD-family attribution @10–12m | 3.81% (alt 20.92%) |
@@ -531,8 +630,8 @@ elapsed-time-correlated feature, not a defect in this round's fix, and not chase
 | DR-21 | pass | cross-seed AUC CI width | 0.0123 |
 | DR-22 | pass | \|ΔAUC\| at 2× base rate | 0.0019 |
 | DR-23 | pass | \|ΔAUC\| bureau missing | 0.0069 |
-| DR-24 | report | adverse-impact ratio (worst) | geography (region) 0.7198; constitution 0.7752, qualification 0.7772, promoter_age_group 0.9195 |
-| DR-25 | report | TPR gap (worst) | geography (region) 0.0992; constitution 0.0962, qualification 0.0215, promoter_age_group 0.0209 |
+| DR-24 | report | adverse-impact ratio (worst) | geography (region) 0.7010; constitution 0.7912, qualification 0.7661, promoter_age_group 0.9405 — flagged on the DECISION score, as the officer's queue is |
+| DR-25 | report | TPR gap (worst) | constitution 0.1023; geography (region) 0.0954, qualification 0.0242, promoter_age_group 0.0240 — same banding change |
 | DR-26 | report | baseline ladder | DPD-only 0.6947 → scorecard 0.8569 → LightGBM 0.8885 (validation's own 45k panel); rigor.py's main-pipeline cross-check: logistic 0.873 → LightGBM 0.902 |
 
 **Runtimes (round 2, this machine):** `generate_data.py --n 45000 --months 48`: 9.3s ·

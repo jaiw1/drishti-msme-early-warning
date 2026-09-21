@@ -43,9 +43,16 @@ describe('Portfolio risk', () => {
     const cards = heading.nextElementSibling
     const msmeCc = within(cards).getByText('MSME-CC').parentElement
     expect(msmeCc).not.toHaveTextContent('not reported')
-    expect(msmeCc).toHaveTextContent('94.6%')
-    expect(msmeCc).toHaveTextContent('95% CI 82.3%–98.5%')
-    expect(msmeCc).toHaveTextContent('35 of 37')
+    // Read the expected figures out of the export rather than pinning them here: the
+    // point of this test is that the screen reads the EXPORT's key names (`precision`,
+    // `ci_lo`, `hits`) and not the API's (`value`, `ci_low`), and hard-coded numbers
+    // made it fail every time the model was re-run without ever testing that.
+    const cell = demoData.metrics.rank_order.by_portfolio
+      .find((p) => p.portfolio === 'MSME-CC').red_band_precision_8m
+    const pct = (v) => `${(v * 100).toFixed(1)}%`
+    expect(msmeCc).toHaveTextContent(pct(cell.precision))
+    expect(msmeCc).toHaveTextContent(`95% CI ${pct(cell.ci_lo)}–${pct(cell.ci_hi)}`)
+    expect(msmeCc).toHaveTextContent(`${cell.hits} of ${cell.n}`)
   })
 
   it('says a portfolio’s precision is not reported rather than inventing one', async () => {

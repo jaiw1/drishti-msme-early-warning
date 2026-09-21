@@ -1,5 +1,16 @@
 # DRISHTi — stale-string sweep (SB-1)
 
+> **Superseded, 2026-09-21 — read this first.** Every number quoted below, including the
+> "84.5% … n=283" headline this sweep installed, was measured under an operating point
+> chosen on the held-out test book. That selection now happens on a separate, borrower-
+> disjoint **policy fold** and the thresholds are frozen before the test book is measured
+> (see `MODEL_CARD.md` §6, README "Thresholds and cost model"). The headline, the band
+> counts and the threshold pair all moved as a result. This file is kept as the record of
+> what the September 17 sweep found and fixed — it is **history, not a source of truth**.
+> The live numbers are in `app/public/demo_data.json` and `validation/report/REPORT.md`,
+> and the rule this file already states still holds: always read the number fresh from the
+> file, never carry one forward from an earlier report.
+
 Swept: `README.md`, `MODEL_CARD.md`, `DATA_CARD.md`, `app/src/**` copy, `app/index.html`, the
 deck (`DRISHTi — Prototype Submission Deck.pptx`). Patterns: `~0.95 AUC` / `0.95`, `93%` flagged
 ≥6 mo, `1.8%`, `9,000 imaginary`, `MSME loan` as the whole scope, `~2.7%/year`, `complements

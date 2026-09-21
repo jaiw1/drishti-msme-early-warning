@@ -127,9 +127,12 @@ def run(criteria: list[Criterion], ctx: RunnerContext) -> list[Result]:
     h = sh.get_holdout(ctx)
     df_test, y_test, p_test = h["df_test"], h["y_test"], h["p_test"]
     amber, red, is_live = sh.get_rag_thresholds(ctx)
-    bucket = sh.rag_bucket(p_test, amber=amber, red=red)
+    # Banded on the DECISION score, not the raw per-month probability: who gets
+    # flagged is a property of the policy the bank runs, and that policy is
+    # defined on the smoothed score (see `sh.decision_score`).
+    bucket = sh.rag_bucket(sh.decision_score(df_test, p_test), amber=amber, red=red)
     flagged = (bucket != "green")
-    thr_note = (f"flagged = Amber or Red at amber={amber}, red={red} "
+    thr_note = (f"flagged = Amber or Red on the decision score at amber={amber}, red={red} "
                 f"({'live cost-minimising' if is_live else 'FALLBACK legacy 0.04/0.40'})")
     no_field_note = "DRISHTi holds no gender, caste, religion or marital-status field at all."
 

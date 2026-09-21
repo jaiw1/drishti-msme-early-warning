@@ -161,6 +161,14 @@ def build_meta(internal_out: dict, *, label: str | None, seed: int, root: Path,
         npa_definition_dpd=int(im["npa_definition_dpd"]),
         n_accounts_scored=int(im["n_accounts_scored"]),
     )
+    # The banding policy, named. `decision_score` is the score the thresholds were
+    # chosen over; a consumer that bands on anything else is not running this
+    # policy, whatever thresholds it uses. Omitted (rather than emitted null) when
+    # an older internal payload carries neither — `meta` forbids unknown keys and
+    # a null would be a claim that the run had no policy.
+    for key in ("policy_version", "decision_score", "eligibility"):
+        if im.get(key) is not None:
+            meta[key] = im[key]
     debug = dict(git_sha=git_sha, git_note=git_note, criteria_sha=crit_sha,
                 model_run_id=run_id, label=label or "local-dev")
     return meta, debug
@@ -336,7 +344,15 @@ def runway_estimate(timeline: list[dict], ref_month: str, red_thr: float) -> int
     hist = [pt for pt in timeline if pt.get("date") and pt["date"] <= ref_month]
     if len(hist) < 7:
         return None
-    vals = [pt.get("pd_smooth") if pt.get("pd_smooth") is not None else pt.get("pd") for pt in hist[-6:]]
+    # Projected on the DECISION score, because the threshold it is projected AT
+    # is a threshold on the decision score. Falls back to `pd_smooth` (the same
+    # number under its older name) and only then to `pd`.
+    vals = [
+        pt.get("decision_score")
+        if pt.get("decision_score") is not None
+        else (pt.get("pd_smooth") if pt.get("pd_smooth") is not None else pt.get("pd"))
+        for pt in hist[-6:]
+    ]
     if any(v is None for v in vals):
         return None
     n = len(vals)
@@ -382,7 +398,15 @@ def build_contract_accounts(internal_out: dict, *, bank_ctx: B.BankContext | Non
         if pd_smooth is None:
             pd_smooth = rec.get("pd")          # already the smoothed value, internal shape
         if pd_raw is None:
+            pd_raw = rec.get("pd_raw")
+        if pd_raw is None:
             pd_raw = pd_smooth if pd_smooth is not None else 0.0
+        # The score the bands were chosen over. The record carries it explicitly
+        # now; `pd_smooth` is the same number and is the fallback for an older
+        # internal payload, because that is what the July policy banded on.
+        decision = rec.get("decision_score")
+        if decision is None:
+            decision = pd_smooth if pd_smooth is not None else 0.0
 
         overlay = bank_ctx.overlay_for(aid) if bank_ctx is not None else {}
         provenance = (bank_ctx.provenance_for(aid) if bank_ctx is not None
@@ -411,6 +435,12 @@ def build_contract_accounts(internal_out: dict, *, bank_ctx: B.BankContext | Non
             channels_present=list(rec.get("channels_present") or []),
             scores=dict(
                 pd=round(float(pd_raw), 4), pd_smooth=round(float(pd_smooth), 4),
+                # The ONE score every band is derived from. Equal to pd_smooth under
+                # the current policy; emitted under its own name so a consumer never
+                # has to guess which of the two the thresholds were tuned on.
+                decision_score=round(float(decision), 4),
+                pd_calibrated=(None if rec.get("pd_calibrated") is None
+                               else round(float(rec["pd_calibrated"]), 4)),
                 bucket=rec.get("bucket"), reasons=list(rec.get("reasons") or [])[:5],
                 first_warning_lead=int(rec.get("first_warning_lead") or 0),
                 runway_months=runway_estimate(tl, ref_month, red_thr),
@@ -425,6 +455,7 @@ def build_contract_accounts(internal_out: dict, *, bank_ctx: B.BankContext | Non
         points = [
             dict(date=pt.get("date"),
                 pd=round(_num0(pt.get("pd")), 4), pd_smooth=round(_num0(pt.get("pd_smooth")), 4),
+                decision_score=round(_num0(pt.get("decision_score", pt.get("pd_smooth"))), 4),
                 utilisation=(None if pt.get("utilisation") is None else round(float(pt["utilisation"]), 4)),
                 inflow=_num0(pt.get("inflow")))
             for pt in tl
@@ -436,7 +467,9 @@ def build_contract_accounts(internal_out: dict, *, bank_ctx: B.BankContext | Non
             # the account's own snapshot values, so a caller with an incomplete
             # fixture never trips a minItems violation on this account alone.
             points = [dict(date=ref_month, pd=round(_num0(pd_raw), 4),
-                           pd_smooth=round(_num0(pd_smooth), 4), utilisation=None, inflow=0.0)]
+                           pd_smooth=round(_num0(pd_smooth), 4),
+                           decision_score=round(_num0(decision), 4),
+                           utilisation=None, inflow=0.0)]
         contract_timelines[aid] = points
     return accounts, contract_timelines
 
@@ -564,11 +597,22 @@ def stratified_sample(internal_out: dict, n: int, *, seed: int = 7) -> dict:
     out["timelines"] = {k: v for k, v in internal_out.get("timelines", {}).items() if k in picked_ids}
     out["memos"] = {k: v for k, v in internal_out.get("memos", {}).items() if k in picked_ids}
     out["spotlight"] = [s for s in internal_out.get("spotlight", []) if s in picked_ids]
+    # The band counts OF THE SAMPLE, recorded beside it. `portfolio_summary` counts
+    # the full panel, so it cannot be used to check a consumer that loads this file:
+    # any consumer that re-bands these accounts from `decision_score` against
+    # `portfolio_summary.red_thr / amber_thr` must reproduce exactly these three
+    # numbers, and the platform's integration test asserts that it does.
+    sampled_bands = {band: sum(1 for r in sampled_portfolio if r.get("bucket") == band)
+                     for band in ("red", "amber", "green")}
     out["_demo_sample"] = dict(
         requested=int(n), sampled=len(sampled_portfolio), full_panel=total,
         stratified_by=["portfolio", "bucket"], seed=int(seed),
+        bands=sampled_bands,
+        banded_on="decision_score",
+        policy_version=internal_out.get("meta", {}).get("policy_version"),
         note=("metrics / thresholds / rank_order / rigor below are the FULL panel's — "
-              "only accounts/timelines are sampled, for file size."),
+              "only accounts/timelines are sampled, for file size. `bands` counts THIS "
+              "sample, so a consumer can check its own banding against it."),
     )
     return out
 

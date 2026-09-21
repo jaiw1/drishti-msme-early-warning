@@ -25,6 +25,7 @@ import math
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -741,6 +742,98 @@ def test_the_bands_in_the_book_are_the_thresholds_that_were_costed(payload):
         # exactly on a threshold could differ; none may differ by a whole band.
         assert record["bucket"] == expected or abs(record["pd"] - amber) < 1e-4 \
             or abs(record["pd"] - red) < 1e-4
+
+
+# --------------------------------------------------------------------------- #
+# DM-5 / review §1 — the thresholds were chosen WITHOUT reading the test book
+#
+# The July build passed the held-out test snapshot into `choose_operating_thresholds`,
+# which reads its future `months_to_npa` outcomes to pick the pair, and then reported
+# Red-band precision on that same snapshot. Whatever else that is, it is not an
+# untouched evaluation of the selected operating point.
+#
+# The property that makes it untouched is testable directly and does not depend on
+# reading the code: rewrite every outcome in the test fold and the fitted thresholds
+# must not move. The perturbation is also asserted to have LANDED — a test that
+# silently perturbed nothing would pass on the broken build too.
+# --------------------------------------------------------------------------- #
+@pytest.fixture(scope="module")
+def perturbed_payload(payload) -> dict:
+    """The same panel, with every TEST-fold outcome flipped, exported again."""
+    panel, accounts = generate(
+        GeneratorConfig(n_accounts=EXPORT_ACCOUNTS, months=EXPORT_MONTHS)
+    )
+    panel = panel.assign(account_id=panel.account_id.astype(str))
+    static = accounts.assign(account_id=accounts.account_id.astype(str)).set_index("account_id")
+
+    _, _, test_rows = export_demo.three_way_split(panel["account_id"].to_numpy())
+    test_accounts = set(panel["account_id"].to_numpy()[test_rows])
+    mask = panel["account_id"].isin(test_accounts).to_numpy()
+    assert mask.any(), "the split produced no test rows to perturb"
+
+    poisoned = panel.copy()
+    # Flip the label, and move every months-to-NPA into (or out of) the action window,
+    # so both the label the model would fit and the outcome the cost search reads change.
+    flipped = 1 - pd.to_numeric(poisoned.loc[mask, "default_within_12m"], errors="coerce").fillna(0)
+    poisoned.loc[mask, "default_within_12m"] = flipped.astype(poisoned["default_within_12m"].dtype)
+    mtn = pd.to_numeric(poisoned.loc[mask, "months_to_npa"], errors="coerce").fillna(-1)
+    poisoned.loc[mask, "months_to_npa"] = (
+        mtn.where(mtn < 1, -1).mask(mtn < 1, 3).astype(poisoned["months_to_npa"].dtype)
+    )
+    return export_demo.build_export(poisoned, static)
+
+
+def test_rewriting_the_test_labels_cannot_move_the_thresholds(payload, perturbed_payload):
+    """The operating point is a function of the POLICY fold, and of nothing else."""
+    before, after = payload["thresholds"], perturbed_payload["thresholds"]
+    assert (after["amber"], after["red"]) == (before["amber"], before["red"])
+    assert after["applied"] == before["applied"]
+    assert after["chosen"]["expected_cost"] == before["chosen"]["expected_cost"]
+    assert (perturbed_payload["portfolio_summary"]["amber_thr"],
+            perturbed_payload["portfolio_summary"]["red_thr"]) == (
+        payload["portfolio_summary"]["amber_thr"], payload["portfolio_summary"]["red_thr"])
+
+
+def test_the_perturbation_really_did_reach_the_test_book(payload, perturbed_payload):
+    """Otherwise the test above would pass on a build that reads test outcomes.
+
+    Rewriting the test fold's outcomes must change what the test fold MEASURES —
+    the realised Red-band rate is computed against exactly those outcomes — even
+    though it may not change the thresholds those bands are drawn at.
+    """
+    before = payload["metrics"]["red_band_precision_8m"]
+    after = perturbed_payload["metrics"]["red_band_precision_8m"]
+    assert (before["n_defaulted"], before["n_defaulted_in_book"]) != (
+        after["n_defaulted"], after["n_defaulted_in_book"]
+    ), "flipping the test fold's outcomes left the test fold's measured outcomes unchanged"
+
+
+def test_the_policy_fold_is_borrower_disjoint_from_the_test_book():
+    """No account may appear in both. A shared borrower is a shared outcome."""
+    groups = np.array([f"A{i // 3:04d}" for i in range(3_000)])
+    fit, policy, test = export_demo.three_way_split(groups)
+    fit_ids, policy_ids, test_ids = (set(groups[idx]) for idx in (fit, policy, test))
+    assert fit_ids and policy_ids and test_ids
+    assert not (fit_ids & policy_ids)
+    assert not (policy_ids & test_ids)
+    assert not (fit_ids & test_ids)
+    assert fit_ids | policy_ids | test_ids == set(groups)
+
+
+def test_the_test_split_is_the_one_the_july_build_drew():
+    """The policy fold comes out of TRAIN. The held-out book must not shrink for it."""
+    from sklearn.model_selection import GroupShuffleSplit
+
+    groups = np.array([f"A{i // 3:04d}" for i in range(3_000)])
+    july = GroupShuffleSplit(n_splits=1, test_size=0.30, random_state=export_demo.SPLIT_SEED)
+    _, july_test = next(july.split(np.zeros(len(groups)), np.zeros(len(groups)), groups=groups))
+    _, _, test = export_demo.three_way_split(groups)
+    assert set(groups[test]) == set(groups[july_test])
+
+
+def test_only_labelable_rows_are_graded(payload):
+    """A row whose forward window runs off the panel has no outcome to be graded on."""
+    assert payload["meta"]["eligibility"].startswith("labelable == 1")
 
 
 def test_the_july_thresholds_can_still_be_pinned():

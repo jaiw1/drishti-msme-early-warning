@@ -4,9 +4,14 @@
 
 **🟠 Interim demo (pre-sandbox):** **https://drishti-ews.vercel.app** — no login, no backend
 behind this particular static build. This is a development demo, not the submission
-deployment: the bank-sandbox deployment (EC2 behind nginx, a real backend, real auth — see
-"Architecture") is in progress this week and is not live as of this writing (2026-09-17). Do
-not read this link as "the deployment."
+deployment.
+
+**🟢 Submission deployment (live):** the bank-sandbox deployment (EC2 behind nginx, a real
+backend, real auth — see "Architecture") **is live** in IDBI's AWS sandbox at the private
+address **172.16.8.60**. There is no public IP by design: the host sits inside the bank's
+VPC and is reached by SSM port forwarding, so a judge with sandbox access reaches it through
+a session, and nobody else reaches it at all. Do not read the Vercel link above as "the
+deployment."
 
 ## What DRISHTi is
 
@@ -26,9 +31,25 @@ Auto — with **one** LightGBM classifier, not eight. For every account it produ
 months before the account would cross into Red. The officer decides; the model never touches
 the account.
 
+**One score decides.** The export carries three numbers per account and only one of them is a
+decision: `decision_score` (a four-month trailing mean of the monthly PD) is what the Amber/Red
+thresholds were searched over, and therefore the only thing a band, a sort order, a timeline
+band or a memo may come from. `pd` (the raw single-month probability) and `pd_smooth` are
+carried for transparency and decide nothing; `pd_calibrated` is the decision score mapped
+through a calibrator fitted on a fold neither the model nor the exported book has seen, and is
+meant to be read as a probability rather than banded. `meta.policy_version` names the rule, so
+a consumer that bands something else contradicts the file it loaded rather than diverging
+silently — which is what had been happening: the platform API banded raw `pd`, putting 443 of
+12,760 accounts in a different band from the book the model published.
+
+**A band is not a classification.** Red says an account resembles the ones that went bad. SMA-1
+says an account is 31–60 days overdue. Only the second is an arrears fact, it belongs to the
+bank's own rules and the CBS, and no memo DRISHTi drafts instructs one: memos recommend a credit
+review and report the observed CBS classification as a separate field.
+
 ## The headline
 
-> **84.5% of Red-flagged accounts went NPA within 8 months (95% CI 79.8%–88.2%, n=283)**
+> **88.6% of Red-flagged accounts went NPA within 8 months (95% CI 84.0%–92.0%, n=245)**
 
 Taken verbatim from `app/public/demo_data.json` → `metrics.honesty.headline` (DM-8 round 2, the
 model's final, frozen state — this is **not** the number an earlier report or an earlier draft
@@ -37,11 +58,16 @@ and not raw accuracy, is the number to publish:
 
 | | value | source |
 |---|---|---|
-| **Red-band precision @ 8 months (the headline)** | **84.5%** (95% CI 79.8–88.2%, n=283 Red-flagged, 239 went NPA) | `demo_data.json` → `metrics.honesty`, `metrics.red_band_precision_8m` |
-| Raw accuracy @ 8 months | 98.8% (95% CI 98.6–99.0%) | `metrics.raw_accuracy_8m` |
+| **Red-band precision @ 8 months (the headline)** | **88.6%** (95% CI 84.0–92.0%, n=245 Red-flagged, 217 went NPA) | `demo_data.json` → `metrics.honesty`, `metrics.red_band_precision_8m` |
+| Raw accuracy @ 8 months | 98.8% (95% CI 98.6–98.9%) | `metrics.raw_accuracy_8m` |
 | **Flag-nobody baseline** | **97.3%** | `metrics.raw_accuracy_8m.flag_nobody_baseline` |
 | Base rate @ 8 months / 12 months | 2.72% / 3.90% | `metrics.base_rate_8m`, `metrics.base_rate_12m` |
-| **Missed-NPA share** — of every account that went NPA within 8 months, the share the model had left in Green | **17.6%** (95% CI 13.9–21.9%) | `metrics.missed_npa_share` |
+| **Missed-NPA share** — of every account that went NPA within 8 months, the share the model had left in Green | **16.1%** (95% CI 12.6–20.4%) | `metrics.missed_npa_share` |
+| **ECE / Brier on the served decision score** | **0.0056 / 0.0195** raw; **0.0008 / 0.0186** after the policy-fold calibrator | `metrics.calibration_served` |
+
+These are measured on a held-out book whose outcomes played no part in choosing the
+thresholds — see "Thresholds and cost model". The previous build's 84.5% / n=283 figure was
+measured at an operating point selected on that same book, and is superseded, not corrected.
 
 **Why not accuracy.** A model that flagged nothing at all would score 97.3% raw accuracy,
 because only 2.7% of the book reaches NPA within 8 months — that figure tracks the base rate,
@@ -55,12 +81,13 @@ positive, so the threshold search minimises expected rupee cost, not maximises p
 
 **A second, larger-population reading exists and is reported alongside, not instead.**
 `validation/report/REPORT.md` (DR-02) reports red-band precision pooled over **every** eligible
-holdout row across the whole out-of-time window (not one snapshot month): **72.9%** (95% CI
-72.1–73.7%, n=11,657). The 84.5% headline is the single frozen reference-month snapshot the
-demo cockpit actually ships (`n_accounts_scored=12,760`, of which 283 sit in Red); the 72.9%
-figure is the same metric measured over a much larger, multi-month holdout. Both are real,
-both are cited, and the gap between them is exactly what "one snapshot" vs "pooled over time"
-means — not a discrepancy to paper over.
+holdout row across the whole out-of-time window (not one snapshot month): **88.2%** (95% CI
+87.5–88.9%, n=8,176) — on the validation lane's own independently generated panel and its own
+split. The 88.6% headline is the single frozen reference-month snapshot the demo cockpit
+actually ships (`n_accounts_scored=12,760`, of which 245 sit in Red). The two now agree closely,
+which they did not before 2026-09-21 (72.9% vs 84.5%): the pack had been banding the raw
+per-month probability while the cockpit banded the smoothed decision score, so the two were
+measuring different Red bands. Both are real and both are cited.
 
 ## How it works
 
@@ -117,10 +144,18 @@ Three numbers, same model family, same population, in the order they were measur
    something real.
 2. **0.927 (pre-noise-hardening checkpoint)** — after the eight-portfolio rewrite but before
    silent-defaulter, hard-negative and dark-link noise injection. Still 0.007 over the ceiling.
-3. **0.902 (shipped)** — after noise-hardening (silent/fast defaulters ~7.8% of the book,
-   transient never-defaulting episodes ~22.5%, chain-link visibility 0.72) and a final
-   borrower-heterogeneity pass. **Inside the pre-registered [0.82, 0.92] band** (DR-01,
-   `validation/criteria.yaml`).
+3. **0.902 (noise-hardened, whole-panel fit)** — after noise-hardening (silent/fast defaulters
+   ~7.8% of the book, transient never-defaulting episodes ~22.5%, chain-link visibility 0.72)
+   and a final borrower-heterogeneity pass.
+4. **0.885 (shipped, 2026-09-21)** — same model, same panel, trained on less of it: a
+   borrower-disjoint **policy fold** was carved out of the training side so the operating
+   thresholds and the served-score calibrator are fitted somewhere the exported book never
+   touches, and every fit and metric was restricted to `labelable == 1`. Training on ~49% of
+   accounts instead of ~70% costs about 0.017 AUC. That is the price of an untouched
+   evaluation, and it is a price worth paying. **Inside the pre-registered [0.82, 0.92] band**
+   (DR-01, `validation/criteria.yaml`).
+
+   95% CI **[0.8784, 0.8928]**, account-clustered bootstrap (`metrics.auc_ci`).
 
 Both the floor (0.82, deliberately lowered from a first-draft 0.85) and the ceiling (0.92) were
 pre-registered **before any model result existed**: "a floor of 0.85 would tempt tuning toward
@@ -129,11 +164,10 @@ around there; DRISHTi's own real-data validation model scores 0.81 — see below
 exists for the same reason in reverse: a synthetic panel that scores above it has made the
 problem too easy to be believable.
 
-The validation lane's own, independently regenerated 45,000×48 panel measures pooled AUC at
-**0.8885** (95% CI 0.8814–0.8949) — a few points different from the 0.902 the main export
-pipeline reports, because the two panels are generated separately from the same code, not
-shared; both numbers are real and both are cited (`validation/report/REPORT.md` DR-01;
-`MODEL_CARD.md` §9).
+The validation lane keeps its own, independently regenerated 45,000×48 panel and its own
+split, so its DR-01 figure and the exporter's are two real measurements of the same model
+family on two separately generated panels, not one number reported twice. Both are cited
+(`validation/report/REPORT.md` DR-01; `MODEL_CARD.md` §9).
 
 ## Rank-order, per portfolio
 
@@ -157,7 +191,7 @@ monotonicity (DR-11 pass, pooled and every portfolio)** — `app/public/demo_dat
 `metrics.rank_order.by_portfolio`; `validation/report/REPORT.md` DR-06, DR-11.
 
 A finer decile-level check (DR-12: at least 9 of 10 decile step-ups non-decreasing) **fails on
-the literal pre-registered arithmetic** (0.5556 pooled) — not because the model doesn't rank
+the literal pre-registered arithmetic** (0.6667 worst portfolio) — not because the model doesn't rank
 risk, but because almost all realised risk concentrates in the top decile, leaving the middle
 deciles sitting at fractions of a percent where step-to-step ordering is statistical noise. A
 second, reported-not-gated reading that only counts a step-down when the two deciles' 95%
@@ -242,13 +276,18 @@ that no band moved after seeing a result. **This is DM-8, round 2 of the two tun
 plan allows — the last permitted round; every number below is reported as measured, not chased
 further** (`MODEL_CARD.md` §17).
 
-**Current report** (`validation/report/REPORT.md`, generated 2026-09-17T02:36:16+05:30 from
-commit `0c92bf980c39`): **16 pass · 4 fail · 0 warn · 6 reported.**
+**Current report** (`validation/report/REPORT.md`, generated 2026-09-21T16:21:05+05:30 from
+commit `1a4209cbf3ed`): **16 pass · 4 fail · 0 warn · 6 reported** — the same verdict on every
+one of the 26 criteria as the run before the 2026-09-21 revision. Four *reported* numbers moved
+because the pack now bands on the decision score rather than the raw per-month probability
+(DR-02 0.729→0.8821 on a smaller Red band, DR-24 0.9195→0.9405, DR-25 0.0209→0.0240) and DR-12's
+literal fraction rose 0.5556→0.6667 without clearing its floor. No criterion passed that used to
+fail, and none failed that used to pass.
 
 | ID | Metric | Band | Observed | Verdict |
 |---|---|---|---|---|
 | DR-01 | grouped AUC | ∈ [0.82, 0.92] | 0.8885 | pass |
-| DR-02 | red-band precision @8m (pooled) | reported | 72.9% (n=11,657) | reported |
+| DR-02 | red-band precision @8m (pooled) | reported | 88.2% (n=8,176) | reported |
 | DR-03 | annual slippage ratio | ∈ [0.03, 0.05] | 3.31% | pass |
 | DR-04 | label base rate (annual) | reported | 3.63% | reported |
 | DR-05 | OOT/holdout AUC ratio | ≥ 0.95 | 1.0009 | pass |
@@ -258,7 +297,7 @@ commit `0c92bf980c39`): **16 pass · 4 fail · 0 warn · 6 reported.**
 | DR-09 | ECE per cut | ≤ 0.04 | all cells pass | pass |
 | DR-10 | Δ Brier (calibrated − raw) | < 0.0 | −0.0001 | pass |
 | DR-11 | band monotonicity | strictly increasing | pooled + 8/8 portfolios | pass |
-| **DR-12** | monotone decile-step fraction | ≥ 0.9 | **0.5556** literal (1.0000 CI-aware) | **FAIL** |
+| **DR-12** | monotone decile-step fraction | ≥ 0.9 | **0.6667** literal (1.0000 CI-aware) | **FAIL** |
 | DR-13 | score PSI | ≤ 0.10 | 0.0006 | pass |
 | **DR-14** | max feature CSI | ≤ 0.25 | **3.6344** (binding: `vintage_band`) | **FAIL** |
 | DR-15 | DPD-family attribution @10–12m | ≤ 0.05 | 3.81% (alt. reading 20.92%) | pass |
@@ -270,15 +309,15 @@ commit `0c92bf980c39`): **16 pass · 4 fail · 0 warn · 6 reported.**
 | DR-21 | cross-seed AUC CI width | ≤ 0.02 | 0.0123 | pass |
 | DR-22 | \|ΔAUC\| at 2× base rate | ≤ 0.03 | 0.0019 | pass |
 | DR-23 | \|ΔAUC\| bureau missing | ≤ 0.02 | 0.0069 | pass |
-| DR-24 | adverse-impact ratio (worst cut) | reported, ref. 0.80 | 0.72 (geography) | reported |
-| DR-25 | TPR gap (worst cut) | reported, ref. 0.15 | 0.099 (geography) | reported |
+| DR-24 | adverse-impact ratio (worst cut) | reported, ref. 0.80 | 0.70 (geography) | reported |
+| DR-25 | TPR gap (worst cut) | reported, ref. 0.15 | 0.102 (constitution) | reported |
 | DR-26 | baseline ladder | reported | DPD-only 0.69 → logistic 0.86 → LightGBM 0.89 | reported |
 
 Source: `validation/report/REPORT.md` + `validation/report/report.json`.
 
 **The four honest fails, none of them tuned away:**
 
-- **DR-12 — decile-step reversals.** Fails on the literal pre-registered arithmetic (0.5556);
+- **DR-12 — decile-step reversals.** Fails on the literal pre-registered arithmetic (0.6667);
   every individual reversal is a same-magnitude, low-count cell whose two Wilson confidence
   intervals overlap — a reading that only counts a reversal when it's statistically detectable
   clears **1.0000, pooled and in all 8 portfolios**. The gate stays on the literal reading by
@@ -310,18 +349,39 @@ Source: `validation/report/REPORT.md` + `validation/report/report.json`.
 
 ## Thresholds and cost model
 
-The Amber/Red split minimises the bank's **expected rupee cost** over the frozen book — the
-expected loss on NPAs a band misses, plus review and relationship-friction cost on the accounts
-it flags — subject to the pre-registered rank-order criteria (DR-11: bands strictly monotone,
-Red non-empty) as a feasibility filter, never as part of the objective itself
-(`app/public/demo_data.json` → `thresholds`):
+The Amber/Red split minimises the bank's **expected rupee cost** — the expected loss on NPAs a
+band misses, plus review and relationship-friction cost on the accounts it flags — subject to the
+pre-registered rank-order criteria (DR-11: bands strictly monotone, Red non-empty) as a
+feasibility filter, never as part of the objective itself
+(`app/public/demo_data.json` → `thresholds`).
+
+**Chosen on a policy fold, then frozen, then measured.** The cost search reads future outcomes
+to price a candidate pair. Until 2026-09-21 the book it read was the held-out test book — the
+same book that then reported the pair's Red-band precision, missed-NPA share, workload and band
+monotonicity. The thresholds are now chosen on a third, borrower-disjoint fold carved out of the
+*training* side (fit ≈49% of accounts / policy ≈21% / test 30%, `export_demo.three_way_split`),
+frozen, and only then applied to the untouched test book that this cockpit ships. The held-out
+book is the same size and the same accounts it always was — the policy fold came out of train,
+not out of test. A test asserts the property rather than the intention: rewrite every outcome in
+the test fold and the fitted thresholds do not move.
+
+Everything that fits or grades is also restricted to `labelable == 1` — rows whose full
+12-month forward window exists inside the panel, the same eligibility rule `validation/
+criteria.yaml` registered. Recent rows without a complete window are still **scored** (the
+cockpit has to draw them); they are never **graded**.
 
 | | amber | red | expected cost | red-band precision | missed-NPA share |
 |---|---|---|---|---|---|
-| **Chosen (cost-minimising)** | 0.0747 | 0.2720 | **₹11.54 cr** | 84.5% | 17.6% |
-| July 2026 hand-set pair | 0.0400 | 0.4000 | ₹11.83 cr | 90.6% | 14.4% |
+| **Chosen (cost-minimising)** | 0.0693 | 0.3437 | **₹6.68 cr** | 86.5% | 18.5% |
+| July 2026 hand-set pair | 0.0400 | 0.4000 | ₹6.80 cr | 91.3% | 15.1% |
 
-The cost-minimising pair is **2.4% cheaper** than the hand-set pair the July build shipped,
+Both rows are priced on the **policy fold** (8,933 accounts), which is the book the search
+sees; they are not comparable to the rupee totals this table carried before 2026-09-21, which
+were priced on the 12,760-account test book. The precision and missed-NPA columns are likewise
+the policy fold's — the numbers the *test* book then produced at the chosen pair are the
+headline 88.6% and missed-NPA 16.1% above, and those are the ones to quote.
+
+The cost-minimising pair is **1.7% cheaper** than the hand-set pair the July build shipped,
 while accepting a higher missed-NPA share and lower red-band precision — a deliberate trade:
 the bank-wide expected cost accounts for review and friction cost on every flagged account, not
 only the cost of the NPAs a band catches or misses. Cost assumptions: LGD 40% secured / 75%
@@ -368,10 +428,26 @@ python3 -m pytest -q                        # unit tests (repo root)
 
 ## What we did not build, and why
 
-- **No retrain on real bank data.** The "Real-data model" (AUC 0.81, 95% CI 0.78–0.84, on 3,171
-  real Indian MSMEs) is `src/real_model.py`'s independent, frozen July 2026 output, embedded
-  verbatim — a separate proof-of-method on a different (real, annual, not monthly) data source,
-  never blended into or used to fine-tune the synthetic-panel model this README describes.
+- **No retrain on real bank data.** The "Real-data model" (AUC 0.81, 95% CI 0.78–0.84) is
+  `src/real_model.py`'s independent, frozen July 2026 output, embedded verbatim — a separate
+  proof-of-method on a different data source, never blended into or used to fine-tune the
+  synthetic-panel model this README describes.
+
+  **What its numbers count, exactly.** The table is **3,171 companies** and **17,031
+  company-year rows**, of which **1,284 are positive rows across 851 distinct companies**.
+  Those are three different denominators and the difference matters: the target is
+  "does this company default in the next two financial years", so one default event labels
+  up to two preceding company-years, and 1,284 is a count of *rows*, not of companies and
+  not of defaults. 851 companies defaulted. Anyone quoting "1,284 real defaults" is quoting
+  the row count under the wrong noun.
+
+  **What it is evidence of.** That a two-year, financial-statement model has real signal on
+  real Indian MSMEs — **complementary evidence**, not external validation of the model this
+  README describes. DRISHTi's shipped model is a twelve-month *behavioural* model on monthly
+  account conduct; this one is an annual *balance-sheet* model on filed statements. Different
+  horizon, different features, different unit of observation, different population. It does
+  not transfer, and it is not offered as though it does. The company-clustered bootstrap
+  behind the interval is retained precisely because rows within a company are not independent.
 - **The bank sandbox is a static mock, not a live data source.** Each Atlas endpoint returns its
   own structured mock record, and returns the same one regardless of the request (API 433 is the
   exception: a composite record with a slice for every API). Nothing here has ever scored,
@@ -418,6 +494,6 @@ repository or its commit history.
 ---
 
 > Hackathon prototype. The cockpit runs on a synthetic panel engineered to public sectoral
-> baselines and bank-stated aggregate figures; the bank-sandbox deployment and any real
-> customer data connect only after shortlisting, and — as of this writing — no live sandbox
-> pull has ever populated this book.
+> baselines and bank-stated aggregate figures. The bank-sandbox deployment is live (private
+> IP 172.16.8.60, reached by SSM port forwarding), but real customer data connects only
+> after shortlisting: no live sandbox pull has ever populated this book.

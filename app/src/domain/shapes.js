@@ -16,13 +16,27 @@ export function num(value) {
 
 export const BANDS = ['red', 'amber', 'green']
 
-/** The band a PD falls in, under the thresholds currently in force. */
-export function bandFor(pd, { red_thr: red, amber_thr: amber } = {}) {
-  const value = num(pd)
+/** The band a decision score falls in, under the thresholds currently in force. */
+export function bandFor(score, { red_thr: red, amber_thr: amber } = {}) {
+  const value = num(score)
   if (value === null || red === undefined || amber === undefined) return null
   if (value >= red) return 'red'
   if (value >= amber) return 'amber'
   return 'green'
+}
+
+/**
+ * The ONE score a band may be derived from: the four-month trailing mean the model's
+ * Amber/Red thresholds were searched over (`meta.decision_score` in the export contract).
+ *
+ * The order matters and is not a convenience. `decision_score` is the field's own name.
+ * `pd_smooth` is that same number under its older name, which the API still returns.
+ * `pd` is LAST because in the static payload the field called `pd` already holds the
+ * smoothed value — but over the API `pd` is the raw single-month probability, and banding
+ * that one moved 443 of 12,760 accounts across a band at the shipped thresholds.
+ */
+export function decisionScore(raw) {
+  return num(raw?.decision_score ?? raw?.pd_smooth ?? raw?.pd)
 }
 
 /**
@@ -36,7 +50,9 @@ export function bandFor(pd, { red_thr: red, amber_thr: amber } = {}) {
 export function toRow(raw, { thresholds } = {}) {
   const pd = num(raw.pd)
   const published = raw.published_bucket ?? raw.bucket ?? null
-  const bucket = raw.bucket ?? bandFor(pd, thresholds) ?? published
+  // When the server did not band the row for us, band it here from the DECISION
+  // score — never from `pd`, which over the API is the raw single-month probability.
+  const bucket = raw.bucket ?? bandFor(decisionScore(raw), thresholds) ?? published
   return {
     ...raw,
     id: raw.id || raw.account_id,

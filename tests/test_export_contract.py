@@ -91,6 +91,10 @@ CONTRACT_META_KEYS = {
     "product", "schema_version", "model_run_id", "generated_at", "git_sha", "seed",
     "criteria_sha", "provenance_version", "sandbox_sync", "generated_from",
     "reference_month", "horizon_months", "npa_definition_dpd", "n_accounts_scored",
+    # The banding policy, carried through from the internal payload because the
+    # contract declares all three: a consumer that knows the thresholds but not
+    # which score they were chosen over cannot reproduce a single band.
+    "policy_version", "decision_score", "eligibility",
 }
 
 
@@ -100,6 +104,35 @@ def test_meta_has_exactly_the_contract_keys_no_internal_extras(contract_no_bank)
     this must be a FRESH dict, not the internal one reused."""
     meta = contract_no_bank[0]["meta"]
     assert set(meta) == CONTRACT_META_KEYS
+
+
+def test_meta_names_the_score_the_bands_come_from(contract_no_bank):
+    """`meta` forbids unknown keys, so these three only load if the contract declares
+    them — which is the point: the policy travels with the numbers it produced."""
+    meta = contract_no_bank[0]["meta"]
+    assert meta["policy_version"] == export_demo.POLICY_VERSION
+    spec = meta["decision_score"]
+    assert spec["field"] == "decision_score"
+    assert spec["window_months"] == export_demo.SMOOTH_WINDOW
+    assert meta["eligibility"].startswith("labelable == 1")
+
+
+def test_every_account_carries_the_decision_score_the_band_was_cut_on(contract_no_bank):
+    """`pd` is the raw month, `decision_score` is the smoothed one the thresholds were
+    searched over. A consumer that bands `pd` gets a different book — the defect this
+    field exists to close — so the band published here must agree with the decision
+    score, account by account."""
+    export = contract_no_bank[0]
+    red = float(export["portfolio_summary"]["red_thr"])
+    amber = float(export["portfolio_summary"]["amber_thr"])
+    for account in export["accounts"]:
+        scores = account["scores"]
+        assert scores["decision_score"] is not None
+        score = scores["decision_score"]
+        expected = "red" if score >= red else "amber" if score >= amber else "green"
+        # `decision_score` is rounded for the wire, so only an account sitting on a
+        # threshold could differ; none may differ by a whole band.
+        assert scores["bucket"] == expected or min(abs(score - amber), abs(score - red)) < 1e-4
 
 
 def test_meta_product_and_schema_version(contract_no_bank):

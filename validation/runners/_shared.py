@@ -359,6 +359,12 @@ def get_calibration(ctx: RunnerContext) -> dict:
 #: not the live policy.
 LEGACY_AMBER_THR, LEGACY_RED_THR = 0.04, 0.40
 
+#: months in the trailing mean the DECISION score is built from. Mirrors
+#: `export_demo.SMOOTH_WINDOW`; kept as a literal here only so this module does
+#: not have to import `src/` before `_ensure_src_on_path` has run. A test pins
+#: the two together.
+SMOOTH_WINDOW = 4
+
 
 def get_rag_thresholds(ctx: RunnerContext) -> tuple[float, float, bool]:
     """`(amber, red, is_live)` — the operating thresholds DM-4/5's cost-
@@ -391,18 +397,55 @@ def rag_bucket(p: np.ndarray, amber: float = LEGACY_AMBER_THR, red: float = LEGA
     return np.where(p >= red, "red", np.where(p >= amber, "amber", "green"))
 
 
+def decision_score(df_test: pd.DataFrame, p_test: np.ndarray) -> np.ndarray:
+    """The score the operating thresholds were chosen over, per row.
+
+    `export_demo.DECISION_SCORE_SPEC`: a four-month trailing mean of the monthly
+    PD, per account. The validation pack used to band the RAW per-month
+    probability, which is a DIFFERENT score from the one the exported policy and
+    the cockpit use — the same divergence the API had. Every band in this pack is
+    now derived from the same quantity the exporter bands on.
+
+    Args:
+        df_test: the eligible test rows, carrying `account_id` and `month_idx`.
+        p_test: the model's raw per-row probability, aligned with `df_test`.
+
+    Returns:
+        A float array aligned with `df_test`'s row order (not the sorted order
+        the rolling mean is computed in).
+    """
+    frame = pd.DataFrame(
+        {
+            "account_id": df_test["account_id"].astype(str).to_numpy(),
+            "month_idx": pd.to_numeric(df_test["month_idx"], errors="coerce").to_numpy(),
+            "pd": np.asarray(p_test, dtype=float),
+        },
+        index=np.arange(len(p_test)),
+    ).sort_values(["account_id", "month_idx"], kind="stable")
+    frame["smooth"] = frame.groupby("account_id")["pd"].transform(
+        lambda s: s.rolling(SMOOTH_WINDOW, min_periods=1).mean()
+    )
+    return frame["smooth"].sort_index().to_numpy(dtype=float)
+
+
 def build_rank_order_population(
     df_test: pd.DataFrame, p_test: np.ndarray, amber: float = LEGACY_AMBER_THR, red: float = LEGACY_RED_THR,
 ) -> pd.DataFrame:
     """The row-level frame `export_demo.rank_order_exhibit` expects: `bucket`,
-    `pd`, `snap_months_to_npa`, `portfolio` — POOLED over every eligible
-    holdout-test row (every account, every eligible month), not a single
+    `pd`, `decision_score`, `snap_months_to_npa`, `portfolio` — POOLED over every
+    eligible holdout-test row (every account, every eligible month), not a single
     frozen reference month the way the cockpit's snapshot is. See runner 05's
     docstring for why.
+
+    Bands and deciles come from `decision_score`, not from the raw per-month
+    probability: DR-11/DR-12 grade the policy the bank actually operates, and
+    that policy is defined on the smoothed score.
     """
+    score = decision_score(df_test, p_test)
     return pd.DataFrame({
-        "bucket": rag_bucket(p_test, amber=amber, red=red),
+        "bucket": rag_bucket(score, amber=amber, red=red),
         "pd": np.asarray(p_test, dtype=float),
+        "decision_score": score,
         "snap_months_to_npa": df_test["months_to_npa"].to_numpy(),
         "portfolio": df_test["portfolio"].astype(str).to_numpy(),
     })

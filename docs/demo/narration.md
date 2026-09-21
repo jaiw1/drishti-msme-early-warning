@@ -90,15 +90,17 @@ touched — see `drishti-autopilot.mjs`'s header comment for the full explanatio
 **1:32–1:58 — Portfolio risk: per-portfolio Red-band precision**
 > Portfolio risk, across all eight products. One model is only a real claim if it ranks
 > risk inside **every** one of them — so each portfolio carries its own Red-band
-> precision: from loan-against-property's **78%** up to MSME cash-credit's **94.6%**.
+> precision: from retail-unsecured's **71%** up to Education's and Auto's **100%** — on
+> Red bands as thin as six accounts, which is why each one carries its interval.
 
 **1:58–2:40 — Model & Metrics: honesty headline, rank-order, validation**
-> The honesty headline, printed verbatim: **84.5%** of Red-flagged accounts went NPA
-> within eight months — n equals **283**. We don't report raw accuracy — flagging
-> nobody at all would already score **97.3%**, because only **2.7%** of this book goes
-> bad. Rank-order holds inside every portfolio, not just pooled. **26** pre-registered
-> criteria, graded before results existed: **16 pass**, **4 disclosed fails** — on
-> feature drift and two family-ablation checks — nothing hidden.
+> The honesty headline, printed verbatim: **88.6%** of Red-flagged accounts went NPA
+> within eight months — n equals **245**. And the operating point that band comes from
+> was chosen on a separate fold, frozen before this book was ever scored — so that
+> number is a measurement, not a fit. We don't report raw accuracy — flagging nobody at
+> all would already score **97.3%**, because only **2.7%** of this book goes bad.
+> Rank-order holds inside every portfolio, not just pooled. **26** pre-registered
+> criteria, graded before results existed — the fails are published, not hidden.
 
 **2:40–3:12 — Switch to manager: cost rationale, a dry threshold change**
 > Switching to a manager. The Red and Amber lines are a **cost** decision, not a model

@@ -260,8 +260,20 @@ def _by_band(frame, horizon):
     return rows
 
 
+def decision_column(frame):
+    """The column carrying the decision score. One place decides this.
+
+    `decision_score` where the producer emitted it; `pd` otherwise, because in
+    the internal payload `pd` has always held the smoothed value the bands were
+    derived from. Either way the deciles, the bands and the review budget are
+    ranked on the SAME quantity the thresholds were chosen over.
+    """
+    return "decision_score" if "decision_score" in frame.columns else "pd"
+
+
 def _by_decile(frame, horizon):
-    ranked = frame.sort_values("pd").reset_index(drop=True)
+    col = decision_column(frame)
+    ranked = frame.sort_values(col).reset_index(drop=True)
     went = _went_bad(ranked, horizon)
     n = len(ranked)
     rows = []
@@ -271,8 +283,8 @@ def _by_decile(frame, horizon):
         m = len(sl)
         rows.append(dict(
             decile=i + 1,
-            pd_lo=jnum(sl.pd.min(), 4) if m else 0.0,
-            pd_hi=jnum(sl.pd.max(), 4) if m else 0.0,
+            pd_lo=jnum(sl[col].min(), 4) if m else 0.0,
+            pd_hi=jnum(sl[col].max(), 4) if m else 0.0,
             **_rate_cell(int(went[lo:hi].sum()), m),
         ))
     return rows
@@ -547,8 +559,9 @@ def honest_metrics(port_df, horizon=RANK_HORIZON, long_horizon=12, budget=0.10,
         definition=f"The same, over the {horizon}-month action window the headline uses.")
 
     # ---- recall at a review budget ---------------------------------------- #
-    # bracket access, not `.pd`: in this module `pd` is also the pandas module
-    scores = port_df["pd"].to_numpy(dtype="float64")
+    # bracket access, not `.pd`: in this module `pd` is also the pandas module.
+    # Ranked on the DECISION score, the same one the bands come from.
+    scores = port_df[decision_column(port_df)].to_numpy(dtype="float64")
     k = max(1, int(round(n * budget)))
     top = np.zeros(n, dtype=bool)
     top[np.argsort(-scores, kind="stable")[:k]] = True
@@ -698,6 +711,41 @@ def assert_honesty(metrics):
 LEGACY_AMBER_THR, LEGACY_RED_THR = 0.04, 0.40
 
 
+# --------------------------------------------------------------------------- #
+# ONE decision score, and the policy that is stated with it.
+#
+# The thresholds are searched over the SMOOTHED score, so the smoothed score is
+# the one an officer's band is derived from. Shipping that fact implicitly — in a
+# field named `pd` that happens to hold the smoothed value — is how the API came
+# to band 443 of 12,760 accounts differently from the model that chose the
+# thresholds. `decision_score` is now emitted under its own name, beside both
+# `pd` and `pd_smooth`, and every consumer bands on it.
+#
+# `policy_version` travels with it. A band is (score, transform, thresholds); a
+# reader who has only the thresholds cannot reproduce the band, and a consumer
+# that silently switched transforms would look identical on the wire.
+# --------------------------------------------------------------------------- #
+#: months in the trailing mean the decision score is built from.
+SMOOTH_WINDOW = 4
+#: bumped whenever the decision score's DEFINITION changes (not when the
+#: thresholds move — those are data, and travel in `thresholds`).
+POLICY_VERSION = "drishti-policy-2.0"
+DECISION_SCORE_SPEC = (
+    f"decision_score = {SMOOTH_WINDOW}-month trailing mean of the monthly model PD, per "
+    "account, min_periods=1 (identical to pd_smooth). The Amber/Red thresholds are "
+    "searched over this score, so this — not the raw single-month pd — is the score "
+    "every band, sort order, timeline, memo and validation exhibit must be derived from."
+)
+
+#: master split seed. The train/test cut is unchanged from the July build; the
+#: policy fold is carved out of TRAIN only, so the test groups are untouched.
+SPLIT_SEED = 7
+#: share of the TRAINING groups reserved for threshold selection and calibration.
+POLICY_FOLD_FRACTION = 0.30
+#: bins used for the expected-calibration-error summary on the served score.
+ECE_BINS = 10
+
+
 def _snapshot_ead(snap):
     """Exposure at default per account: the outstanding balance.
 
@@ -714,11 +762,172 @@ def _snapshot_ead(snap):
     return np.where(np.isfinite(ead) & (ead > 0), ead, fallback)
 
 
-def choose_operating_thresholds(snap, horizon=RANK_HORIZON, keep_legacy=False):
-    """DM-5: Amber and Red, chosen on rupee cost over the frozen book.
+def eligible_rows(df):
+    """The ``labelable == 1`` mask — the same eligibility rule the validation
+    runners apply (``validation/runners/_shared.py``, ``criteria.yaml``
+    ``label_definition.eligibility``).
+
+    A row without a complete forward window has no observable outcome, so it may
+    be SCORED for the cockpit but must never enter a fit, a threshold search or a
+    metric. The exporter used to train and measure on the whole panel, which let
+    the simulator expose outcomes a bank extract could not yet have seen.
+
+    Returns:
+        A boolean numpy mask over ``df``'s rows. All-true when the panel carries
+        no ``labelable`` column (a hand-built fixture).
+    """
+    if "labelable" not in df.columns:
+        return np.ones(len(df), dtype=bool)
+    return pd.to_numeric(df["labelable"], errors="coerce").fillna(0).to_numpy() == 1
+
+
+def three_way_split(groups, seed=SPLIT_SEED, policy_fraction=POLICY_FOLD_FRACTION):
+    """``(fit, policy, test)`` row indices, disjoint by BORROWER.
+
+    The train/test cut is the July build's, unchanged and with the same seed and
+    the same 30% size: ``GroupShuffleSplit`` shuffles the sorted unique groups, so
+    the test groups depend only on the account list and the seed, not on how many
+    rows each account contributes. The policy fold is then carved out of the
+    TRAIN groups alone — the test book is never touched by anything that reads an
+    outcome to make a decision.
 
     Args:
-        snap: the frozen book at the reference month, scored but not yet banded.
+        groups: per-row ``account_id``.
+        seed: master split seed.
+        policy_fraction: share of the training GROUPS reserved for policy.
+
+    Returns:
+        Three integer index arrays. ``fit`` trains the model, ``policy`` chooses
+        the thresholds and fits the calibrator, ``test`` is measured and exported.
+    """
+    groups = np.asarray(groups)
+    n = len(groups)
+    outer = GroupShuffleSplit(n_splits=1, test_size=0.30, random_state=seed)
+    tr, te = next(outer.split(np.zeros(n), np.zeros(n), groups=groups))
+    inner = GroupShuffleSplit(n_splits=1, test_size=policy_fraction, random_state=seed + 1)
+    fit_pos, pol_pos = next(
+        inner.split(np.zeros(len(tr)), np.zeros(len(tr)), groups=groups[tr])
+    )
+    return tr[fit_pos], tr[pol_pos], te
+
+
+def add_decision_score(frame, source="pd", out="decision_score"):
+    """Attach the smoothed score every band is derived from.
+
+    ``frame`` must carry ``account_id`` and ``month_idx``; it is returned sorted
+    by both, because a trailing mean over an unsorted month order is not a
+    trailing mean.
+    """
+    frame = frame.sort_values(["account_id", "month_idx"]).reset_index(drop=True)
+    frame[out] = frame.groupby("account_id")[source].transform(
+        lambda s: s.rolling(SMOOTH_WINDOW, min_periods=1).mean()
+    )
+    return frame
+
+
+def fit_decision_calibrator(scores, y):
+    """Isotonic calibration of the SERVED score, fitted on the policy fold.
+
+    The July build left ``pd_calibrated`` empty and pointed at a calibration
+    measured in the validation pack — on a separately fitted model, on the RAW
+    per-month probability, before smoothing. A calibration of a different score
+    produced by a different model does not transfer to this one. This fits the
+    map on the same quantity the officer sees (``decision_score``), on a fold the
+    model never trained on and the test book never touches.
+
+    Returns:
+        A fitted ``IsotonicRegression``, or ``None`` when the fold carries only
+        one class (nothing to calibrate against, and a constant map would be a
+        fabricated probability).
+    """
+    from sklearn.isotonic import IsotonicRegression
+
+    scores = np.asarray(scores, dtype="float64")
+    y = np.asarray(y, dtype="float64")
+    if len(scores) < 2 or len(np.unique(y)) < 2:
+        return None
+    return IsotonicRegression(out_of_bounds="clip").fit(scores, y)
+
+
+def expected_calibration_error(p, y, bins=ECE_BINS):
+    """Equal-count ECE: mean |predicted - observed| weighted by bin size."""
+    p = np.asarray(p, dtype="float64")
+    y = np.asarray(y, dtype="float64")
+    if not len(p):
+        return 0.0, []
+    edges = np.unique(np.quantile(p, np.linspace(0, 1, bins + 1)))
+    idx = np.clip(np.searchsorted(edges, p, side="right") - 1, 0, max(len(edges) - 2, 0))
+    total, gap, table = len(p), 0.0, []
+    for b in range(max(len(edges) - 1, 1)):
+        m = idx == b
+        n = int(m.sum())
+        if not n:
+            continue
+        pred, obs = float(p[m].mean()), float(y[m].mean())
+        gap += n / total * abs(pred - obs)
+        table.append(dict(bin=b + 1, n=n, pred=round(pred, 6), obs=round(obs, 6)))
+    return round(gap, 6), table
+
+
+def brier(p, y):
+    p = np.asarray(p, dtype="float64")
+    y = np.asarray(y, dtype="float64")
+    return round(float(np.mean((p - y) ** 2)), 6) if len(p) else 0.0
+
+
+def calibration_on_served_score(te_df, calibrator, bins=ECE_BINS):
+    """Brier and ECE for the score the cockpit actually shows, on the test fold.
+
+    Two numbers per score, on eligible test rows only: the decision score as
+    served raw, and the isotonic map fitted on the policy fold applied to it. The
+    calibrator never saw a test row and the model never saw a policy row, so this
+    is an out-of-sample reading of the served probability — which is the claim
+    "a displayed 40% means roughly 40%" needs and did not previously have.
+    """
+    elig = te_df["labelable"].to_numpy().astype(bool) if "labelable" in te_df else np.ones(len(te_df), bool)
+    frame = te_df[elig]
+    y = frame["default_within_12m"].to_numpy(dtype="float64")
+    s = frame["decision_score"].to_numpy(dtype="float64")
+    ece_raw, table_raw = expected_calibration_error(s, y, bins=bins)
+    block = dict(
+        score="decision_score",
+        policy_version=POLICY_VERSION,
+        n=int(len(frame)),
+        horizon_months=12,
+        fitted_on="policy fold (borrower-disjoint from both train and test)",
+        method="isotonic",
+        brier_decision_score=brier(s, y),
+        ece_decision_score=ece_raw,
+        reliability_decision_score=table_raw,
+        definition=("Brier score and equal-count expected calibration error for the score "
+                    "the officer is shown, measured on the untouched test fold. "
+                    "`pd_calibrated` is the isotonic map fitted on the policy fold applied "
+                    "to that same score."),
+    )
+    if calibrator is not None and "pd_calibrated" in frame:
+        c = frame["pd_calibrated"].to_numpy(dtype="float64")
+        ece_cal, table_cal = expected_calibration_error(c, y, bins=bins)
+        block.update(brier_calibrated=brier(c, y), ece_calibrated=ece_cal,
+                     reliability_calibrated=table_cal, calibrated=True)
+    else:
+        block.update(brier_calibrated=None, ece_calibrated=None,
+                     reliability_calibrated=[], calibrated=False,
+                     calibrated_note="the policy fold carried a single class; no map was fitted")
+    return block
+
+
+def choose_operating_thresholds(snap, horizon=RANK_HORIZON, keep_legacy=False):
+    """DM-5: Amber and Red, chosen on rupee cost over the POLICY fold's book.
+
+    The July build passed the held-out TEST snapshot here, read its future
+    ``months_to_npa`` outcomes to pick the pair, and then reported Red-band
+    precision on that same snapshot. The pair is now chosen on a borrower-
+    disjoint fold carved out of TRAIN, and frozen before the test book is
+    measured; see ``three_way_split``.
+
+    Args:
+        snap: the policy fold's book at the policy month, scored and carrying
+            ``decision_score``, but not yet banded.
         horizon: the action window the outcome is measured over.
         keep_legacy: pin the July thresholds and emit the cost evidence beside
             them, without moving the operating point.
@@ -732,9 +941,10 @@ def choose_operating_thresholds(snap, horizon=RANK_HORIZON, keep_legacy=False):
                if "secured" in snap.columns else np.full(len(snap), np.nan))
     portfolio = (snap["portfolio"].astype(str).to_numpy(dtype=object)
                  if "portfolio" in snap.columns else np.full(len(snap), "", dtype=object))
+    score_col = "decision_score" if "decision_score" in snap.columns else "pd_smooth"
 
     block = costs.choose_thresholds(
-        snap["pd_smooth"].to_numpy(dtype="float64"), went, _snapshot_ead(snap),
+        snap[score_col].to_numpy(dtype="float64"), went, _snapshot_ead(snap),
         secured, portfolio,
         current=(LEGACY_AMBER_THR, LEGACY_RED_THR), horizon=horizon,
     )
@@ -774,6 +984,26 @@ def reason_codes(feat_row, contribs, cols, k=3):
     return out
 
 
+def _observed_classification(rec):
+    """The CBS asset classification as OBSERVED, or an honest blank.
+
+    The synthetic panel models arrears (``dpd``) but carries no CBS
+    classification field — only the bank overlay (``src/bank.py``, DM-6) can
+    supply one, and only for accounts the sandbox actually answered for. When
+    there is none, the memo says so and quotes the observed DPD instead of
+    inventing a classification from the model's own band.
+    """
+    for key in ("asset_classification", "npa_status"):
+        value = rec.get(key)
+        if value:
+            return str(value)
+    dpd = rec.get("dpd")
+    if dpd is None:
+        return "not supplied by the core banking system for this account"
+    return (f"not supplied by the core banking system for this account "
+            f"(observed DPD at the reference month: {float(dpd):.0f})")
+
+
 def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_legacy=False,
                  stats_sink=None):
     """Train, score and assemble the whole cockpit payload from an in-memory panel.
@@ -808,59 +1038,115 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
     X = df.drop(columns=DROP)
     cols = list(X.columns)
 
-    gss = GroupShuffleSplit(n_splits=1, test_size=0.30, random_state=7)
-    tr, te = next(gss.split(X, y, groups=df["account_id"]))
+    # ---- eligibility: labelable rows only, for everything that FITS or MEASURES.
+    # Recent rows without a complete forward window are still scored (the cockpit
+    # has to draw them), but they never train a model, choose a threshold or enter
+    # a metric — the same rule criteria.yaml states and the validation runners use.
+    labelable = eligible_rows(df)
+
+    # ---- three borrower-disjoint folds. TEST is untouched by policy selection.
+    fit, pol, te = three_way_split(df["account_id"].to_numpy())
+    fit_lab = fit[labelable[fit]]
 
     model = LGBMClassifier(
         n_estimators=600, learning_rate=0.03, num_leaves=48, subsample=0.8,
         colsample_bytree=0.8, min_child_samples=80, random_state=7, n_jobs=-1, verbose=-1,
     )
-    model.fit(X.iloc[tr], y[tr], categorical_feature=cats)
+    model.fit(X.iloc[fit_lab], y[fit_lab], categorical_feature=cats)
 
     te_df = df.iloc[te].copy().reset_index(drop=True)
     Xte = X.iloc[te].reset_index(drop=True)
     p = model.predict_proba(Xte)[:, 1]
     te_df["pd"] = p
     te_df["pos"] = np.arange(len(te_df))                              # row -> contrib index
+    te_df["labelable"] = labelable[te]
     contribs = model.booster_.predict(Xte, pred_contrib=True)[:, :-1]
 
-    # ---- honest metrics (row level, over all test account-months) ----
-    yte = te_df["default_within_12m"].values
-    auc, prauc, ks = roc_auc_score(yte, p), average_precision_score(yte, p), ks_stat(yte, p)
+    # ---- honest metrics (row level, over ELIGIBLE test account-months) ----
+    # A row whose forward window runs off the end of the panel has no outcome to
+    # be right or wrong about; scoring it is fine, grading against it is not.
+    elig = te_df["labelable"].to_numpy().astype(bool)
+    yte_all = te_df["default_within_12m"].values
+    yte, p_elig = yte_all[elig], p[elig]
+    auc = roc_auc_score(yte, p_elig)
+    prauc, ks = average_precision_score(yte, p_elig), ks_stat(yte, p_elig)
     if stats_sink is not None:
         # captured here, aligned by position, before te_df is re-sorted below
-        stats_sink["account_id"] = te_df["account_id"].to_numpy()
+        stats_sink["account_id"] = te_df["account_id"].to_numpy()[elig]
         stats_sink["y"] = np.asarray(yte, dtype="float64")
-        stats_sink["p"] = np.asarray(p, dtype="float64")
+        stats_sink["p"] = np.asarray(p_elig, dtype="float64")
 
     def recall_at(budget):
-        k = max(1, int(len(p) * budget))
-        return float(yte[np.argsort(p)[::-1][:k]].sum() / max(1, yte.sum()))
+        k = max(1, int(len(p_elig) * budget))
+        return float(yte[np.argsort(p_elig)[::-1][:k]].sum() / max(1, yte.sum()))
 
-    thr10 = float(np.quantile(p, 0.90))
+    thr10 = float(np.quantile(p_elig, 0.90))
     lead_curve = []
+    elig_df = te_df[elig]
     for lo, hi in [(1, 3), (4, 6), (7, 9), (10, 12)]:
-        m = (te_df.default_within_12m == 1) & te_df.months_to_npa.between(lo, hi)
+        m = (elig_df.default_within_12m == 1) & elig_df.months_to_npa.between(lo, hi)
         lead_curve.append(dict(bucket=f"{lo}-{hi} mo",
-                               recall=round(float((te_df.loc[m, "pd"] >= thr10).mean()), 3) if int(m.sum()) else 0.0))
+                               recall=round(float((elig_df.loc[m, "pd"] >= thr10).mean()), 3) if int(m.sum()) else 0.0))
 
-    # ---- smoothed risk trajectory (3-month trailing mean) ----
+    # ---- the DECISION SCORE: smoothed risk trajectory (4-month trailing mean) ----
     # A real early-warning desk acts on a smoothed risk TREND, not a jittery single-month
     # score. Smoothing removes one-off blips and widens the "sliding/amber" tier.
-    te_df = te_df.sort_values(["account_id", "month_idx"]).reset_index(drop=True)
-    te_df["pd_smooth"] = te_df.groupby("account_id")["pd"].transform(lambda s: s.rolling(4, min_periods=1).mean())
+    # `pd_smooth` is kept under its old name for the charts; `decision_score` is the
+    # same number under the name every consumer must band on — see DECISION_SCORE_SPEC.
+    te_df = add_decision_score(te_df)
+    te_df["pd_smooth"] = te_df["decision_score"]
 
-    # ---- RAG thresholds on the smoothed PD, chosen on COST (DM-5) ----
-    # Not hand-set any more, and not tuned toward AUC or any validation band:
-    # the pair below is whichever one minimises the bank's expected rupee cost
-    # over this very book, subject to the pre-registered DR-11 constraint.
-    # `thresholds` carries the whole derivation — parameters, provenance,
-    # alternatives and the July pair's results — so the cockpit can answer
-    # "why is the threshold here?" and the platform can override it.
-    snap = te_df[te_df.month_idx == ref_month].copy()
-    thresholds = choose_operating_thresholds(snap, horizon=horizon, keep_legacy=keep_legacy)
+    # ---- RAG thresholds on the decision score, chosen on COST (DM-5), on the
+    # ---- POLICY fold — never on the book this export then reports on.
+    # Not hand-set, and not tuned toward AUC or any validation band: the pair
+    # below is whichever one minimises the bank's expected rupee cost over a
+    # borrower-disjoint fold of TRAIN, subject to the pre-registered DR-11
+    # constraint. `thresholds` carries the whole derivation — parameters,
+    # provenance, alternatives and the July pair's results — so the cockpit can
+    # answer "why is the threshold here?" and the platform can override it.
+    pol_df = df.iloc[pol].copy().reset_index(drop=True)
+    pol_df["pd"] = model.predict_proba(X.iloc[pol].reset_index(drop=True))[:, 1]
+    pol_df["labelable"] = labelable[pol]
+    pol_df = add_decision_score(pol_df)
+    pol_elig = pol_df[pol_df["labelable"].to_numpy().astype(bool)]
+    # The policy book is taken at the reference month when that month has a
+    # complete forward window, and otherwise at the latest month that does — a
+    # threshold chosen against a half-observed window is a threshold chosen
+    # against a censored outcome. On the shipped 48-month panel the two are the
+    # same month; only small fixtures ever fall back.
+    policy_month = ref_month
+    if not len(pol_elig[pol_elig.month_idx == ref_month]) and len(pol_elig):
+        policy_month = int(pol_elig["month_idx"].max())
+    pol_snap = pol_elig[pol_elig.month_idx == policy_month].copy()
+    thresholds = choose_operating_thresholds(pol_snap, horizon=horizon, keep_legacy=keep_legacy)
+    thresholds["selection"] = dict(
+        fold="policy",
+        policy_version=POLICY_VERSION,
+        score="decision_score",
+        smoothing_months=SMOOTH_WINDOW,
+        policy_month=int(policy_month),
+        reference_month_idx=int(ref_month),
+        n_policy_accounts=int(pol_snap["account_id"].nunique()),
+        n_policy_rows=int(len(pol_snap)),
+        n_test_accounts=int(te_df["account_id"].nunique()),
+        eligibility="labelable == 1",
+        note=("Amber/Red were chosen on a borrower-disjoint fold carved out of TRAIN and "
+              "frozen before the test book was scored or measured. No outcome of any "
+              "account in the exported book was read to pick them."),
+    )
     red_thr, amber_thr = float(thresholds["red"]), float(thresholds["amber"])
     bucket = lambda s: "red" if s >= red_thr else "amber" if s >= amber_thr else "green"
+
+    # ---- calibration of the SERVED score, fitted on the same frozen fold ----
+    calibrator = fit_decision_calibrator(
+        pol_elig["decision_score"].to_numpy(dtype="float64"),
+        pol_elig["default_within_12m"].to_numpy(dtype="float64"),
+    )
+    te_df["pd_calibrated"] = (
+        np.clip(calibrator.predict(te_df["decision_score"].to_numpy(dtype="float64")), 0.0, 1.0)
+        if calibrator is not None else np.nan
+    )
+    served = calibration_on_served_score(te_df, calibrator)
 
     # ---- SUSTAINED first-warning lead time per account ----
     # Honest lead = length of the FINAL uninterrupted amber+ run before NPA (within the
@@ -879,7 +1165,8 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
         return lead
     first_warn = te_df.groupby("account_id").apply(sustained_lead, include_groups=False)
 
-    # ---- portfolio = frozen snapshot at REF_MONTH ----
+    # ---- the exported book: the UNTOUCHED test fold, frozen at REF_MONTH ----
+    snap = te_df[te_df.month_idx == ref_month].copy()
     portfolio = []
     for _, cur in snap.iterrows():
         acc_id, pos = cur["account_id"], int(cur["pos"])
@@ -897,7 +1184,14 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
             # exposure at default — what the cost model prices the account at
             outstanding=jnum(cur.get("outstanding"), 0),
             vintage_months=jint(cur["vintage_months"]), business_age_years=jint(st["business_age_years"]),
-            pd=jnum(cur["pd_smooth"], 4), bucket=bucket(cur["pd_smooth"]),
+            # `pd` has carried the SMOOTHED value since the July build; it keeps
+            # that meaning so the cockpit does not change under it. `decision_score`
+            # is the same number under the name the band is defined against, and
+            # `pd_raw` is the single-month probability it was smoothed from.
+            pd=jnum(cur["decision_score"], 4), decision_score=jnum(cur["decision_score"], 4),
+            pd_raw=jnum(cur["pd"], 4),
+            pd_calibrated=jnum(cur.get("pd_calibrated"), 4),
+            bucket=bucket(cur["decision_score"]),
             # channel-gated: `null` means "this product has no such channel", NOT zero.
             dpd=jnum(cur["dpd"], 1), utilisation=jnum(cur["utilisation"], 3),
             inflow_vs_6m_avg=jnum(cur["inflow_vs_6m_avg"], 3),
@@ -984,22 +1278,39 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
     for acc_id, g in te_df[te_df.account_id.isin(port_ids)][tcols].sort_values("month_idx").groupby("account_id"):
         # `utilisation` is null on the five portfolios with no credit limit — the chart
         # must draw a gap there, not a line along zero.
+        #
+        # `pd_smooth` here IS the decision score — the same number, under the name this
+        # payload has always used for it. It is not repeated under both names: the SPA
+        # fetches this file over the wire, a third number per point costs ~1.5 MB across
+        # the sampled book, and the budget is 4 MB. The contract export (which nothing
+        # downloads) does emit `decision_score` explicitly, because the platform's loader
+        # keys on that name.
         timelines[acc_id] = [dict(date=d, pd=jnum(p, 3), pd_smooth=jnum(ps, 3),
                                   utilisation=jnum(u, 3), inflow=jint(inf))
                              for d, p, ps, u, inf in
                              zip(g.date, g.pd, g.pd_smooth, g.utilisation, g.inflow)]
 
     # ---- auto-drafted memo for EVERY red account ----
+    # A model band is not a regulatory classification. Red says "this account looks
+    # like the ones that went bad"; SMA-1 says "this account is 31-60 days overdue",
+    # which is an observed arrears fact the CBS owns and the model cannot assign.
+    # The memo therefore RECOMMENDS a credit review and REPORTS the CBS classification
+    # as a separate observed field, never derives one from the other.
     memos = {}
     for rec in portfolio:
         if rec["bucket"] == "red":
             memos[rec["account_id"]] = (
-                f"SMA / EARLY-WARNING ALERT — Account {rec['account_id']}\n"
+                f"EARLY-WARNING ALERT — Account {rec['account_id']}\n"
                 f"Facility: {rec['loan_type']} | Sanctioned: ₹{rec['sanctioned']:,.0f} | Sector: {rec['sector']}\n"
-                f"Model PD (12-month): {rec['pd']*100:.0f}%  [RED]\n"
+                f"Model risk band: RED (model decision score, 12-month horizon: "
+                f"{rec['decision_score']*100:.0f}%). A model band is not a regulatory "
+                f"classification.\n"
+                f"CBS asset classification (observed): {_observed_classification(rec)}\n"
                 f"Primary early-warning signals:\n  - " + "\n  - ".join(rec["reasons"] or ["elevated model risk"]) + "\n"
-                f"Recommended action: classify SMA-1, initiate borrower engagement, review working-capital "
-                f"cycle and GST filings; escalate to relationship manager. (AI-generated — human review required.)"
+                f"Recommended action: initiate credit review / borrower engagement, review "
+                f"working-capital cycle and GST filings; escalate to relationship manager. Any "
+                f"change of asset classification follows the bank's own arrears rules on observed "
+                f"DPD, not this band. (AI-generated — human review required.)"
             )
 
     # aggregate lead-time stats over ALL held-out defaulters (model capability, not just the snapshot)
@@ -1028,12 +1339,21 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
                             "model=LightGBM"),
             reference_month=str(snap["date"].iloc[0]), horizon_months=12, npa_definition_dpd=90,
             n_accounts_scored=int(port_df.account_id.nunique()),
+            # ONE score, named, versioned and specified — so a consumer cannot band on a
+            # different quantity from the one the thresholds were chosen over.
+            policy_version=POLICY_VERSION,
+            decision_score=dict(
+                field="decision_score", smoothing="trailing_mean", window_months=SMOOTH_WINDOW,
+                min_periods=1, derived_from="pd", spec=DECISION_SCORE_SPEC,
+            ),
+            eligibility="labelable == 1 for every fit and every metric; other rows are scored only",
             # so the UI can say "not applicable" without re-deriving the rule per account
             channels=list(ALL_CHANNELS),
             channels_by_portfolio=CHANNELS_BY_PORTFOLIO,
         ),
         metrics=dict(
             auc=round(auc, 3), pr_auc=round(prauc, 3), ks=round(ks, 3),
+            calibration_served=served,
             recall_at_budget=[dict(budget=b, recall=round(recall_at(b), 3)) for b in (0.02, 0.05, 0.10, 0.20)],
             recall_by_lead_time=lead_curve,
             median_first_warning_months=jint(lead_series.median()) or 0,

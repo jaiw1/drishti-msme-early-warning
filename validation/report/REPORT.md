@@ -6,7 +6,7 @@
 
 These 26 acceptance bands were registered at **2026-09-16T10:47:14+05:30** by RR Squad, before any model result for DRISHTi existed.
 
-`validation/criteria.yaml` first entered git at **2026-09-16T11:05:49+05:30** — that commit timestamp, not this file, is the evidence. This report was generated at 2026-09-17T02:36:16+05:30 from commit `0c92bf980c39`.
+`validation/criteria.yaml` first entered git at **2026-09-16T11:05:49+05:30** — that commit timestamp, not this file, is the evidence. This report was generated at 2026-09-21T16:21:05+05:30 from commit `1a4209cbf3ed`.
 
 Clarifications issued during pre-registration (no band was loosened):
 - *2026-09-16T02:00:00+05:30* — DRISHTi has EIGHT portfolios — MSME-CC, MSME-TL, Housing, Education, Agri, Retail-Unsecured, LAP, Auto. The "7 portfolios" figure in plan §B L4 SD-D2 and in the §D G2 gate was stale from plan v1 and has been patched.
@@ -17,7 +17,7 @@ No amendments. Every band below is as first registered.
 
 | Criterion | Metric | Band | Observed | 95% CI | n | Detail |
 |---|---|---|---|---|---|---|
-| **DR-12** | monotone_decile_step_fraction | ≥ 0.9 | 0.5556 | — | 46557 | literal fraction gates (per the brief); CI-aware fraction reported only (a step only counts as a reversal when the two deciles' Wilson intervals do not overlap): {'MSME-CC': 1.0, 'MSME-TL': 1.0, 'Housing': 1.0, 'Education': 1.0, 'Agri': 1.0, 'Retail-Unsecured': 1.0, 'LAP': 1.0, 'Auto': 1.0}. pooled literal=1.0000, pooled CI-aware=1.0000 (reported, not gated); operating thresholds amber=0.074653, red=0.271968 (live cost-minimising). |
+| **DR-12** | monotone_decile_step_fraction | ≥ 0.9 | 0.6667 | — | 46557 | literal fraction gates (per the brief); CI-aware fraction reported only (a step only counts as a reversal when the two deciles' Wilson intervals do not overlap): {'MSME-CC': 1.0, 'MSME-TL': 1.0, 'Housing': 1.0, 'Education': 1.0, 'Agri': 1.0, 'Retail-Unsecured': 1.0, 'LAP': 1.0, 'Auto': 1.0}. pooled literal=1.0000, pooled CI-aware=1.0000 (reported, not gated); operating thresholds amber=0.069298, red=0.343723 (live cost-minimising). |
 | **DR-14** | max_feature_csi | ≤ 0.25 | 3.6344 | — | 500168 | max over 62 model-input features, binding feature: vintage_band |
 | **DR-18** | auc_drop_when_cashflow_family_removed | ≥ 0.04 | 0.001 | [-0.0057, 0.0066] | 63226 | AUC drop when the Cash-flow (inflows / GST) family (7 columns) is removed, on the 9,000 x 36 book (seed 7), baseline AUC=0.8533, dropped AUC=0.8523. Full family table: Demand vs collection: ΔAUC=0.018 (CI (0.0104, 0.0261), n_cols=4); Income & balance: ΔAUC=0.0085 (CI (0.0016, 0.0153), n_cols=11); Bureau: ΔAUC=0.0024 (CI (-0.0058, 0.0097), n_cols=1); Days-past-due / repayment: ΔAUC=0.0011 (CI (-0.003, 0.0052), n_cols=7); Cash-flow (inflows / GST): ΔAUC=0.001 (CI (-0.0057, 0.0066), n_cols=7); Credit-limit utilisation: ΔAUC=-0.0005 (CI (-0.0072, 0.0068), n_cols=6); Adverse filings: ΔAUC=-0.005 (CI (-0.009, -0.0011), n_cols=2); Leverage & collateral: ΔAUC=-0.0058 (CI (-0.0116, 0.0007), n_cols=6); Borrower profile: ΔAUC=-0.0123 (CI (-0.023, -0.0037), n_cols=18). |
 | **DR-19** | max_auc_gain_from_dropping_any_family | ≤ 0.0 | 0.0123 | [0.0037, 0.023] | 63226 | largest AUC gain from dropping any family: 0.0123 (family: Borrower profile). No noise allowance — a small positive gain inside its own CI is recorded as a failure (criteria.yaml DR-19 note). Full family table: Demand vs collection: ΔAUC=0.018 (CI (0.0104, 0.0261), n_cols=4); Income & balance: ΔAUC=0.0085 (CI (0.0016, 0.0153), n_cols=11); Bureau: ΔAUC=0.0024 (CI (-0.0058, 0.0097), n_cols=1); Days-past-due / repayment: ΔAUC=0.0011 (CI (-0.003, 0.0052), n_cols=7); Cash-flow (inflows / GST): ΔAUC=0.001 (CI (-0.0057, 0.0066), n_cols=7); Credit-limit utilisation: ΔAUC=-0.0005 (CI (-0.0072, 0.0068), n_cols=6); Adverse filings: ΔAUC=-0.005 (CI (-0.009, -0.0011), n_cols=2); Leverage & collateral: ΔAUC=-0.0058 (CI (-0.0116, 0.0007), n_cols=6); Borrower profile: ΔAUC=-0.0123 (CI (-0.023, -0.0037), n_cols=18). |
@@ -29,7 +29,7 @@ No amendments. Every band below is as first registered.
 | ID | Metric | Scope | Band | Observed | 95% CI | n | Severity | Status |
 |---|---|---|---|---|---|---|---|---|
 | DR-01 | grouped_auc | overall | ∈ [0.82, 0.92] | 0.8885 | [0.8814, 0.8949] | 467471 | fail | PASS |
-| DR-02 | red_band_precision_at_8_months | overall | reported, no target | 0.729 | [0.7209, 0.737] | 11657 | report | reported |
+| DR-02 | red_band_precision_at_8_months | overall | reported, no target | 0.8821 | [0.8749, 0.8889] | 8176 | report | reported |
 | DR-03 | annual_slippage_ratio | overall | ∈ [0.03, 0.05] | 0.0331 | [0.0324, 0.0339] | 45000 | fail | PASS |
 | DR-04 | label_base_rate_annual | overall | reported, no target | 0.0363 | [0.0354, 0.0371] | 1557251 | report | reported |
 
@@ -226,7 +226,7 @@ No amendments. Every band below is as first registered.
 | calendar_month=27 | 0.0019 | [0.0013, 0.005] | 12613 | PASS |
 | calendar_month=28 | 0.0029 | [0.0016, 0.0053] | 12573 | PASS |
 | calendar_month=29 | 0.0022 | [0.0015, 0.0048] | 12530 | PASS |
-| calendar_month=30 | 0.0014 | [0.0013, 0.0044] | 12499 | PASS |
+| calendar_month=30 | 0.0013 | [0.0013, 0.0044] | 12499 | PASS |
 | calendar_month=31 | 0.002 | [0.0015, 0.0048] | 12458 | PASS |
 | calendar_month=32 | 0.0026 | [0.0017, 0.0056] | 12416 | PASS |
 | calendar_month=33 | 0.0034 | [0.0019, 0.0062] | 12373 | PASS |
@@ -240,20 +240,20 @@ No amendments. Every band below is as first registered.
 | ID | Metric | Scope | Band | Observed | 95% CI | n | Severity | Status |
 |---|---|---|---|---|---|---|---|---|
 | DR-11 | risk_band_default_rate_monotonicity | per_portfolio | strictly increasing | — | — | — | fail | PASS |
-| DR-12 | monotone_decile_step_fraction | per_portfolio | ≥ 0.9 | 0.5556 | — | 46557 | fail | **FAIL** |
+| DR-12 | monotone_decile_step_fraction | per_portfolio | ≥ 0.9 | 0.6667 | — | 46557 | fail | **FAIL** |
 
 <details><summary>DR-11 — per-cell breakdown (8 cells)</summary>
 
 | Cell | Observed | 95% CI | n | Status |
 |---|---|---|---|---|
-| MSME-CC | [0.0037, 0.1031, 0.864] | — | 46557 | PASS |
-| MSME-TL | [0.0032, 0.0976, 0.7566] | — | 39920 | PASS |
-| Housing | [0.0031, 0.1788, 0.7892] | — | 71404 | PASS |
-| Education | [0.004, 0.1296, 0.7447] | — | 37559 | PASS |
-| Agri | [0.0031, 0.0496, 0.6987] | — | 135043 | PASS |
-| Retail-Unsecured | [0.0047, 0.108, 0.684] | — | 45385 | PASS |
-| LAP | [0.0031, 0.1022, 0.7765] | — | 48651 | PASS |
-| Auto | [0.0032, 0.0766, 0.6634] | — | 42952 | PASS |
+| MSME-CC | [0.004, 0.1893, 0.9677] | — | 46557 | PASS |
+| MSME-TL | [0.0046, 0.138, 0.8762] | — | 39920 | PASS |
+| Housing | [0.0037, 0.2651, 0.9395] | — | 71404 | PASS |
+| Education | [0.0048, 0.191, 0.8789] | — | 37559 | PASS |
+| Agri | [0.0032, 0.0932, 0.8627] | — | 135043 | PASS |
+| Retail-Unsecured | [0.0056, 0.1567, 0.8426] | — | 45385 | PASS |
+| LAP | [0.0041, 0.1519, 0.9406] | — | 48651 | PASS |
+| Auto | [0.0037, 0.1249, 0.8269] | — | 42952 | PASS |
 
 </details>
 
@@ -261,14 +261,14 @@ No amendments. Every band below is as first registered.
 
 | Cell | Observed | 95% CI | n | Status |
 |---|---|---|---|---|
-| MSME-CC | 0.5556 | — | 46557 | **FAIL** |
-| MSME-TL | 0.5556 | — | 39920 | **FAIL** |
-| Housing | 0.7778 | — | 71404 | **FAIL** |
+| MSME-CC | 0.6667 | — | 46557 | **FAIL** |
+| MSME-TL | 0.7778 | — | 39920 | **FAIL** |
+| Housing | 0.5556 | — | 71404 | **FAIL** |
 | Education | 0.7778 | — | 37559 | **FAIL** |
-| Agri | 0.7778 | — | 135043 | **FAIL** |
-| Retail-Unsecured | 0.8889 | — | 45385 | **FAIL** |
-| LAP | 0.6667 | — | 48651 | **FAIL** |
-| Auto | 0.8889 | — | 42952 | **FAIL** |
+| Agri | 0.6667 | — | 135043 | **FAIL** |
+| Retail-Unsecured | 0.7778 | — | 45385 | **FAIL** |
+| LAP | 0.8889 | — | 48651 | **FAIL** |
+| Auto | 0.7778 | — | 42952 | **FAIL** |
 
 </details>
 
@@ -450,17 +450,17 @@ No amendments. Every band below is as first registered.
 
 | ID | Metric | Scope | Band | Observed | 95% CI | n | Severity | Status |
 |---|---|---|---|---|---|---|---|---|
-| DR-24 | adverse_impact_ratio | per_cut (protected_proxies) | ≥ 0.8 | 0.9195 | — | 467471 | report | reported |
-| DR-25 | tpr_gap | per_cut (protected_proxies) | ≤ 0.15 | 0.0209 | — | 16936 | report | reported |
+| DR-24 | adverse_impact_ratio | per_cut (protected_proxies) | ≥ 0.8 | 0.9405 | — | 467471 | report | reported |
+| DR-25 | tpr_gap | per_cut (protected_proxies) | ≤ 0.15 | 0.024 | — | 16936 | report | reported |
 
 <details><summary>DR-24 — per-cell breakdown (4 cells)</summary>
 
 | Cell | Observed | 95% CI | n | Status |
 |---|---|---|---|---|
-| promoter_age_group | 0.9195 | — | 467471 | reported |
-| qualification | 0.7772 | — | 467471 | reported |
-| geography (region) | 0.7198 | — | 467471 | reported |
-| constitution | 0.7752 | — | 467471 | reported |
+| promoter_age_group | 0.9405 | — | 467471 | reported |
+| qualification | 0.7661 | — | 467471 | reported |
+| geography (region) | 0.701 | — | 467471 | reported |
+| constitution | 0.7912 | — | 467471 | reported |
 
 </details>
 
@@ -468,10 +468,10 @@ No amendments. Every band below is as first registered.
 
 | Cell | Observed | 95% CI | n | Status |
 |---|---|---|---|---|
-| promoter_age_group | 0.0209 | — | 16936 | reported |
-| qualification | 0.0215 | — | 16936 | reported |
-| geography (region) | 0.0992 | — | 16936 | reported |
-| constitution | 0.0962 | — | 16936 | reported |
+| promoter_age_group | 0.024 | — | 16936 | reported |
+| qualification | 0.0242 | — | 16936 | reported |
+| geography (region) | 0.0954 | — | 16936 | reported |
+| constitution | 0.1023 | — | 16936 | reported |
 
 </details>
 

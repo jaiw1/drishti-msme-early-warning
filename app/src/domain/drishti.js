@@ -185,7 +185,10 @@ export const ACTIONS = [
   { value: 'site_visit', label: 'Site visit', hint: 'Visited the business premises.' },
   { value: 'restructure_proposed', label: 'Restructure proposed', hint: 'A restructuring has been put to the borrower.' },
   { value: 'escalated', label: 'Escalated', hint: 'Referred upward for a decision.' },
-  { value: 'classified_sma1', label: 'Classified SMA-1', hint: 'Recorded as a special-mention account.' },
+  // What the OFFICER did, recorded after the fact. The model never assigns a
+  // regulatory classification — its Red band says an account resembles the ones
+  // that went bad, which is not the same statement as "31-60 days overdue".
+  { value: 'classified_sma1', label: 'Classified SMA-1', hint: 'The officer classified the account as SMA-1 in the CBS. The model does not assign this.' },
   { value: 'false_positive', label: 'False positive', hint: 'The flag does not reflect the account. Recorded for model review.' },
   { value: 'closed', label: 'Closed', hint: 'No further action needed on this flag.' },
 ]

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  bandFor, byPortfolioList, dpdBand, honestyBlock, num, redBandPrecision, ticketBand, toRow,
+  bandFor, byPortfolioList, decisionScore, dpdBand, honestyBlock, num, redBandPrecision,
+  ticketBand, toRow,
 } from './shapes'
 import { ROW_WITHOUT_LIMIT, ROW_WITH_LIMIT, metrics } from '../test/fixtures/api'
 
@@ -22,6 +23,35 @@ describe('bandFor', () => {
     'pd %s is %s', (pd, band) => expect(bandFor(pd, t)).toBe(band),
   )
   it('claims no band without thresholds', () => expect(bandFor(0.9, {})).toBeNull())
+})
+
+describe('decisionScore', () => {
+  // The model searched its thresholds over the smoothed score. `pd` over the API is the
+  // RAW single-month probability, and banding that one moved 443 of 12,760 accounts.
+  it('prefers the score the thresholds were chosen over', () => {
+    expect(decisionScore({ decision_score: 0.31, pd_smooth: 0.29, pd: 0.92 })).toBe(0.31)
+  })
+  it('falls back to pd_smooth, which is that same score under its older name', () => {
+    expect(decisionScore({ pd_smooth: 0.29, pd: 0.92 })).toBe(0.29)
+  })
+  it('only reaches pd last, where the static payload already holds the smoothed value', () => {
+    expect(decisionScore({ pd: 0.92 })).toBe(0.92)
+  })
+  it('claims no score for a row that carries none', () => {
+    expect(decisionScore({})).toBeNull()
+    expect(decisionScore(null)).toBeNull()
+  })
+})
+
+describe('banding a row the server did not band', () => {
+  const thresholds = { red_thr: 0.5, amber_thr: 0.2 }
+  it('bands on the decision score, not on the raw pd beside it', () => {
+    const row = toRow(
+      { account_id: 'A1', pd: 0.92, pd_smooth: 0.29, published_bucket: null },
+      { thresholds },
+    )
+    expect(row.bucket).toBe('amber')
+  })
 })
 
 describe('toRow', () => {
