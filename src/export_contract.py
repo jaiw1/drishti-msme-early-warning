@@ -444,6 +444,13 @@ def build_contract_accounts(internal_out: dict, *, bank_ctx: B.BankContext | Non
                 bucket=rec.get("bucket"), reasons=list(rec.get("reasons") or [])[:5],
                 first_warning_lead=int(rec.get("first_warning_lead") or 0),
                 runway_months=runway_estimate(tl, ref_month, red_thr),
+                # SD-D5's secondary label (SMA-2-or-worse within 6 months), read off the
+                # panel via export_demo.py's own snapshot row. `enum: [0, 1]` in the
+                # schema — a genuinely unknown value is OMITTED rather than sent as null,
+                # which the enum would reject; every account in a real build_export
+                # payload has one, so this only triggers on a hand-built fixture.
+                **({"sma2_within_6m": int(rec["sma2_within_6m"])}
+                   if rec.get("sma2_within_6m") is not None else {}),
             ),
             provenance=provenance,
         )
@@ -457,7 +464,12 @@ def build_contract_accounts(internal_out: dict, *, bank_ctx: B.BankContext | Non
                 pd=round(_num0(pt.get("pd")), 4), pd_smooth=round(_num0(pt.get("pd_smooth")), 4),
                 decision_score=round(_num0(pt.get("decision_score", pt.get("pd_smooth"))), 4),
                 utilisation=(None if pt.get("utilisation") is None else round(float(pt["utilisation"]), 4)),
-                inflow=_num0(pt.get("inflow")))
+                inflow=_num0(pt.get("inflow")),
+                # Per-month DPD, schema-typed as a plain integer — never null on this
+                # channel (every facility has a days-past-due reading), so unlike
+                # `utilisation` there is no "channel absent" case to preserve; omitted
+                # only when a point genuinely carries none (an older internal payload).
+                **({"dpd": int(round(_num0(pt["dpd"])))} if pt.get("dpd") is not None else {}))
             for pt in tl
         ]
         if not points:
@@ -469,7 +481,8 @@ def build_contract_accounts(internal_out: dict, *, bank_ctx: B.BankContext | Non
             points = [dict(date=ref_month, pd=round(_num0(pd_raw), 4),
                            pd_smooth=round(_num0(pd_smooth), 4),
                            decision_score=round(_num0(decision), 4),
-                           utilisation=None, inflow=0.0)]
+                           utilisation=None, inflow=0.0,
+                           dpd=int(round(_num0(rec.get("dpd")))))]
         contract_timelines[aid] = points
     return accounts, contract_timelines
 

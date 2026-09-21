@@ -1204,6 +1204,12 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
             first_warning_lead=jint(first_warn.get(acc_id, 0)) or 0,
             snap_months_to_npa=jint(cur["months_to_npa"]) if pd.notna(cur["months_to_npa"]) else -1,
             ground_truth_default=int(st["is_defaulter"]),          # demo "outcome" reveal only
+            # SD-D5's secondary label, read straight off the panel column at the same
+            # reference-month row every other snapshot field comes from. A label, not a
+            # feature (DROP above keeps it out of X) — carried through so a consumer can
+            # ask "does this account reach SMA-2 in the next 6 months" without rederiving
+            # it from a DPD series it does not have.
+            sma2_within_6m=jint(cur.get("sma2_within_6m")),
         ))
     port_df = pd.DataFrame(portfolio)
 
@@ -1293,7 +1299,7 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
 
     # ---- timelines for EVERY account in the book (so ANY clicked account renders) ----
     port_ids = set(port_df.account_id)
-    tcols = ["account_id", "month_idx", "date", "pd", "pd_smooth", "utilisation", "inflow"]
+    tcols = ["account_id", "month_idx", "date", "pd", "pd_smooth", "utilisation", "inflow", "dpd"]
     timelines = {}
     for acc_id, g in te_df[te_df.account_id.isin(port_ids)][tcols].sort_values("month_idx").groupby("account_id"):
         # `utilisation` is null on the five portfolios with no credit limit — the chart
@@ -1305,10 +1311,13 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
         # the sampled book, and the budget is 4 MB. The contract export (which nothing
         # downloads) does emit `decision_score` explicitly, because the platform's loader
         # keys on that name.
+        #
+        # `dpd` per month rides along too — same panel column the account-level snapshot
+        # `dpd` already reads, just not previously carried into the trajectory.
         timelines[acc_id] = [dict(date=d, pd=jnum(p, 3), pd_smooth=jnum(ps, 3),
-                                  utilisation=jnum(u, 3), inflow=jint(inf))
-                             for d, p, ps, u, inf in
-                             zip(g.date, g.pd, g.pd_smooth, g.utilisation, g.inflow)]
+                                  utilisation=jnum(u, 3), inflow=jint(inf), dpd=jnum(dd, 1))
+                             for d, p, ps, u, inf, dd in
+                             zip(g.date, g.pd, g.pd_smooth, g.utilisation, g.inflow, g.dpd)]
 
     # ---- auto-drafted memo for EVERY red account ----
     # A model band is not a regulatory classification. Red says "this account looks

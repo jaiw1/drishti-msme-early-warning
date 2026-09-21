@@ -135,6 +135,46 @@ def test_every_account_carries_the_decision_score_the_band_was_cut_on(contract_n
         assert scores["bucket"] == expected or min(abs(score - amber), abs(score - red)) < 1e-4
 
 
+def test_every_account_carries_the_sma2_within_6m_secondary_label(contract_no_bank):
+    """SD-D5's secondary label (SMA-2-or-worse within 6 months) is a panel column
+    ``export_demo.py`` has always computed and never exported — the platform's own
+    key-parity test (``rrsquad-platform/tests/test_export_key_parity.py``) caught it as
+    a field the contract declares and no producer ever sends. It must now ride on every
+    account's ``scores`` block, as the ``0``/``1`` the contract enum requires (never a
+    bare Python bool, which ``json`` would still render as ``true``/``false`` and which
+    the schema's ``enum: [0, 1]`` does not accept)."""
+    export = contract_no_bank[0]
+    accounts = export["accounts"]
+    assert accounts, "fixture produced no accounts to check"
+    for account in accounts:
+        scores = account["scores"]
+        assert "sma2_within_6m" in scores, account["account_id"]
+        value = scores["sma2_within_6m"]
+        assert value in (0, 1), (account["account_id"], value)
+        assert isinstance(value, int) and not isinstance(value, bool), (account["account_id"], value)
+
+
+def test_every_timeline_point_carries_dpd(contract_no_bank):
+    """``timelines[account_id][*].dpd`` is the other field the platform's key-parity
+    test found declared and never emitted. Every month in every account's trajectory
+    must now carry it, as the non-negative integer the schema types it as — dpd has no
+    "channel absent" case the way `utilisation` does, so there is no legitimate null
+    here."""
+    export = contract_no_bank[0]
+    timelines = export["timelines"]
+    assert timelines, "fixture produced no timelines to check"
+    checked = 0
+    for account_id, points in timelines.items():
+        assert points, account_id
+        for point in points:
+            assert "dpd" in point, (account_id, point.get("date"))
+            dpd = point["dpd"]
+            assert isinstance(dpd, int) and not isinstance(dpd, bool), (account_id, dpd)
+            assert dpd >= 0, (account_id, dpd)
+            checked += 1
+    assert checked > 0
+
+
 def test_meta_product_and_schema_version(contract_no_bank):
     meta = contract_no_bank[0]["meta"]
     assert meta["product"] == "drishti"

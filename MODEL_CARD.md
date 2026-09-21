@@ -118,8 +118,10 @@ FEATURES only (§3), not from the panel — as of round 2, so is `months_since_m
   (DR-01, DR-05, DR-08–DR-10, DR-13–DR-19) against.
 - **Secondary — `sma2_within_6m`** (6-month SMA-2 crossing) exists in the panel for the
   generator's own base-rate assertions and DR-18-adjacent diagnostics; it is never a feature and
-  the model does not predict it directly. The contract's `scores.sma2_within_6m` field is left
-  unpopulated.
+  the model does not predict it directly. The contract's `scores.sma2_within_6m` field carries
+  the panel's own ground-truth label, read straight off the account's reference-month row — a
+  disclosed fact about the generated book, the same way `ground_truth_default` is, never a
+  model output.
 - **The rank-order / red-band-precision action window is 8 months**, not 12 — deliberately
   shorter than the label horizon, because it is the window a Relationship Manager can actually
   act inside. `red_band_precision_8m` and the rank-order exhibit (§9) are both measured over it;
