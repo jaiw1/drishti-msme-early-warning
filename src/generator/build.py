@@ -260,6 +260,53 @@ class GeneratorConfig:
     #: ``noise=False`` is not the dataset DRISHTi is trained or validated on,
     #: and its AUC is above the pre-registered ceiling by design.
     noise: bool = True
+    #: Apply PORTFOLIO-APPROPRIATE NPA recognition instead of one 90-DPD rule
+    #: for the whole book (`Portfolio.npa_recognition_months`).  Only agriculture
+    #: differs, and only because RBI's IRAC norms use crop seasons rather than
+    #: days for crop advances.
+    #:
+    #: **Default False, and the shipped panel is generated with it False.**  A
+    #: label definition is not a free parameter: changing it moves every
+    #: downstream number and several pre-registered bands, and the 2026-09-21
+    #: review's own instruction is to have the bank confirm its classification
+    #: policy first.  The switch exists so the size of the difference can be
+    #: measured — see `validation/experiments/e6_portfolio_npa_rules.py`.
+    portfolio_npa_rules: bool = False
+
+
+def _recognise_by_portfolio(npa_month: np.ndarray, portfolio_code: np.ndarray,
+                            portfolios, months: int) -> np.ndarray:
+    """Push each portfolio's NPA month out by its own recognition lag.
+
+    The latent deterioration is untouched — a borrower who is going to fail still
+    fails, on the same path, at the same speed.  What changes is WHEN the advance
+    is classified, which is the thing RBI's norms actually govern and the thing a
+    single 90-DPD rule gets wrong for crop loans.
+
+    An account whose recognised month would fall outside the observation window
+    becomes a survivor (``-1``): within this panel it never reaches NPA, which is
+    the honest consequence of a longer recognition rule and not a row to discard.
+
+    Args:
+        npa_month: ``(N,)`` month index of NPA, ``-1`` for survivors.
+        portfolio_code: ``(N,)`` index into ``portfolios``.
+        portfolios: the registry entries, in code order.
+        months: the observation window length.
+
+    Returns:
+        A new ``(N,)`` array; the input is not modified.
+    """
+    shifted = npa_month.copy()
+    for code, portfolio in enumerate(portfolios):
+        lag = int(getattr(portfolio, "npa_recognition_months", 0))
+        if lag <= 0:
+            continue
+        rows = (portfolio_code == code) & (npa_month >= 0)
+        if not rows.any():
+            continue
+        moved = npa_month[rows] + lag
+        shifted[rows] = np.where(moved < months, moved, -1)
+    return shifted
 
 
 def _by_account(values: np.ndarray, keep: np.ndarray) -> np.ndarray:
@@ -296,8 +343,12 @@ def generate(config: GeneratorConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
     population, portfolios = draw_population(
         config.seed, config.n_accounts, months, mix, selected, config.noise
     )
+    npa_month = population.npa_month
+    if config.portfolio_npa_rules:
+        npa_month = _recognise_by_portfolio(npa_month, population.portfolio_code,
+                                            portfolios, months)
     stress = build_stress_path(
-        population.is_defaulter, population.npa_month, population.onset,
+        population.is_defaulter, npa_month, population.onset,
         population.severity, months, mix, population.silent,
     )
 

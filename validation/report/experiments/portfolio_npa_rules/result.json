@@ -1,0 +1,207 @@
+{
+ "experiment": "portfolio_npa_rules",
+ "question": "What does applying one 90-DPD rule to all eight portfolios \u2014 including Kisan Credit Card \u2014 cost, compared with RBI's crop-season rule for agricultural advances?",
+ "rule": {
+  "default": "90 DPD for every portfolio (what the shipped panel uses)",
+  "alternative": "Portfolio.npa_recognition_months: +12 months for agri (two kharif/rabi crop seasons), 0 elsewhere",
+  "recognition_months": {
+   "agri": 12
+  },
+  "citation": "RBI Master Circular on Income Recognition, Asset Classification and Provisioning: a short-duration crop advance is NPA when principal or interest is overdue for two crop seasons; a long-duration crop advance for one crop season. Ordinary term loans use 90 days overdue; CC/OD uses 'out of order' for more than 90 days.",
+  "shipped_default": "OFF. The shipped panel keeps 90 DPD everywhere. A label definition is not a free parameter, and the review's own instruction is to have the bank confirm its classification policy before this is represented as regulatory classification."
+ },
+ "panel": {
+  "seed": 20260709,
+  "n_accounts": 9000,
+  "months": 36
+ },
+ "artefact": {
+  "policy_version": "drishti-policy-2.0",
+  "split_seed": 7,
+  "policy_fold_fraction": 0.3,
+  "smooth_window": 4,
+  "reference_month_idx": 24,
+  "policy_month_idx": 24,
+  "horizon_months": 8,
+  "panel": "data/msme_loan_panel.csv",
+  "panel_sha256": "7e0e3ab0855a25d0c3569f6911b76c8889458fc69eece9f4e297eacec1809332",
+  "panel_rows": 2039678,
+  "panel_accounts": 45000,
+  "n_fit_accounts": 22050,
+  "n_policy_accounts": 9450,
+  "n_test_accounts": 13500,
+  "n_fit_rows_used": 762376,
+  "eligibility": "labelable == 1",
+  "thresholds": {
+   "amber": 0.069298,
+   "red": 0.343723,
+   "applied": "cost_minimising"
+  },
+  "shipped_thresholds": {
+   "amber": 0.069298,
+   "red": 0.343723
+  },
+  "reproduces_shipped_thresholds": true,
+  "versions": {
+   "lightgbm": "4.6.0",
+   "scikit_learn": "1.8.0",
+   "numpy": "2.4.4",
+   "pandas": "3.0.2"
+  },
+  "note": "Trained by validation/experiments/artefact.py with the exporter's own CAT/DROP/split/hyperparameters, imported rather than restated. `reproduces_shipped_thresholds` records whether this fit lands on the same operating point the committed export shipped; a False there means the two have diverged and every experiment below is describing a different model from the one in the cockpit."
+ },
+ "books": {
+  "dpd90_everywhere": {
+   "rule": "dpd90_everywhere",
+   "portfolio_npa_rules": false,
+   "book_rate_12m": 0.03868,
+   "n_eligible_rows": 211059,
+   "by_portfolio": {
+    "Agri": {
+     "n_rows": 62607,
+     "rate_12m": 0.06584,
+     "median_months_to_npa": 12.0
+    },
+    "Auto": {
+     "n_rows": 18432,
+     "rate_12m": 0.01888,
+     "median_months_to_npa": 12.0
+    },
+    "Education": {
+     "n_rows": 17716,
+     "rate_12m": 0.03359,
+     "median_months_to_npa": 13.0
+    },
+    "Housing": {
+     "n_rows": 30612,
+     "rate_12m": 0.01065,
+     "median_months_to_npa": 14.0
+    },
+    "LAP": {
+     "n_rows": 22227,
+     "rate_12m": 0.03086,
+     "median_months_to_npa": 12.0
+    },
+    "MSME-CC": {
+     "n_rows": 20967,
+     "rate_12m": 0.03711,
+     "median_months_to_npa": 12.0
+    },
+    "MSME-TL": {
+     "n_rows": 17380,
+     "rate_12m": 0.04097,
+     "median_months_to_npa": 11.0
+    },
+    "Retail-Unsecured": {
+     "n_rows": 21118,
+     "rate_12m": 0.02827,
+     "median_months_to_npa": 14.0
+    }
+   },
+   "frozen_model": {
+    "auc_overall": 0.8645,
+    "auc_by_portfolio": {
+     "Agri": 0.881,
+     "Auto": 0.786,
+     "Education": 0.8298,
+     "Housing": 0.8389,
+     "LAP": 0.849,
+     "MSME-CC": 0.8625,
+     "MSME-TL": 0.828,
+     "Retail-Unsecured": 0.7714
+    }
+   },
+   "refit": {
+    "auc_overall": 0.8545,
+    "auc_by_portfolio": {
+     "Agri": 0.8784,
+     "Auto": 0.7937,
+     "Education": 0.8264,
+     "Housing": 0.8647,
+     "LAP": 0.7966,
+     "MSME-CC": 0.8345,
+     "MSME-TL": 0.7872,
+     "Retail-Unsecured": 0.8077
+    },
+    "n_train_rows": 103355,
+    "n_test_rows": 63443
+   }
+  },
+  "portfolio_appropriate": {
+   "rule": "portfolio_appropriate",
+   "portfolio_npa_rules": true,
+   "book_rate_12m": 0.03027,
+   "n_eligible_rows": 209643,
+   "by_portfolio": {
+    "Agri": {
+     "n_rows": 61191,
+     "rate_12m": 0.03765,
+     "median_months_to_npa": 16.0
+    },
+    "Auto": {
+     "n_rows": 18432,
+     "rate_12m": 0.01888,
+     "median_months_to_npa": 12.0
+    },
+    "Education": {
+     "n_rows": 17716,
+     "rate_12m": 0.03359,
+     "median_months_to_npa": 13.0
+    },
+    "Housing": {
+     "n_rows": 30612,
+     "rate_12m": 0.01065,
+     "median_months_to_npa": 14.0
+    },
+    "LAP": {
+     "n_rows": 22227,
+     "rate_12m": 0.03086,
+     "median_months_to_npa": 12.0
+    },
+    "MSME-CC": {
+     "n_rows": 20967,
+     "rate_12m": 0.03711,
+     "median_months_to_npa": 12.0
+    },
+    "MSME-TL": {
+     "n_rows": 17380,
+     "rate_12m": 0.04097,
+     "median_months_to_npa": 11.0
+    },
+    "Retail-Unsecured": {
+     "n_rows": 21118,
+     "rate_12m": 0.02827,
+     "median_months_to_npa": 14.0
+    }
+   },
+   "frozen_model": {
+    "auc_overall": 0.8427,
+    "auc_by_portfolio": {
+     "Agri": 0.8685,
+     "Auto": 0.786,
+     "Education": 0.8298,
+     "Housing": 0.8389,
+     "LAP": 0.849,
+     "MSME-CC": 0.8625,
+     "MSME-TL": 0.828,
+     "Retail-Unsecured": 0.7714
+    }
+   },
+   "refit": {
+    "auc_overall": 0.8198,
+    "auc_by_portfolio": {
+     "Agri": 0.8492,
+     "Auto": 0.7067,
+     "Education": 0.8428,
+     "Housing": 0.88,
+     "LAP": 0.824,
+     "MSME-CC": 0.7558,
+     "MSME-TL": 0.7413,
+     "Retail-Unsecured": 0.6911
+    },
+    "n_train_rows": 102600,
+    "n_test_rows": 63010
+   }
+  }
+ }
+}

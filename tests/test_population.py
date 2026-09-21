@@ -315,3 +315,53 @@ def test_the_annual_rate_does_not_move_with_the_window() -> None:
         frame, _ = generate(GeneratorConfig(n_accounts=12_000, months=months))
         rates.append(float(frame.loc[frame.labelable == 1, "default_within_12m"].mean()))
     assert abs(rates[0] - rates[1]) < 0.005, rates
+
+
+# --------------------------------------------------------------------------- #
+# Portfolio-appropriate NPA recognition (review section 11)
+#
+# RBI's IRAC norms do not apply the 90-day test to crop advances: a short-duration
+# crop loan is NPA after principal or interest is overdue for TWO CROP SEASONS.
+# `GeneratorConfig.portfolio_npa_rules` switches that on. It ships OFF, and the two
+# tests below are the guard on both halves of that sentence — it must change nothing
+# when off, and it must change agriculture and ONLY agriculture when on.
+# --------------------------------------------------------------------------- #
+def test_portfolio_npa_rules_is_off_by_default_and_changes_nothing():
+    """The shipped panel must be bit-identical to the one generated before the switch existed."""
+    from generator import GeneratorConfig, generate
+
+    import pandas as pd
+
+    a, _ = generate(GeneratorConfig(n_accounts=900, months=30))
+    b, _ = generate(GeneratorConfig(n_accounts=900, months=30, portfolio_npa_rules=False))
+    pd.testing.assert_frame_equal(a, b)
+    assert GeneratorConfig().portfolio_npa_rules is False, (
+        "the shipped panel's label definition may not change without the bank confirming "
+        "its classification policy — see review section 11"
+    )
+
+
+def test_the_crop_season_rule_moves_agriculture_and_only_agriculture():
+    """Every other portfolio is a term loan or a CC/OD facility, where 90 days is correct."""
+    from generator import GeneratorConfig, generate
+    from generator.portfolios import NPA_RECOGNITION_MONTHS
+
+    assert set(NPA_RECOGNITION_MONTHS) == {"agri"}, (
+        "only agriculture has a recognition rule that is not 90 DPD"
+    )
+    base, _ = generate(GeneratorConfig(n_accounts=2_400, months=36))
+    crop, _ = generate(GeneratorConfig(n_accounts=2_400, months=36, portfolio_npa_rules=True))
+
+    def rate(panel, code):
+        rows = panel[(panel.portfolio == code) & (panel.labelable == 1)]
+        return float(rows.default_within_12m.mean()) if len(rows) else None
+
+    for code in sorted(set(base.portfolio.astype(str))):
+        if code == "Agri":
+            continue
+        assert rate(base, code) == rate(crop, code), f"{code} must be untouched by the agri rule"
+
+    assert rate(crop, "Agri") < rate(base, "Agri"), (
+        "recognising a crop default two seasons later must leave FEWER defaults inside the "
+        "12-month forward window, not more"
+    )

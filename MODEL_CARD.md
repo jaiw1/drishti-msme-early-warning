@@ -454,6 +454,41 @@ data easier than reality. The ceiling exists for the same reason in reverse.
 
 ## 14. Known limits
 
+**The label definition is wrong for agriculture, by about 43%** (experiment E6,
+`validation/report/experiments/portfolio_npa_rules/`). The generator applies one 90-DPD test to
+all eight portfolios including Kisan Credit Card. RBI's IRAC norms do not: a short-duration crop
+advance becomes NPA when principal or interest has been overdue for **two crop seasons**, a
+long-duration one after **one crop season**. Every Agri label in the shipped panel is therefore
+an event the bank's own rules would recognise roughly a year later.
+
+`GeneratorConfig.portfolio_npa_rules` implements the correct rule
+(`Portfolio.npa_recognition_months`; only `agri` is non-zero, at 12 months ≈ two kharif/rabi
+seasons). **It ships OFF and the shipped panel does not use it**, deliberately: a label
+definition is not a free parameter, changing it moves every downstream number and several
+pre-registered bands, and the review's own instruction is to have the bank confirm its
+classification policy first. Measured on a matched pair of 9,000×36 panels at one seed:
+
+| | 90 DPD everywhere | crop-season rule |
+|---|---|---|
+| Agri 12-month rate | 6.58% | **3.77%** (−43%) |
+| every other portfolio | unchanged | unchanged |
+| book 12-month rate | 3.87% | 3.03% (−22%) |
+| shipped model, no refit — overall AUC | 0.8645 | 0.8427 |
+| shipped model, no refit — Agri AUC | 0.8810 | 0.8685 |
+| refit under that rule — overall AUC | 0.8545 | 0.8198 |
+
+Two things follow. The corrected Agri label is genuinely **harder** — a default recognised a
+year later sits further from the signals that precede it — so retraining does not recover the
+gap; it is a real reduction in what is predictable, not a modelling loss. And a bank that
+corrects its label definition without retraining loses about 0.02 AUC on day one, which is the
+case the middle row prices.
+
+What E6 does not settle is IDBI's own policy: the short- versus long-duration crop mix, how a
+KCC renewal interacts with recognition, and whether the bank treats the seasons as half-years.
+Those are the bank's to confirm. Nothing in DRISHTi assigns a regulatory classification in
+either configuration.
+
+
 **What the four disclosed failures actually are** (experiment E2,
 `validation/report/experiments/disclosed_failures/`). All four remain failures on the
 pre-registered arithmetic and none was tuned away; E2 says what each is measuring.

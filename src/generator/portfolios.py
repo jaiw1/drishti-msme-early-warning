@@ -475,6 +475,27 @@ class Portfolio:
     #: chain at all — fraud, death, a sudden shock.  They are the honest
     #: ceiling on how well any model can score this book.
     silent_share: float = 0.0
+    #: Months of RECOGNITION LAG between the borrower falling irrecoverably
+    #: behind and the advance being classified NPA, over and above the ordinary
+    #: 90-day rule.  Zero for every portfolio governed by the 90-DPD test.
+    #:
+    #: The exception the 2026-09-21 review raised is agriculture.  RBI's IRAC
+    #: norms do not apply 90 DPD to crop loans: a short-duration crop advance
+    #: becomes NPA when principal or interest is overdue for **two crop
+    #: seasons**, and a long-duration crop advance for **one crop season**
+    #: (RBI Master Circular on IRAC & Provisioning, agricultural advances).  A
+    #: crop season here is the kharif/rabi half-year the mix already models,
+    #: so two seasons is roughly twelve months rather than three.
+    #:
+    #: **Only applied when ``GeneratorConfig.portfolio_npa_rules`` is True.**
+    #: It is off by default and the shipped panel does not use it: changing a
+    #: label definition changes every downstream number and several
+    #: pre-registered bands, and the review's own instruction is to have the
+    #: bank confirm its classification policy before representing this as
+    #: regulatory classification.  The switch exists so the difference can be
+    #: measured (validation/experiments/e6_portfolio_npa_rules.py) rather than
+    #: argued about.
+    npa_recognition_months: int = 0
 
     def __post_init__(self) -> None:
         unknown = set(self.channels) - set(ALL_CHANNELS)
@@ -631,8 +652,24 @@ def _build_registry() -> dict[str, Portfolio]:
             default_rate_band=(float(band[0]), float(band[1])),
             silent_share=float(
                 sources.value(f"portfolios.{key}.noise.silent_default_share")),
+            npa_recognition_months=NPA_RECOGNITION_MONTHS.get(key, 0),
         )
     return built
+
+
+#: Recognition lag over and above the 90-DPD test, by registry key.  Only
+#: `agri` differs, and only because RBI's IRAC norms say so: a short-duration
+#: crop advance is NPA when principal or interest has been overdue for TWO CROP
+#: SEASONS, not ninety days.  The mix models kharif and rabi as half-years, so
+#: two seasons is ~12 months.  Every other portfolio here is an ordinary term
+#: loan or CC/OD and is governed by 90 DPD (CC/OD by the "out of order for more
+#: than 90 days" test), so its lag is zero.
+#:
+#: Read only when `GeneratorConfig.portfolio_npa_rules` is True.  This is a
+#: SIMULATOR setting, not a classification engine: nothing in DRISHTi assigns a
+#: regulatory classification, and the bank must confirm its own policy before
+#: any of this is represented as one.
+NPA_RECOGNITION_MONTHS: dict[str, int] = {"agri": 12}
 
 
 #: human labels for the CLI's progress lines
