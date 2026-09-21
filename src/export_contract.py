@@ -51,8 +51,14 @@ from sklearn.metrics import roc_auc_score
 sys.path.insert(0, str(Path(__file__).resolve().parent))   # so `import bank` resolves standalone
 
 import bank as B                                            # noqa: E402  (path shim first)
+import costs                                                # noqa: E402  (path shim first)
 
 SCHEMA_VERSION = "1.0.0"
+#: decimals every published per-account score carries. The SAME quantisation the
+#: thresholds are emitted at (``costs.THRESHOLD_DECIMALS``, mirrored by
+#: ``export_demo.SCORE_DECIMALS``) — imported from ``costs`` rather than from
+#: ``export_demo``, which imports this module.
+SCORE_DECIMALS = costs.THRESHOLD_DECIMALS
 #: Fixed namespace so uuid5(NAMESPACE, label) is stable across processes and
 #: machines — the whole point of deriving model_run_id from --label at all.
 _NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "https://rrsquad.dev/drishti")
@@ -306,6 +312,13 @@ def cost_model_block(thresholds: dict) -> dict:
     )
     if lgd_secured is not None:
         block["lgd"] = round(_weighted_mean(by_port, "lgd_mean") or float(lgd_secured), 4)
+    # The two-number rupee comparison, in crore, over the fold the search ran on.
+    # Same helper the internal payload's `metrics.cost_model.policy_fold` uses, so
+    # the contract and the cockpit cannot quote different costs for the same run.
+    # `curve` above is priced on that same fold; this is its two named points.
+    policy_fold = costs.policy_fold_cost(thresholds)
+    if policy_fold:
+        block["policy_fold"] = policy_fold
     return block
 
 
@@ -390,15 +403,20 @@ def build_contract_accounts(internal_out: dict, *, bank_ctx: B.BankContext | Non
     for rec in internal_out["portfolio"]:
         aid = rec["account_id"]
         tl = timelines_in.get(aid, [])
-        pd_raw = pd_smooth = None
-        for pt in tl:
-            if pt.get("date") == ref_month:
-                pd_raw, pd_smooth = pt.get("pd"), pt.get("pd_smooth")
-                break
-        if pd_smooth is None:
-            pd_smooth = rec.get("pd")          # already the smoothed value, internal shape
-        if pd_raw is None:
-            pd_raw = rec.get("pd_raw")
+        # The RECORD first, the timeline only as a fallback. Both carry the same two
+        # numbers, but the timeline is a chart series quantised to three decimals for
+        # the app's payload budget, while the record carries them at the precision the
+        # bands were decided at (`export_demo.SCORE_DECIMALS`). Reading the coarse copy
+        # when the exact one is right there is how a published score stops reproducing
+        # its own band.
+        pd_smooth = rec.get("pd")              # already the smoothed value, internal shape
+        pd_raw = rec.get("pd_raw")
+        if pd_raw is None or pd_smooth is None:
+            for pt in tl:
+                if pt.get("date") == ref_month:
+                    pd_raw = pt.get("pd") if pd_raw is None else pd_raw
+                    pd_smooth = pt.get("pd_smooth") if pd_smooth is None else pd_smooth
+                    break
         if pd_raw is None:
             pd_raw = pd_smooth if pd_smooth is not None else 0.0
         # The score the bands were chosen over. The record carries it explicitly
@@ -434,13 +452,19 @@ def build_contract_accounts(internal_out: dict, *, bank_ctx: B.BankContext | Non
             eco_red=int(rec.get("eco_red") or 0),
             channels_present=list(rec.get("channels_present") or []),
             scores=dict(
-                pd=round(float(pd_raw), 4), pd_smooth=round(float(pd_smooth), 4),
+                # SCORE_DECIMALS (= costs.THRESHOLD_DECIMALS), not four: the platform
+                # re-bands `decision_score >= chosen_red_thr` in SQL, so a score
+                # published coarser than the threshold it is compared against is a
+                # band the loader cannot reproduce. Two accounts straddled the Amber
+                # cut-off at four decimals.
+                pd=round(float(pd_raw), SCORE_DECIMALS),
+                pd_smooth=round(float(pd_smooth), SCORE_DECIMALS),
                 # The ONE score every band is derived from. Equal to pd_smooth under
                 # the current policy; emitted under its own name so a consumer never
                 # has to guess which of the two the thresholds were tuned on.
-                decision_score=round(float(decision), 4),
+                decision_score=round(float(decision), SCORE_DECIMALS),
                 pd_calibrated=(None if rec.get("pd_calibrated") is None
-                               else round(float(rec["pd_calibrated"]), 4)),
+                               else round(float(rec["pd_calibrated"]), SCORE_DECIMALS)),
                 bucket=rec.get("bucket"), reasons=list(rec.get("reasons") or [])[:5],
                 first_warning_lead=int(rec.get("first_warning_lead") or 0),
                 runway_months=runway_estimate(tl, ref_month, red_thr),

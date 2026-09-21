@@ -284,7 +284,15 @@ Missed-NPA also fell (17.6% → 16.1%) despite Red being stricter, because Amber
 5.5% of the book, which is the real price of that.
 
 Every figure in the table above is re-derivable from `data/demo_data.json` by re-banding
-`decision_score` at the two threshold pairs — nothing here is a second model run.
+`decision_score` at the two threshold pairs — nothing here is a second model run. It no longer
+has to be re-derived by hand either: the exporter computes the middle row at export time and
+emits the whole table as `metrics.red_precision_decomposition` (with `model_effect_pp` and
+`threshold_effect_pp` named separately, and a one-sentence `note` formatted from those same
+numbers), so the cockpit prints the reason beside the headline rather than leaving a reader to
+find this section. `export_demo.py::honesty_violations` fails the export if that block's
+shipped-threshold row is not the headline it claims to be splitting. The July row stays a pair
+of constants (`PREVIOUS_MODEL_RED_PRECISION` / `PREVIOUS_MODEL_N_RED`) — that model is not in
+this repo, and recomputing it on today's book would be comparing this build against itself.
 
 **The headline, derived and asserted in-script (`assert_honesty`), never typed:**
 > "88.6% of Red-flagged accounts went NPA within 8 months (95% CI 84.0%–92.0%, n=245)" — 45k, shipped.
@@ -374,7 +382,10 @@ the 12,760-account test book. What the chosen pair then delivered on the untouch
 
 **Chosen pair, 45k:** amber **0.069298** / red **0.343723**, expected cost **₹6.68 cr** over the
 policy fold, vs the July 2026 hand-set 0.04/0.40 pair's ₹6.80 cr on the same fold — 1.7%
-cheaper. Both are DR-11-admissible at this size. Cost alone, with the DR-11 constraint lifted,
+cheaper. Both figures are emitted as `metrics.cost_model.policy_fold`, in crore and with
+`n_accounts` beside them, because a rupee total read against the 12,760-account test book
+instead of the fold it was summed over is the one way this comparison goes wrong.
+Both are DR-11-admissible at this size. Cost alone, with the DR-11 constraint lifted,
 would have picked 0.1515/0.1658 at ₹6.61 cr: the pre-registered constraint costs ₹0.07 cr on
 this book, and that price is emitted beside the pair (`thresholds.unconstrained`) rather than
 absorbed.
@@ -734,7 +745,24 @@ this, per the plan, numbers are reported as they are, not chased further.
    Measured: 2,500 → 12.5 MB; the first candidate, 800, still landed at 4.08 MB because
    stratified rounding samples slightly more than requested (810 accounts); 700 → 710 sampled →
    **3.59 MB**, safely inside the app's 4 MB budget, stratified by portfolio × band exactly as
-   before.
+   before. **Re-cut to 640 on 2026-09-22**: per-month `dpd` on every timeline point costs about
+   0.4 MB across the sample, which put 700 at 4.05 MB — over. 640 → 650 sampled → **3.70 MB**,
+   and it covers the same 21 of 24 portfolio × band cells 700 did (the three it misses have six
+   or seven Red accounts each and round to zero at every sample size in this range). The
+   exporter now prints a loud warning when the pack exceeds the budget, because the first
+   breach happened silently: the field was added and the committed pack was never re-measured.
+
+5. **Published scores are quantised at the threshold's precision, not coarser.** A band is
+   `score >= threshold`, and both sides have to be on the wire at the same resolution. Account
+   scores were published at four decimals while the thresholds carry six
+   (`costs.THRESHOLD_DECIMALS`), so two accounts (`MSME09498`, `MSME36698`, both at ≈0.06925
+   against the Amber cut-off 0.069298) re-banded Amber downstream while the frozen book called
+   them Green — the platform loaded 245/460/12,055 where this export published 245/458/12,057.
+   `decision_score`, `pd`, `pd_raw` and `pd_calibrated` now ship at `SCORE_DECIMALS` (= 6) in
+   both the cockpit payload and the contract export, and a test re-bands every published score
+   against the published thresholds and requires all 12,760 to reproduce their own `bucket`.
+   Timelines stay at three decimals on purpose: nothing bands off a chart series, and a third
+   number per point costs the 4 MB payload more than it buys.
 
 **A bug found in passing, and fixed as a precondition for an honest round-2 measurement.**
 `validation/runners/_shared.py::load_panel` caches its own 45k×48 panel under

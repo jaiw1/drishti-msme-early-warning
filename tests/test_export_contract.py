@@ -385,6 +385,61 @@ def test_cost_model_block_degrades_gracefully_from_an_empty_grid():
         assert point["n_flagged"] >= 0
 
 
+def test_every_contract_score_reproduces_its_own_band(contract_no_bank):
+    """The platform re-bands `decision_score >= chosen_red_thr` in SQL.
+
+    So the score on the wire has to be quantised no coarser than the threshold it
+    will be compared against. At four decimals it was not, and the book came out
+    of the loader with two accounts in a different band from the one the export
+    published.
+    """
+    export, _ = contract_no_bank
+    summary = export["portfolio_summary"]
+    amber, red = float(summary["amber_thr"]), float(summary["red_thr"])
+    for account in export["accounts"]:
+        for name in ("pd_smooth", "decision_score"):
+            score = account["scores"][name]
+            rederived = "red" if score >= red else "amber" if score >= amber else "green"
+            assert rederived == account["scores"]["bucket"], (
+                f"{account['account_id']}: {name}={score!r} re-bands {rederived}, "
+                f"but the export published {account['scores']['bucket']!r}")
+    counts = {band: sum(1 for a in export["accounts"] if a["scores"]["bucket"] == band)
+              for band in ("red", "amber", "green")}
+    assert counts == {b: summary[b] for b in ("red", "amber", "green")}
+
+
+def test_the_contract_scores_come_from_the_record_not_the_coarse_timeline(contract_no_bank,
+                                                                          internal_payload):
+    """Both carry the same numbers; only one carries them at banding precision."""
+    export, _ = contract_no_bank
+    out, _ = internal_payload
+    by_id = {r["account_id"]: r for r in out["portfolio"]}
+    for account in export["accounts"][:200]:
+        rec = by_id[account["account_id"]]
+        assert account["scores"]["pd_smooth"] == rec["pd"]
+        assert account["scores"]["pd"] == rec["pd_raw"]
+        assert account["scores"]["decision_score"] == rec["decision_score"]
+
+
+def test_cost_model_block_carries_the_policy_folds_rupee_pair(internal_payload):
+    """The contract and the cockpit must quote the SAME two numbers for one run."""
+    out, _ = internal_payload
+    block = export_contract.cost_model_block(out["thresholds"])
+    assert block["policy_fold"] == out["metrics"]["cost_model"]["policy_fold"]
+    assert block["policy_fold"]["n_accounts"] == out["thresholds"]["chosen"]["n"]
+
+
+def test_the_contract_export_carries_both_honesty_fields(contract_no_bank):
+    export, _ = contract_no_bank
+    metrics = export["metrics"]
+    assert metrics["cost_model"]["policy_fold"]["expected_cost_chosen_cr"] >= 0
+    cell = metrics["red_precision_decomposition"]
+    # `red_band_precision` is the contract's renamed cell; the decomposition still
+    # has to split THAT number, not the internal one it was reshaped from.
+    assert cell["new_model_at_new_threshold"]["precision"] == metrics["red_band_precision"]["value"]
+    assert cell["previous_threshold"] == export_demo.PREVIOUS_RED_THR
+
+
 # --------------------------------------------------------------------------- #
 # --demo-sample stratification
 # --------------------------------------------------------------------------- #

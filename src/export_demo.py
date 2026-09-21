@@ -472,6 +472,27 @@ DISCLAIMERS = ("not ", "never", "rather than", "instead", "for contrast")
 #: block — so a reference cannot become a sentence without the guard noticing.
 IDENTIFIER_PATHS = ("$.honesty.derived_from",)
 
+# --------------------------------------------------------------------------- #
+# The July 2026 operating point, named ONCE.
+#
+# The headline rose 84.5% -> 88.6% between the July build and this one, and the
+# tempting reading — "the model got better" — is the wrong one: the two figures
+# are measured at different Red cut-offs, and a higher cut-off raises precision
+# arithmetically whatever the model does.  MODEL_CARD §8 separates the two
+# effects by re-banding THIS book at the OLD cut-off; the decomposition below is
+# that table, computed at export time rather than typed into a document.
+# --------------------------------------------------------------------------- #
+#: where Red started before the policy fold existed (MODEL_CARD §8).  A
+#: documented constant of the OLD operating point — the one number the
+#: decomposition holds fixed while the model underneath it changes.
+PREVIOUS_RED_THR = 0.2720
+#: what the JULY 2026 RUN itself measured at that cut-off.  CONSTANTS, and
+#: labelled as such in the export: that model is not in this repo, re-fitting it
+#: would not reproduce it, and quietly recomputing these from today's book would
+#: turn the comparison into a tautology.
+PREVIOUS_MODEL_RED_PRECISION = 0.845
+PREVIOUS_MODEL_N_RED = 283
+
 
 def _ci(k, n):
     """A proportion with its 95% Wilson interval: ``{value, ci_lo, ci_hi}``."""
@@ -487,6 +508,77 @@ def _red_precision_cell(frame, horizon):
     n_red, hits = int(is_red.sum()), int(went[is_red].sum())
     return dict(**_ci(hits, n_red), n_red=n_red, n_defaulted=hits,
                 n_defaulted_in_book=int(went.sum()))
+
+
+def _precision_if_red_started_at(frame, threshold, horizon):
+    """What Red-band precision WOULD be on this book if Red started at ``threshold``.
+
+    Re-bands from the decision score rather than reading ``bucket``, which is the
+    whole point: the counterfactual cut-off is not the one the book was banded
+    at. Ranked on :func:`decision_column`, the same quantity the thresholds were
+    searched over, so the two rows of the decomposition differ only in where the
+    line sits.
+    """
+    went = _went_bad(frame, horizon)
+    scores = frame[decision_column(frame)].to_numpy(dtype="float64")
+    is_red = scores >= float(threshold)
+    n_red, hits = int(is_red.sum()), int(went[is_red].sum())
+    return dict(precision=round(hits / n_red, 4) if n_red else 0.0,
+                n_red=n_red, n_true=hits)
+
+
+def red_precision_decomposition(port_df, thresholds, horizon=RANK_HORIZON):
+    """How much of the headline's rise is the MODEL, and how much is the CUT-OFF.
+
+    MODEL_CARD §8's table, derived here instead of transcribed. Three readings of
+    the same 8-month window:
+
+    * the July 2026 run's own figure, at its own Red cut-off — a pair of
+      constants (``PREVIOUS_MODEL_RED_PRECISION`` / ``PREVIOUS_MODEL_N_RED``),
+      because that model is gone and recomputing it from today's book would
+      compare this build against itself;
+    * **this** model re-banded at that same old cut-off — computed, on the book
+      being exported;
+    * this model at the cut-off that shipped — the headline.
+
+    The first step is the model and the fold changing with the line held still;
+    the second is the line moving with the model held still. Publishing only
+    their sum is what would let "84.5% -> 88.6%" read as an improvement it is
+    not: the model step is NEGATIVE, and the whole visible gain (and more) is the
+    cut-off.
+
+    Args:
+        port_df: the frozen book, banded, carrying the decision score.
+        thresholds: the DM-5 block — ``red`` is the cut-off that shipped.
+        horizon: the action window the headline is measured over.
+
+    Returns:
+        The ``red_precision_decomposition`` cell, or ``None`` when there is no
+        shipped threshold to compare against.
+    """
+    new_thr = (thresholds or {}).get("red")
+    if new_thr is None:
+        return None
+    at_old = _precision_if_red_started_at(port_df, PREVIOUS_RED_THR, horizon)
+    at_new = _precision_if_red_started_at(port_df, float(new_thr), horizon)
+    model_pp = round((at_old["precision"] - PREVIOUS_MODEL_RED_PRECISION) * 100, 1)
+    threshold_pp = round((at_new["precision"] - at_old["precision"]) * 100, 1)
+    return dict(
+        previous_threshold=PREVIOUS_RED_THR,
+        previous_model_precision=PREVIOUS_MODEL_RED_PRECISION,
+        previous_model_n_red=PREVIOUS_MODEL_N_RED,
+        new_model_at_previous_threshold=at_old,
+        new_model_at_new_threshold=at_new,
+        model_effect_pp=model_pp,
+        threshold_effect_pp=threshold_pp,
+        note=(f"Red-band precision reads {at_new['precision']:.1%} rather than the July 2026 "
+              f"build's {PREVIOUS_MODEL_RED_PRECISION:.1%} because Red now starts at "
+              f"{float(new_thr):.4f} instead of {PREVIOUS_RED_THR:.4f}, not because the model "
+              f"improved: this same model re-banded at the old cut-off scores "
+              f"{at_old['precision']:.1%}, {abs(model_pp):.1f} points "
+              f"{'below' if model_pp < 0 else 'above'} the July build, and the cut-off alone "
+              f"accounts for {threshold_pp:+.1f} points."),
+    )
 
 
 def honest_metrics(port_df, horizon=RANK_HORIZON, long_horizon=12, budget=0.10,
@@ -599,8 +691,15 @@ def honest_metrics(port_df, horizon=RANK_HORIZON, long_horizon=12, budget=0.10,
            f"we publish — beside the {missed_npa_share['value']:.1%} of NPAs this operating "
            f"point still missed.")
 
+    decomposition = red_precision_decomposition(port_df, thresholds, horizon=horizon)
+
     return dict(
         red_band_precision_8m=red_band_precision_8m,
+        # Emitted BESIDE the headline, never instead of it: the headline is what
+        # the shipped policy delivered, and this is what it would be dishonest to
+        # let a reader infer from it. Omitted, not zeroed, when there is no
+        # shipped threshold to decompose against.
+        **({"red_precision_decomposition": decomposition} if decomposition else {}),
         raw_accuracy_8m=raw_accuracy_8m,
         base_rate_8m=base_rate_8m,
         base_rate_12m=base_rate_12m,
@@ -687,6 +786,18 @@ def honesty_violations(metrics):
         problems.append(
             "$.honesty.at_operating_point: the headline reports what the Red band did but "
             "does not say where Red starts, so nobody can reproduce it")
+    # The decomposition exists to stop the headline being read as an improvement.
+    # It can only do that while its shipped-threshold row IS the headline: a row
+    # that has drifted from it (a threshold re-banded off a rounded score, say)
+    # would quietly attribute the gain to the wrong cause.
+    decomposition = metrics.get("red_precision_decomposition")
+    if decomposition:
+        shipped = (decomposition.get("new_model_at_new_threshold") or {}).get("precision")
+        if shipped != red.get("value"):
+            problems.append(
+                f"$.red_precision_decomposition.new_model_at_new_threshold.precision: "
+                f"{shipped!r} is not red_band_precision_8m ({red.get('value')!r}) — the "
+                f"decomposition must split the headline, not a different number")
     return problems
 
 
@@ -744,6 +855,24 @@ SPLIT_SEED = 7
 POLICY_FOLD_FRACTION = 0.30
 #: bins used for the expected-calibration-error summary on the served score.
 ECE_BINS = 10
+
+#: decimals every PUBLISHED per-account score is quantised to.  Deliberately the
+#: SAME number as ``costs.THRESHOLD_DECIMALS``: a band is `score >= threshold`,
+#: so a score published coarser than the threshold it is compared against is a
+#: band a consumer cannot reproduce.  At four decimals two accounts sat between
+#: the rounded score and the Amber cut-off (0.069298) and re-banded Amber
+#: downstream while the frozen book called them Green — 245/458/12,057 became
+#: 245/460/12,055 on the way out.  Timelines stay coarser on purpose: they are
+#: chart series, nothing bands off them, and a third decimal there costs the
+#: 4 MB app payload more than it buys.
+SCORE_DECIMALS = costs.THRESHOLD_DECIMALS
+
+#: accounts written to ``app/public/demo_data.json``.  Calibrated against the
+#: app's 4 MB payload budget and re-measured whenever a per-point field is added
+#: to the timelines — see ``--demo-sample``'s help for the measurements.
+DEMO_SAMPLE_DEFAULT = 640
+#: the budget that calibration answers to, in bytes.
+DEMO_PACK_BUDGET_BYTES = 4 * 1024 * 1024
 
 
 def _snapshot_ead(snap):
@@ -1188,9 +1317,16 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
             # that meaning so the cockpit does not change under it. `decision_score`
             # is the same number under the name the band is defined against, and
             # `pd_raw` is the single-month probability it was smoothed from.
-            pd=jnum(cur["decision_score"], 4), decision_score=jnum(cur["decision_score"], 4),
-            pd_raw=jnum(cur["pd"], 4),
-            pd_calibrated=jnum(cur.get("pd_calibrated"), 4),
+            #
+            # SCORE_DECIMALS, not four: `bucket` below is computed from the
+            # UNROUNDED score, and every consumer re-derives it from the published
+            # one against the published thresholds. Quantise the score coarser
+            # than the threshold and those two answers part company — see
+            # SCORE_DECIMALS for the two accounts that did.
+            pd=jnum(cur["decision_score"], SCORE_DECIMALS),
+            decision_score=jnum(cur["decision_score"], SCORE_DECIMALS),
+            pd_raw=jnum(cur["pd"], SCORE_DECIMALS),
+            pd_calibrated=jnum(cur.get("pd_calibrated"), SCORE_DECIMALS),
             bucket=bucket(cur["decision_score"]),
             # channel-gated: `null` means "this product has no such channel", NOT zero.
             dpd=jnum(cur["dpd"], 1), utilisation=jnum(cur["utilisation"], 3),
@@ -1355,6 +1491,7 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
     n_accounts = int(df.account_id.nunique())
     n_months = int(df.month_idx.nunique())
     rank_order = rank_order_exhibit(port_df, horizon=horizon)
+    policy_fold = costs.policy_fold_cost(thresholds)
     # The gate's verdict travels INSIDE the payload as well as being asserted by the
     # CLI, so an artefact produced by a failing run can never be mistaken for a passing
     # one — the cockpit and the honesty gate both read it off the file itself.
@@ -1388,6 +1525,12 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
             median_first_warning_months=jint(lead_series.median()) or 0,
             pct_flagged_6mo_ahead=jnum((lead_series >= 6).mean(), 3) or 0.0,
             rank_order=rank_order,
+            # DM-5's rupee comparison, in the one place a metrics consumer looks.
+            # `thresholds` below still carries the whole derivation; this is the
+            # two-number summary the cockpit quotes, priced on the POLICY fold —
+            # which is why `n_accounts` is 8,933 here and not the 12,760 of the
+            # book every other metric in this block is measured on.
+            **({"cost_model": dict(policy_fold=policy_fold)} if policy_fold else {}),
             # DM-4. Merged last so the honest numbers cannot be shadowed by an
             # older key, and asserted below before anything is written.
             **honest_metrics(port_df, horizon=horizon, thresholds=thresholds),
@@ -1451,16 +1594,20 @@ def _parse_args(argv):
                     help="DM-6: also write the full, UNSAMPLED platform-contract-shaped "
                          "export (meta/accounts/scores/provenance/...) to PATH. Validate "
                          "with contracts/validate.py in the platform repo.")
-    ap.add_argument("--demo-sample", nargs="?", type=int, const=700, default=700,
-                    metavar="N",
+    ap.add_argument("--demo-sample", nargs="?", type=int, const=DEMO_SAMPLE_DEFAULT,
+                    default=DEMO_SAMPLE_DEFAULT, metavar="N",
                     help="DM-8 round 2: accounts (stratified by portfolio+band) written to "
                          "app/public/demo_data.json; metrics/thresholds/rank_order still "
-                         "come from the full panel. Default 700 — measured at 2,500 "
+                         "come from the full panel. Default 640 — measured at 2,500 "
                          "(the DM-6 default) the file was 12.5 MB, well over the app's "
                          "4 MB budget; 800 (the first candidate) still landed at 4.08 MB "
                          "because stratified rounding samples slightly more than N. 700 "
-                         "-> 710 accounts sampled -> 3.59 MB, comfortably under budget, "
-                         "while timelines still cover every portfolio x band cell. Pass "
+                         "held the budget at 3.59 MB until per-month `dpd` was wired into "
+                         "every timeline point, which costs ~0.4 MB across the sample and "
+                         "put 700 at 4.05 MB. 640 -> 650 accounts -> 3.70 MB restores the "
+                         "headroom, and covers exactly the same 21 of 24 portfolio x band "
+                         "cells 700 did (the three it misses have six or seven Red accounts "
+                         "each and round to zero at every sample size in this range). Pass "
                          "with no value to keep the default explicitly.")
     ap.add_argument("--no-demo-sample", action="store_true",
                     help="skip writing app/public/demo_data.json entirely")
@@ -1537,8 +1684,17 @@ def main(argv=None):
             json.dump(demo, f, allow_nan=False)
         written_payloads.append(DEMO_PUBLIC)
         ds = demo["_demo_sample"]
+        pack_bytes = Path(DEMO_PUBLIC).stat().st_size
         print(f"demo sample: {ds['sampled']}/{ds['full_panel']} accounts -> {DEMO_PUBLIC} "
-              f"({len(json.dumps(demo))/1024:.0f} KB) — DO NOT COMMIT this file")
+              f"({pack_bytes/1024:.0f} KB) — DO NOT COMMIT this file")
+        # The budget is a discipline, not a gate: the file is already written and a
+        # reviewer needs to see it. But it went over once, silently, when a per-point
+        # field was added and nobody re-measured — so say so, loudly, on the way past.
+        if pack_bytes > DEMO_PACK_BUDGET_BYTES:
+            print(f"  WARNING: {pack_bytes/1048576:.2f} MB is over the app's "
+                  f"{DEMO_PACK_BUDGET_BYTES/1048576:.0f} MB payload budget. Re-calibrate "
+                  f"--demo-sample (currently {DEMO_SAMPLE_DEFAULT}) or drop a per-point "
+                  f"timeline field.", file=sys.stderr)
 
     # DM-6 — the full, UNSAMPLED platform-contract export. --bank overlays
     # data/bank/{pulled,provenance,fixture}.json identity fields per SCHEMA.md's

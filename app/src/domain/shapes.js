@@ -161,6 +161,57 @@ export function honestyBlock(metrics) {
   }
 }
 
+/**
+ * How much of the Red-precision headline is the MODEL and how much is the CUT-OFF.
+ *
+ * `metrics.red_precision_decomposition`, emitted by `export_demo.py` and carried
+ * unchanged through the platform's metrics route. Absent on any run built before it
+ * existed, which is why every caller must treat `null` as "say nothing" rather than
+ * "nothing moved" — a missing decomposition is not evidence that the headline rose on
+ * merit, and printing a zeroed one would claim exactly that.
+ */
+export function precisionDecomposition(metrics) {
+  const d = metrics?.red_precision_decomposition
+  if (!d || typeof d !== 'object') return null
+  const atOld = d.new_model_at_previous_threshold || {}
+  const atNew = d.new_model_at_new_threshold || {}
+  const previous = num(d.previous_model_precision)
+  const rebanded = num(atOld.precision)
+  const shipped = num(atNew.precision)
+  if (previous === null || rebanded === null || shipped === null) return null
+  return {
+    previousThreshold: num(d.previous_threshold),
+    previousPrecision: previous,
+    previousNRed: d.previous_model_n_red ?? null,
+    rebandedPrecision: rebanded,
+    rebandedNRed: atOld.n_red ?? null,
+    rebandedNTrue: atOld.n_true ?? null,
+    shippedPrecision: shipped,
+    shippedNRed: atNew.n_red ?? null,
+    shippedNTrue: atNew.n_true ?? null,
+    modelEffectPp: num(d.model_effect_pp),
+    thresholdEffectPp: num(d.threshold_effect_pp),
+    note: typeof d.note === 'string' && d.note.trim() ? d.note : null,
+  }
+}
+
+/**
+ * The policy fold's two expected-cost figures, in crore.
+ *
+ * `metrics.cost_model.policy_fold`. Both sides are priced on the SAME fold — the one the
+ * thresholds were searched over, not the book the rest of the metrics block reports on —
+ * so `nAccounts` travels with them and must be shown: a rupee total read against the
+ * wrong denominator is the whole failure mode this field exists to close.
+ */
+export function policyFoldCost(metrics) {
+  const fold = metrics?.cost_model?.policy_fold
+  if (!fold || typeof fold !== 'object') return null
+  const chosen = num(fold.expected_cost_chosen_cr)
+  const july = num(fold.expected_cost_july_cr)
+  if (chosen === null || july === null) return null
+  return { nAccounts: num(fold.n_accounts), chosenCr: chosen, julyCr: july }
+}
+
 /** Provenance family map -> sorted [family, source] pairs, for the badge strip. */
 export function familyBadges(families) {
   if (!families || typeof families !== 'object') return []

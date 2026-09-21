@@ -17,7 +17,7 @@ import {
 } from 'recharts'
 import { pct } from '../lib/format'
 import { coverageGap, familiesIn } from '../domain/families'
-import { byPortfolioList, honestyBlock, redBandPrecision } from '../domain/shapes'
+import { byPortfolioList, honestyBlock, policyFoldCost, precisionDecomposition, redBandPrecision } from '../domain/shapes'
 
 function Rigor({ rigor }) {
   if (!rigor) return null
@@ -243,11 +243,70 @@ export function RankOrder({ rank, compact = false }) {
   )
 }
 
+/**
+ * One sentence saying how much of the headline is the model and how much is the cut-off.
+ *
+ * The export writes that sentence itself (`red_precision_decomposition.note`, derived
+ * from the same numbers the block carries), so it is printed verbatim for the same reason
+ * the honesty block is. The fallback exists for a run whose decomposition predates the
+ * note, and is composed from the structured fields rather than from prose — never from a
+ * number typed here.
+ */
+export function DecompositionNote({ metrics }) {
+  const d = precisionDecomposition(metrics)
+  if (!d) return null
+  const sentence = d.note || (
+    `Red-band precision reads ${pct(d.shippedPrecision, 1)} rather than the July 2026 build’s `
+    + `${pct(d.previousPrecision, 1)} because Red now starts higher, not because the model improved: `
+    + `this same model re-banded at the old cut-off scores ${pct(d.rebandedPrecision, 1)}.`
+  )
+  return (
+    <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50/70 px-3 py-2 text-sm leading-relaxed text-slate-800">
+      <b>Why it is higher than the July 2026 figure: </b>{sentence}
+      {d.rebandedNRed != null && d.rebandedNTrue != null && (
+        <span className="text-slate-600">
+          {' '}(At {d.previousThreshold != null ? d.previousThreshold.toFixed(4) : 'the old cut-off'}:{' '}
+          {d.rebandedNRed} Red, {d.rebandedNTrue} NPA. At the cut-off in force:{' '}
+          {d.shippedNRed} Red, {d.shippedNTrue} NPA.)
+        </span>
+      )}
+    </p>
+  )
+}
+
+/**
+ * What the operating point saves, as the pair of expected costs it was chosen between.
+ *
+ * Deliberately the PAIR and not a single "saving": one rupee total says nothing without
+ * the alternative it beat, and both sides here are priced on the policy fold the search
+ * ran on — a different, smaller book than the one every other number on this screen is
+ * measured over, which is why its size is printed rather than assumed.
+ */
+export function CostPair({ metrics }) {
+  const fold = policyFoldCost(metrics)
+  if (!fold) return null
+  return (
+    <p className="mt-2 rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-sm leading-relaxed text-slate-700">
+      <b>What that operating point costs: </b>
+      expected cost <b>₹{fold.chosenCr.toFixed(2)} cr</b> at the thresholds in force, against{' '}
+      <b>₹{fold.julyCr.toFixed(2)} cr</b> at the July 2026 pair — the saving this point claims.
+      {fold.nAccounts != null && (
+        <span className="text-slate-600">
+          {' '}Both are priced on the {fold.nAccounts.toLocaleString('en-IN')}-account policy fold the
+          thresholds were chosen on, not on the book the precision above is measured over.
+        </span>
+      )}
+    </p>
+  )
+}
+
 /** The Red-band precision claim, with the interval that says how much to trust it. */
 export function PrecisionCard({ metrics }) {
   const p = redBandPrecision(metrics)
   const honesty = honestyBlock(metrics)
-  if (!p && !honesty) return null
+  const decomposition = precisionDecomposition(metrics)
+  const fold = policyFoldCost(metrics)
+  if (!p && !honesty && !decomposition && !fold) return null
 
   return (
     <section className="rounded-xl border border-idbi-green/30 bg-idbi-green/5 p-5">
@@ -281,6 +340,10 @@ export function PrecisionCard({ metrics }) {
           and the Red band’s realised NPA rate — the figure an officer’s workload is actually spent on.
         </p>
       )}
+      {/* Both hidden when the run does not carry them: a run that cannot decompose its own
+          headline must say nothing here, never imply the rise was earned. */}
+      <DecompositionNote metrics={metrics} />
+      <CostPair metrics={metrics} />
     </section>
   )
 }

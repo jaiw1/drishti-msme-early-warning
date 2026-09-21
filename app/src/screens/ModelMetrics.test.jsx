@@ -126,6 +126,46 @@ describe('Model & Metrics', () => {
     expect(screen.getByText(block.why)).toBeInTheDocument()
   })
 
+  // The headline rose between builds because the Red cut-off moved, not because the model
+  // improved. A screen that prints only the headline lets a reviewer draw the other
+  // conclusion, so the split is rendered beside it — and omitted, never faked, when the
+  // published run does not carry one.
+  it('prints the decomposition beside the headline, so the rise cannot read as an improvement', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    const cell = metrics().data.metrics.red_precision_decomposition
+    expect(await screen.findByText(cell.note)).toBeInTheDocument()
+    // the counterfactual band, so the sentence can be re-derived rather than trusted
+    expect(screen.getByText(/At 0\.2720: 288 Red, 237 NPA\./)).toBeInTheDocument()
+    expect(screen.getByText(/At the cut-off in force: 264 Red, 244 NPA\./)).toBeInTheDocument()
+  })
+
+  it('says nothing about the decomposition when the run published none', async () => {
+    mockApi(apiRoutes({ [`${B}/drishti/metrics`]: ok(metrics({ decomposition: false })) }), { vi })
+    render()
+    expect(await screen.findByText('92.4%')).toBeInTheDocument()
+    expect(screen.queryByText(/Why it is higher than the July 2026 figure/)).not.toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/0\.2720/)
+  })
+
+  it('shows the cost pair, both sides priced on the policy fold', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    const pair = (await screen.findByText(/What that operating point costs/)).closest('p')
+    expect(pair).toHaveTextContent('₹6.68 cr')
+    expect(pair).toHaveTextContent('₹6.80 cr')
+    // the denominator, printed rather than assumed — it is NOT the 443-account book above
+    expect(pair).toHaveTextContent('8,933-account policy fold')
+  })
+
+  it('says nothing about cost when the run published no policy-fold pair', async () => {
+    mockApi(apiRoutes({ [`${B}/drishti/metrics`]: ok(metrics({ costModel: false })) }), { vi })
+    render()
+    expect(await screen.findByText('92.4%')).toBeInTheDocument()
+    expect(screen.queryByText(/What that operating point costs/)).not.toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/6\.68 cr/)
+  })
+
   it('shows the Red-band precision with its confidence interval', async () => {
     mockApi(apiRoutes(), { vi })
     render()

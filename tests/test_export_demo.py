@@ -33,6 +33,7 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+import costs  # noqa: E402  (path shim must run first)
 import export_demo  # noqa: E402  (path shim must run first)
 from generator import GeneratorConfig, generate  # noqa: E402
 from generator.portfolios import ALL_CHANNELS, PORTFOLIOS  # noqa: E402
@@ -639,6 +640,100 @@ def test_red_band_precision_is_repeated_for_every_portfolio_in_the_book():
 
 
 # --------------------------------------------------------------------------- #
+# DM-4 — the decomposition that stops the headline reading as an improvement
+#
+# 84.5% -> 88.6% is the rise a reader will want to call "the model got better".
+# It is not: the two figures sit at different Red cut-offs. The block below
+# splits the move into the part the model owns and the part the cut-off owns,
+# and the tests hold it to the hand-counted book: at the old cut-off (0.2720)
+# every Red and every Amber account is Red, which is 30 accounts and 10 NPAs.
+# --------------------------------------------------------------------------- #
+def test_the_decomposition_re_bands_this_book_at_the_old_cut_off(honest):
+    cell = honest["red_precision_decomposition"]
+    assert cell["previous_threshold"] == export_demo.PREVIOUS_RED_THR
+    # 0.2720 swallows the whole Amber band on this book: 10 Red + 20 Amber.
+    assert cell["new_model_at_previous_threshold"] == dict(
+        precision=round(10 / 30, 4), n_red=30, n_true=10)
+
+
+def test_the_shipped_row_of_the_decomposition_is_the_headline(honest):
+    """If it splits a different number, it is not splitting the headline."""
+    cell = honest["red_precision_decomposition"]
+    assert cell["new_model_at_new_threshold"] == dict(precision=0.6, n_red=10, n_true=6)
+    assert cell["new_model_at_new_threshold"]["precision"] == honest["red_band_precision_8m"]["value"]
+
+
+def test_the_july_figures_are_carried_as_constants_not_recomputed(honest):
+    """That model is gone; recomputing it here would compare this build to itself."""
+    cell = honest["red_precision_decomposition"]
+    assert cell["previous_model_precision"] == export_demo.PREVIOUS_MODEL_RED_PRECISION
+    assert cell["previous_model_n_red"] == export_demo.PREVIOUS_MODEL_N_RED
+
+
+def test_the_two_effects_sum_to_the_move_they_are_decomposing(honest):
+    cell = honest["red_precision_decomposition"]
+    total = (cell["new_model_at_new_threshold"]["precision"]
+             - cell["previous_model_precision"]) * 100
+    assert cell["model_effect_pp"] + cell["threshold_effect_pp"] == pytest.approx(total, abs=0.1)
+    assert cell["model_effect_pp"] < 0, "the model step is the one a reader must not miss"
+
+
+def test_the_decomposition_note_is_formatted_from_its_own_numbers(honest):
+    note = honest["red_precision_decomposition"]["note"]
+    assert "60.0%" in note and "33.3%" in note and "84.5%" in note
+    assert "not because the model improved" in note
+
+
+def test_the_decomposition_is_omitted_when_there_is_no_shipped_threshold():
+    """No operating point, no split — a zeroed cell would read as a measurement."""
+    blind = export_demo.honest_metrics(_banded_book())
+    assert "red_precision_decomposition" not in blind
+
+
+def test_a_decomposition_that_has_drifted_from_the_headline_fails_the_guard(honest):
+    drifted = dict(honest, red_precision_decomposition=dict(
+        honest["red_precision_decomposition"],
+        new_model_at_new_threshold=dict(precision=0.91, n_red=10, n_true=6)))
+    problems = export_demo.honesty_violations(drifted)
+    assert any("must split the headline" in p for p in problems)
+    with pytest.raises(AssertionError, match="decomposition"):
+        export_demo.assert_honesty(drifted)
+
+
+def test_the_payload_decomposes_its_own_headline(payload):
+    """The real pipeline's output, not a hand-built block."""
+    cell = payload["metrics"]["red_precision_decomposition"]
+    assert cell["new_model_at_new_threshold"]["precision"] == \
+        payload["metrics"]["red_band_precision_8m"]["value"]
+    assert cell["new_model_at_new_threshold"]["n_red"] == payload["portfolio_summary"]["red"]
+
+
+# --------------------------------------------------------------------------- #
+# DM-5 — the policy fold's rupee pair, beside the metrics that quote it
+# --------------------------------------------------------------------------- #
+def test_the_cost_pair_is_read_back_out_of_the_search(payload):
+    fold = payload["metrics"]["cost_model"]["policy_fold"]
+    block = payload["thresholds"]
+    assert fold["n_accounts"] == block["chosen"]["n"]
+    assert fold["expected_cost_chosen_cr"] == round(block["chosen"]["expected_cost"] / 1e7, 2)
+    assert fold["expected_cost_july_cr"] == round(block["current"]["expected_cost"] / 1e7, 2)
+
+
+def test_the_cost_pair_is_priced_on_the_policy_fold_not_the_exported_book(payload):
+    """Both numbers count the fold the thresholds were chosen on, never the test book."""
+    fold = payload["metrics"]["cost_model"]["policy_fold"]
+    assert fold["n_accounts"] != payload["portfolio_summary"]["total_accounts"]
+    assert fold["n_accounts"] == payload["thresholds"]["current"]["n"], (
+        "the chosen pair and the July pair must be priced on the same accounts, or the "
+        "comparison is between two different books")
+
+
+def test_the_cost_pair_is_omitted_when_the_book_could_not_be_priced():
+    assert costs.policy_fold_cost({}) is None
+    assert costs.policy_fold_cost({"chosen": {"expected_cost": 1.0}}) is None
+
+
+# --------------------------------------------------------------------------- #
 # DM-4 — the honesty block, and the guard on it
 # --------------------------------------------------------------------------- #
 def test_the_headline_is_formatted_from_the_measured_number(honest):
@@ -738,10 +833,42 @@ def test_the_bands_in_the_book_are_the_thresholds_that_were_costed(payload):
     assert payload["portfolio_summary"]["red_thr"] == red
     for record in payload["portfolio"]:
         expected = "red" if record["pd"] >= red else "amber" if record["pd"] >= amber else "green"
-        # `pd` is the banding score rounded for the wire, so only an account sitting
-        # exactly on a threshold could differ; none may differ by a whole band.
-        assert record["bucket"] == expected or abs(record["pd"] - amber) < 1e-4 \
-            or abs(record["pd"] - red) < 1e-4
+        assert record["bucket"] == expected, record["account_id"]
+
+
+def test_every_published_score_reproduces_its_own_band(payload):
+    """The band is `score >= threshold`, and BOTH sides have to be on the wire.
+
+    `bucket` is computed from the unrounded decision score; every consumer
+    re-derives it from the published one. At four decimals those two answers
+    parted company for accounts sitting inside the rounding step of the Amber
+    cut-off, and the book came out of the loader 245/460/12,055 where the export
+    said 245/458/12,057. The fix is to publish the score at the same
+    quantisation as the threshold, and this is the assertion that it holds —
+    exactly, for every account, with no tolerance to hide inside.
+    """
+    amber = payload["portfolio_summary"]["amber_thr"]
+    red = payload["portfolio_summary"]["red_thr"]
+    counts = dict(red=0, amber=0, green=0)
+    for record in payload["portfolio"]:
+        for name in ("pd", "decision_score"):
+            score = record[name]
+            rederived = "red" if score >= red else "amber" if score >= amber else "green"
+            assert rederived == record["bucket"], (
+                f"{record['account_id']}: {name}={score!r} re-bands {rederived}, "
+                f"but the export published {record['bucket']!r}")
+        counts[record["bucket"]] += 1
+    summary = payload["portfolio_summary"]
+    assert counts == dict(red=summary["red"], amber=summary["amber"], green=summary["green"])
+
+
+def test_published_scores_are_quantised_no_coarser_than_the_thresholds(payload):
+    """A score rounded coarser than the cut-off it is compared against cannot band."""
+    assert export_demo.SCORE_DECIMALS == costs.THRESHOLD_DECIMALS
+    for record in payload["portfolio"][:200]:
+        for name in ("pd", "decision_score", "pd_raw"):
+            value = record[name]
+            assert round(value, export_demo.SCORE_DECIMALS) == value, (record["account_id"], name)
 
 
 # --------------------------------------------------------------------------- #

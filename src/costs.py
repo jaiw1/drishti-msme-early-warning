@@ -860,3 +860,37 @@ def choose_thresholds(scores, went_bad, ead, secured, portfolio, *,
                   "block is the evidence for the value being replaced, not a lock on it."),
         ),
     )
+
+
+#: rupees in one crore — the unit the policy fold's expected cost is quoted in,
+#: because that is how the cost of an operating point gets discussed out loud.
+CRORE = 1e7
+
+
+def policy_fold_cost(thresholds):
+    """The two expected-cost figures the operating-point choice actually turns on.
+
+    Both already exist inside the block :func:`choose_thresholds` returns:
+    ``chosen`` is the cost-minimising pair that shipped, ``current`` is the July
+    2026 hand-set pair, and — the part that makes the comparison legitimate at
+    all — they are priced on the SAME policy fold, over the same accounts, with
+    the same cost parameters. This reads those two numbers back in crore rather
+    than recomputing them, so a screen cannot print a rupee figure the search
+    never produced, and ``n_accounts`` travels with them because a cost total is
+    meaningless without the size of the book it was summed over.
+
+    Returns:
+        ``{n_accounts, expected_cost_chosen_cr, expected_cost_july_cr}``, or
+        ``None`` when either side is missing — a book too thin to price must
+        leave the field out rather than publish a zero that looks like a
+        measurement.
+    """
+    chosen = (thresholds or {}).get("chosen") or {}
+    current = (thresholds or {}).get("current") or {}
+    if chosen.get("expected_cost") is None or current.get("expected_cost") is None:
+        return None
+    return dict(
+        n_accounts=int(chosen.get("n") or 0),
+        expected_cost_chosen_cr=round(float(chosen["expected_cost"]) / CRORE, 2),
+        expected_cost_july_cr=round(float(current["expected_cost"]) / CRORE, 2),
+    )

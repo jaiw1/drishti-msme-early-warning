@@ -174,7 +174,8 @@ const decileRows = () => Array.from({ length: 10 }, (_, i) => ({
 }))
 
 /** The API spells `by_portfolio` as an object; the export spells it as an array. */
-export const metrics = ({ byPortfolioAsArray = false, honesty = true } = {}) => {
+export const metrics = ({ byPortfolioAsArray = false, honesty = true, decomposition = true,
+  costModel = true } = {}) => {
   const perPortfolio = {
     'MSME-CC': {
       n: 263, by_band: bandRows(), by_decile: decileRows(),
@@ -205,6 +206,26 @@ export const metrics = ({ byPortfolioAsArray = false, honesty = true } = {}) => 
           not_claimed: 'accuracy',
           why: 'Only 31.3% of this book reaches NPA within eight months, so a model that flagged nothing at all would score 68.7% raw accuracy. That figure tracks the base rate, not the model.',
           derived_from: ['red_band_precision_8m', 'base_rate_8m', 'raw_accuracy_8m'],
+        },
+      } : {}),
+      // Both blocks are OPTIONAL on the wire: a run published before they existed carries
+      // neither, and the screen must then say nothing rather than imply a zero.
+      ...(decomposition ? {
+        red_precision_decomposition: {
+          previous_threshold: 0.272,
+          previous_model_precision: 0.845,
+          previous_model_n_red: 283,
+          new_model_at_previous_threshold: { precision: 0.8229, n_red: 288, n_true: 237 },
+          new_model_at_new_threshold: { precision: 0.924, n_red: 264, n_true: 244 },
+          model_effect_pp: -2.2,
+          threshold_effect_pp: 10.1,
+          note: 'Red-band precision reads 92.4% rather than the July 2026 build’s 84.5% because Red now starts higher, not because the model improved.',
+        },
+      } : {}),
+      ...(costModel ? {
+        cost_model: {
+          currency: 'INR',
+          policy_fold: { n_accounts: 8933, expected_cost_chosen_cr: 6.68, expected_cost_july_cr: 6.8 },
         },
       } : {}),
       rank_order: {

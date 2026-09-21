@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  bandFor, byPortfolioList, decisionScore, dpdBand, honestyBlock, num, redBandPrecision,
-  ticketBand, toRow,
+  bandFor, byPortfolioList, decisionScore, dpdBand, honestyBlock, num, policyFoldCost,
+  precisionDecomposition, redBandPrecision, ticketBand, toRow,
 } from './shapes'
 import { ROW_WITHOUT_LIMIT, ROW_WITH_LIMIT, metrics } from '../test/fixtures/api'
 
@@ -140,5 +140,62 @@ describe('honestyBlock', () => {
   it('is null when the export has no honesty block, so the screen falls back', () => {
     expect(honestyBlock(metrics({ honesty: false }).data.metrics)).toBeNull()
     expect(honestyBlock({ honesty: {} })).toBeNull()
+  })
+})
+
+describe('precisionDecomposition', () => {
+  it('reads the three readings the split is made of', () => {
+    const d = precisionDecomposition(metrics().data.metrics)
+    expect(d.previousPrecision).toBe(0.845)
+    expect(d.previousNRed).toBe(283)
+    expect(d.rebandedPrecision).toBe(0.8229)
+    expect(d.rebandedNRed).toBe(288)
+    expect(d.shippedPrecision).toBe(0.924)
+    expect(d.modelEffectPp).toBe(-2.2)
+    expect(d.note).toContain('not because the model improved')
+  })
+
+  it('is null on a run that carries none, so the screen says nothing', () => {
+    expect(precisionDecomposition(metrics({ decomposition: false }).data.metrics)).toBeNull()
+    expect(precisionDecomposition({})).toBeNull()
+    expect(precisionDecomposition(undefined)).toBeNull()
+  })
+
+  it('is null when a reading is missing, rather than defaulting it to zero', () => {
+    expect(precisionDecomposition({
+      red_precision_decomposition: {
+        previous_model_precision: 0.845,
+        new_model_at_new_threshold: { precision: 0.886 },
+      },
+    })).toBeNull()
+  })
+
+  it('treats an empty note as no note, so the screen composes its own sentence', () => {
+    const d = precisionDecomposition({
+      red_precision_decomposition: {
+        previous_model_precision: 0.845,
+        new_model_at_previous_threshold: { precision: 0.8229, n_red: 288, n_true: 237 },
+        new_model_at_new_threshold: { precision: 0.8857, n_red: 245, n_true: 217 },
+        note: '   ',
+      },
+    })
+    expect(d.note).toBeNull()
+  })
+})
+
+describe('policyFoldCost', () => {
+  it('carries both sides of the pair and the fold they are priced on', () => {
+    expect(policyFoldCost(metrics().data.metrics))
+      .toEqual({ nAccounts: 8933, chosenCr: 6.68, julyCr: 6.8 })
+  })
+
+  it('is null on a run that published no pair', () => {
+    expect(policyFoldCost(metrics({ costModel: false }).data.metrics)).toBeNull()
+    expect(policyFoldCost({ cost_model: {} })).toBeNull()
+    expect(policyFoldCost(undefined)).toBeNull()
+  })
+
+  it('is null when only one side of the comparison exists', () => {
+    expect(policyFoldCost({ cost_model: { policy_fold: { expected_cost_chosen_cr: 6.68 } } })).toBeNull()
   })
 })

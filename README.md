@@ -76,6 +76,8 @@ and not raw accuracy, is the number to publish:
 | Base rate @ 8 months / 12 months | 2.72% / 3.90% | `metrics.base_rate_8m`, `metrics.base_rate_12m` |
 | **Missed-NPA share** — of every account that went NPA within 8 months, the share the model had left in Green | **16.1%** (95% CI 12.6–20.4%) | `metrics.missed_npa_share` |
 | **ECE / Brier on the served decision score** | **0.0056 / 0.0195** raw; **0.0008 / 0.0186** after the policy-fold calibrator | `metrics.calibration_served` |
+| **Why the headline is higher than July's 84.5%** — the model step and the threshold step, separately | model **−2.2pp**, threshold **+6.3pp** (same book re-banded at 0.2720: 82.3%, 237/288) | `metrics.red_precision_decomposition` |
+| **Expected cost at the operating point, against the July pair** | **₹6.68 cr** vs ₹6.80 cr, both on the 8,933-account policy fold | `metrics.cost_model.policy_fold` |
 
 These are measured on a held-out book whose outcomes played no part in choosing the
 thresholds — see "Thresholds and cost model". The previous build's 84.5% / n=283 figure was
@@ -87,7 +89,12 @@ flagged Red (283 → 245) and the survivors are the riskiest, which lifts precis
 Re-banding the *new* book at the *old* thresholds gives **82.3%** (237/288) — i.e. the model and
 fold change on their own moved precision **down** 2.2pp, in line with AUC falling 0.902 → 0.885
 (training on ~49% of accounts instead of ~70% so a policy fold could exist). The whole headline
-gain is the threshold move. `MODEL_CARD.md` §8 carries the three-row decomposition.
+gain is the threshold move. `MODEL_CARD.md` §8 carries the three-row decomposition, and the
+export now carries it too — `metrics.red_precision_decomposition` holds the same three readings,
+computed at export time rather than transcribed, so the screen that prints 88.6% prints the
+reason beside it. The rupee pair behind the operating point travels the same way:
+`metrics.cost_model.policy_fold` = ₹6.68 cr (chosen) vs ₹6.80 cr (the July pair) on the
+8,933-account policy fold.
 
 **Why not accuracy.** A model that flagged nothing at all would score 97.3% raw accuracy,
 because only 2.7% of the book reaches NPA within 8 months — that figure tracks the base rate,
@@ -450,7 +457,7 @@ day), shared with DRISHTi's sister product SANKET:
 # 1) generate the panel, run the rigour pack, train + export (from this repo's root)
 python3 -m generator.build --seed 20260709 --n 45000 --months 48 --out data   # validation population, ~9s
 python3 src/rigor.py                        # calibration, leakage, OOT, baseline ladder
-python3 src/export_demo.py                  # trains + writes app/public/demo_data.json (700-account sample)
+python3 src/export_demo.py                  # trains + writes app/public/demo_data.json (640-account sample)
 python3 src/real_model.py                   # REAL-data validation model (needs ../msme_data/*.csv)
 
 # 2) run the app
