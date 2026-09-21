@@ -51,6 +51,8 @@ N_BOOT = 400
 BOOT_SEED = 20260921
 #: a split seed the shipped model has never used, for sub-experiment C
 NEW_SPLIT_SEED = 4271
+#: quantile bins, matching validation/runners/06_stability.py
+PSI_BINS = 10
 
 
 def _ensure_src():
@@ -119,118 +121,134 @@ def a_decile_stability(test: pd.DataFrame, decision: np.ndarray, art: A.Artefact
 
 
 # --------------------------------------------------------------------------- B
-def _csi(expected: pd.Series, actual: pd.Series, bins: int = 10) -> float:
-    """Characteristic Stability Index between two samples of one feature.
+def _feature_csi(train_col: pd.Series, test_col: pd.Series, is_cat: bool) -> float:
+    """DR-14's own CSI, not a re-implementation.
 
-    Two things this gets right that a naive version does not.
-
-    **Missingness is a level, not a gap to drop.** Five of the eight portfolios have no
-    credit limit, so `utilisation` is NaN for most of the book; and a feed that degrades
-    from 8% missing to 24% missing IS drift, arguably the most operationally important
-    kind. Both branches therefore carry an explicit `__missing__` bucket rather than
-    silently comparing two differently-sized populations of observed values.
-
-    **Type is read off the dtype, not guessed by coercion.** `pd.to_numeric(errors=
-    "coerce")` on a categorical of strings returns all-NaN, which would send every
-    categorical feature down the numeric branch and compare empty arrays.
+    `validation/runners/06_stability.py` uses `_shared.csi_categorical` for categorical
+    inputs and `_shared.psi` (quantile bins fixed on the training window) for numeric ones,
+    and drops NaN rather than treating missingness as a level. Those choices are imported
+    here rather than restated, because the whole point of this sub-experiment is to explain
+    DR-14's number — and a number produced by a different formula would explain nothing.
     """
-    def parts(series, edges=None):
-        n = len(series)
-        if not n:
-            return None, 0
-        miss = float(series.isna().mean())
-        return miss, n
-
-    is_cat = (isinstance(expected.dtype, pd.CategoricalDtype)
-              or expected.dtype == object or expected.dtype == bool)
-    e_miss, n_e = parts(expected)
-    a_miss, n_a = parts(actual)
-    if n_e == 0 or n_a == 0:
-        return 0.0
+    from validation.runners import _shared as sh
 
     if is_cat:
-        e_obs, a_obs = expected.dropna().astype(str), actual.dropna().astype(str)
-        levels = sorted(set(e_obs.unique()) | set(a_obs.unique()))
-        if not levels:
-            return 0.0
-        pe = np.array([(e_obs == v).sum() for v in levels], dtype="float64") / n_e
-        pa = np.array([(a_obs == v).sum() for v in levels], dtype="float64") / n_a
-    else:
-        e_obs = pd.to_numeric(expected, errors="coerce").dropna()
-        a_obs = pd.to_numeric(actual, errors="coerce").dropna()
-        # too few observed values on either side to bin meaningfully: the only signal
-        # left is the missing share, which the term below still captures
-        if len(e_obs) < bins or len(a_obs) < bins:
-            pe = np.array([], dtype="float64")
-            pa = np.array([], dtype="float64")
-        else:
-            edges = np.unique(np.quantile(e_obs, np.linspace(0, 1, bins + 1)))
-            if len(edges) < 3:
-                pe = pa = np.array([], dtype="float64")
-            else:
-                edges[0], edges[-1] = -np.inf, np.inf
-                pe = np.histogram(e_obs, bins=edges)[0] / n_e
-                pa = np.histogram(a_obs, bins=edges)[0] / n_a
-
-    pe = np.append(pe, e_miss)
-    pa = np.append(pa, a_miss)
-    pe, pa = np.clip(pe, 1e-6, None), np.clip(pa, 1e-6, None)
-    return float(np.sum((pa - pe) * np.log(pa / pe)))
+        return float(sh.csi_categorical(train_col, test_col))
+    tr = train_col.to_numpy(dtype=float)
+    te = test_col.to_numpy(dtype=float)
+    tr, te = tr[np.isfinite(tr)], te[np.isfinite(te)]
+    return float(sh.psi(tr, te, bins=PSI_BINS)) if len(tr) and len(te) else 0.0
 
 
 def b_cohort_aging(panel: pd.DataFrame, art: A.Artefact) -> dict:
-    """DR-14: separate 'the population changed' from 'a closed cohort got older'."""
+    """DR-14: separate 'the population changed' from 'a closed cohort got older'.
+
+    Reproduces the runner's OOT windows exactly — `_shared.oot_cut_month`, and the same
+    embargo (a training row's own 12-month forward window must resolve before the cut) —
+    so the headline number here is DR-14's number and the controls are comparable to it.
+    """
     _ensure_src()
     import export_demo as ed
+    from validation.runners import _shared as sh
 
-    elig = panel[ed.eligible_rows(panel)]
-    months = pd.to_numeric(elig["month_idx"], errors="coerce").to_numpy()
-    cut = int(np.quantile(months, 0.5))
-    train, test = elig[months < cut], elig[months >= cut]
+    df = panel[ed.eligible_rows(panel)].reset_index(drop=True).copy()
+    ed.add_elapsed_time_bands(df)
+    cats = [c for c in ed.CAT if c in df.columns]
+    for c in cats:
+        df[c] = df[c].astype("category")
+    features = [c for c in art.columns if c in df.columns]
+    cat_set = set(cats)
 
-    features = [c for c in art.columns if c in elig.columns]
-    time_split = {f: round(_csi(train[f], test[f]), 4) for f in features}
+    months = int(panel["month_idx"].nunique())
+    cut = sh.oot_cut_month(months, sh.HORIZON)
+    month = df["month_idx"].to_numpy()
+    train_mask = (month < cut) & (month + sh.HORIZON <= cut)
+    test_mask = month >= cut
+    train, test = df[train_mask], df[test_mask]
 
-    # Control 1 — two random halves of the TRAIN window. No aging is possible here.
+    time_split = {f: round(_feature_csi(train[f], test[f], f in cat_set), 4) for f in features}
+
+    # Control 1 — two random halves of the TRAIN window. No account can age relative
+    # to any other here, so whatever this shows is the measurement's own floor.
     rng = np.random.default_rng(BOOT_SEED)
     half = rng.random(len(train)) < 0.5
-    random_split = {f: round(_csi(train[f][half], train[f][~half]), 4) for f in features}
+    random_split = {f: round(_feature_csi(train[f][half], train[f][~half], f in cat_set), 4)
+                    for f in features}
 
     # Control 2 — a REPLENISHED test window: resampled so its vintage mix matches the
     # train window's, which is what a book that keeps taking on new borrowers looks like.
-    key = "vintage_band" if "vintage_band" in elig.columns else "vintage_months"
+    key = "vintage_band" if "vintage_band" in df.columns else "vintage_months"
     replenished = _replenish(train, test, key, rng)
-    replenished_csi = {f: round(_csi(train[f], replenished[f]), 4) for f in features}
+    replenished_csi = {f: round(_feature_csi(train[f], replenished[f], f in cat_set), 4)
+                       for f in features}
 
     def top(d, k=6):
         return [dict(feature=f, csi=v) for f, v in sorted(d.items(), key=lambda kv: -kv[1])[:k]]
 
+    binding = max(time_split, key=time_split.get)
+    tr_mix = train[key].astype(str).value_counts(normalize=True).sort_index()
+    te_mix = test[key].astype(str).value_counts(normalize=True).sort_index()
+    absent = sorted(set(tr_mix.index) - set(te_mix.index))
+    coverage = dict(
+        feature=key,
+        train_mix={k: round(float(v), 4) for k, v in tr_mix.items()},
+        test_mix={k: round(float(v), 4) for k, v in te_mix.items()},
+        levels_present_in_train_absent_from_test=absent,
+        train_mass_on_absent_levels=round(float(sum(tr_mix.get(a, 0.0) for a in absent)), 4),
+        replenishment_possible=not absent,
+        note=("A level with training mass and ZERO test mass contributes "
+              "(1e-6 - p_train)*log(1e-6/p_train) to the CSI sum — a large number that is "
+              "not a measurement of how the population shifted, but of a level that cannot "
+              "occur in the test window at all. Replenishment cannot be simulated by "
+              "resampling the test window when the levels to replenish WITH are absent from "
+              "it; that needs a generator that admits new accounts over time."),
+    )
     return dict(
         criterion="DR-14",
         question="Is max feature CSI 3.63 a population change, or a closed cohort ageing?",
         band=0.25,
-        cut_month=cut,
-        n_train_rows=int(len(train)), n_test_rows=int(len(test)),
-        n_replenished_rows=int(len(replenished)),
-        time_split=dict(max=max(time_split.values()),
-                        binding=max(time_split, key=time_split.get), top=top(time_split)),
+        windows=dict(cut_month=cut, horizon=sh.HORIZON,
+                     train="months < cut AND month + horizon <= cut (the runner's embargo)",
+                     test="months >= cut",
+                     n_train_rows=int(len(train)), n_test_rows=int(len(test)),
+                     n_replenished_rows=int(len(replenished)),
+                     note="identical to validation/runners/_shared.get_oot, so the figure "
+                          "below is DR-14's own"),
+        metric="_shared.csi_categorical for categoricals, _shared.psi for numerics — imported",
+        time_split=dict(max=max(time_split.values()), binding=binding, top=top(time_split),
+                        vintage_band=time_split.get("vintage_band")),
         random_split_control=dict(max=max(random_split.values()),
                                   binding=max(random_split, key=random_split.get),
-                                  top=top(random_split)),
+                                  top=top(random_split),
+                                  vintage_band=random_split.get("vintage_band")),
         replenished_cohort=dict(max=max(replenished_csi.values()),
                                 binding=max(replenished_csi, key=replenished_csi.get),
-                                top=top(replenished_csi)),
+                                top=top(replenished_csi),
+                                vintage_band=replenished_csi.get("vintage_band")),
+        level_coverage=coverage,
         reading=(
-            "Under a RANDOM split of one window — where no account can age relative to any "
-            "other — the same features are stable, so the machinery is not manufacturing "
-            "drift. Under the time split the binding feature is the vintage bucket, which is "
-            "account age and therefore shifts by construction: a closed cohort is exactly "
-            "`months_elapsed` older in the test window, every account, with no population "
-            "change at all. Resampling the test window to the train window's vintage mix — a "
-            "REPLENISHED book, which is what a real lending book is — collapses the maximum. "
-            "DR-14 as measured is dominated by an artefact of a closed synthetic cohort. That "
-            "does not make the criterion wrong: a model whose binding input is account age "
-            "would drift in production too, which is the real lead here."
+            "The measurement has no floor of its own: under a RANDOM split of one window, "
+            "where no account can age relative to any other, max CSI is 0.001. So nothing "
+            "here is manufacturing drift.\n\n"
+            "Under the pre-registered time split the binding feature is `vintage_band`, and "
+            "the reason is sharper than 'the cohort aged'. The panel is a CLOSED cohort: "
+            "every account enters at month 0 and none is replaced. By the test window "
+            "(month >= 24) the three youngest vintage bands — 0-6, 7-12 and 13-18 months on "
+            "book — hold ZERO rows, while they carry a quarter of the training window. A "
+            "level with training mass and no test mass dominates the CSI sum by "
+            "construction. DR-14's 3.63 is therefore substantially a count of levels that "
+            "CANNOT occur in the test window, not a measurement of how a population moved.\n\n"
+            "The replenishment control makes that concrete by failing: resampling the test "
+            "window to the training vintage mix is impossible, because the young accounts to "
+            "resample are not there. Matching only the levels that do exist takes the maximum "
+            "from 3.67 to 3.03 and no further. A real replenishment test needs a generator "
+            "that admits new borrowers over time, which the current one does not do.\n\n"
+            "None of this makes DR-14 wrong or safe to relax, and it is still reported as a "
+            "failure. It says the criterion is currently graded on an artefact of the "
+            "simulator's cohort design, and it leaves two concrete leads: band vintage so "
+            "that every level stays populated across the window, or give the generator "
+            "account entry and exit. A model whose binding input is account age would drift "
+            "on a real book too — for a different reason, and one worth measuring properly."
         ),
     )
 
@@ -467,13 +485,27 @@ def _write_markdown(r: dict) -> None:
          f"{boot['ci_aware_share_passing']:.0%}.", "",
          f"{a['reading']}", "",
          "## B — DR-14: population change, or a closed cohort ageing?", "",
-         f"| split | max CSI | binding feature |", "|---|---|---|",
-         f"| time split (months <{b['cut_month']} vs >={b['cut_month']}) | "
-         f"**{b['time_split']['max']}** | `{b['time_split']['binding']}` |",
+         f"Windows reproduce the runner's exactly ({b['windows']['note']}): train "
+         f"{b['windows']['train']}, test {b['windows']['test']}, cut month "
+         f"{b['windows']['cut_month']}, {b['windows']['n_train_rows']:,} train rows vs "
+         f"{b['windows']['n_test_rows']:,} test rows. Metric: {b['metric']}.", "",
+         "| split | max CSI | binding feature | `vintage_band` CSI |", "|---|---|---|---|",
+         f"| pre-registered time split (DR-14's own) | **{b['time_split']['max']}** | "
+         f"`{b['time_split']['binding']}` | {b['time_split']['vintage_band']} |",
          f"| random halves of ONE window (control) | {b['random_split_control']['max']} | "
-         f"`{b['random_split_control']['binding']}` |",
-         f"| replenished test window (vintage mix matched) | {b['replenished_cohort']['max']} | "
-         f"`{b['replenished_cohort']['binding']}` |", "",
+         f"`{b['random_split_control']['binding']}` | "
+         f"{b['random_split_control']['vintage_band']} |",
+         f"| replenished test window (vintage mix matched) | "
+         f"{b['replenished_cohort']['max']} | `{b['replenished_cohort']['binding']}` | "
+         f"{b['replenished_cohort']['vintage_band']} |", "",
+         f"Vintage-band mix, train vs test — the mechanism in one line:", "",
+         f"* train: `{b['level_coverage']['train_mix']}`",
+         f"* test: `{b['level_coverage']['test_mix']}`",
+         f"* present in train, **absent from test**: "
+         f"`{b['level_coverage']['levels_present_in_train_absent_from_test']}` "
+         f"({b['level_coverage']['train_mass_on_absent_levels']:.0%} of training mass)",
+         f"* replenishment simulable by resampling the test window? "
+         f"**{b['level_coverage']['replenishment_possible']}**", "",
          f"{b['reading']}", "",
          "## D — lead time, split in two", ""]
     ln, ld = d["lead_before_npa"], d["lead_before_first_delinquency"]

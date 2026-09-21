@@ -454,6 +454,42 @@ data easier than reality. The ceiling exists for the same reason in reverse.
 
 ## 14. Known limits
 
+**What the four disclosed failures actually are** (experiment E2,
+`validation/report/experiments/disclosed_failures/`). All four remain failures on the
+pre-registered arithmetic and none was tuned away; E2 says what each is measuring.
+
+* **DR-12 (0.6667 vs 0.9)** is dominated by sampling, not by mis-ranking. Resampling the test
+  fold by account 400 times — same model, same book — the literal statistic ranges **0.667 to
+  1.000** and clears the band in **11%** of resamples. The CI-aware variant, which counts a
+  step down only when two deciles' Wilson intervals are disjoint, averages 0.994 and clears it
+  in 95%. A criterion whose value swings that far on resamples of one book is measuring how
+  finely the deciles happen to split, not whether risk is ordered.
+* **DR-14 (3.6652 vs 0.25)** is a cohort-design artefact, and sharper than "the cohort aged".
+  The panel is closed — every account enters at month 0, none is replaced — so by the test
+  window the three youngest vintage bands (0–6, 7–12, 13–18 months on book) hold **zero** rows
+  while carrying **26% of the training window**. A level with training mass and no test mass
+  dominates the CSI sum by construction. The control confirms the measurement has no floor of
+  its own: max CSI across two random halves of one window is **0.001**. The replenishment test
+  could not be run, which is itself the finding — you cannot resample young accounts out of a
+  window that has none. Two concrete leads follow: band vintage so every level stays populated,
+  or give the generator account entry and exit.
+* **DR-18 / DR-19** were measured on the 9,000×36 diagnostic book. Repeated on the full
+  45,000-account population with a split seed the shipped model has never used: shipped 0.8840,
+  profile-free 0.8849 (**+0.0009**), regularized full-feature 0.8854 (**+0.0014**). DR-19's
+  0.0123 gain does not reproduce at that magnitude on the full population — it is an order of
+  magnitude smaller and within the range two fits of the same family differ by. The
+  borrower-profile features are close to free rather than harmful; a regularized full-feature
+  model matches a profile-free one, which points at mild over-fitting rather than at columns
+  that need deleting.
+
+**Lead time, stated twice** (E2, sub-experiment D). Over 1,646 held-out defaulters: median
+**8 months** before NPA, 74% flagged 6+ months ahead — and median **3 months** before the
+borrower's *first missed payment*, with **66%** flagged before any DPD appeared. The second is
+the harder and more useful number: an alert raised after a borrower is already in arrears tells
+a collections team what its own screen shows. **11% of defaulters (180 accounts) get no
+sustained warning at all**, and that is a population this product does not help.
+
+
 **The model cannot warn about stress that arrives faster than its own window** (experiment E5,
 `validation/report/experiments/challenge_regimes/`). The shipped artefact was scored, unretuned,
 on nine generator regimes it was never fitted to, with three same-parameter control seeds to
