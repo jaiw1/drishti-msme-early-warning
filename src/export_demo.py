@@ -1254,6 +1254,26 @@ def build_export(df, static, ref_month=REF_MONTH, horizon=RANK_HORIZON, keep_leg
         n_green_1link_red=len(green_1link), n_amber_1link_red=len(amber_1link),
         exposure_1link_red=float(sum(r["sanctioned"] for r in green_1link + amber_1link)),
         by_sector=sorted(eco_sector.values(), key=lambda x: -x["exposure"])[:6],
+        # ILLUSTRATIVE, and the export says so rather than leaving a reader to
+        # infer it from the code. The links above are GENERATED — mostly within
+        # sector, and every Red account is additionally given 2-4 dependents —
+        # so "accounts within one link of a Red" is a property of that
+        # construction, not a measurement of contagion. The numbers show what
+        # the lens would look like on a real graph; they are not evidence that
+        # the lens works, and nothing here enters a metric, a band or a
+        # threshold.
+        illustrative=True,
+        illustrative_note=(
+            "Illustrative only. The partner graph is generated (2-4 partners per account, "
+            "drawn mostly from the same sector, with 2-4 extra dependents attached to every "
+            "Red account), so the counts below are a property of that construction and not a "
+            "measurement of contagion. No model PD, band or threshold is derived from it. "
+            "Validating contagion detection requires a network defined INDEPENDENTLY of "
+            "predicted risk — CRILC common exposures or a GST buyer-supplier graph — and a "
+            "test of incremental predictive value on held-out outcomes. That has not been done."
+        ),
+        linkage="generated (illustrative)",
+        validated=False,
     )
     print(f"ecosystem: {len(green_1link)} green + {len(amber_1link)} amber accounts within 1 link of a red "
           f"(₹{ecosystem['exposure_1link_red']/1e7:.1f} cr exposure)")

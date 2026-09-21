@@ -299,14 +299,25 @@ export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, onS
       {/* ecosystem stress (contagion lens) */}
       {ecosystem && (
         <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="mb-1 flex items-center gap-2">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
             <Share2 size={16} className="text-idbi-orangetx" aria-hidden="true" />
             <h3 className="font-bold text-slate-800">Stress travels through trading networks</h3>
+            <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-800">
+              Illustrative
+            </span>
           </div>
+          <p className="mb-3 max-w-3xl rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-xs leading-relaxed text-amber-900">
+            <b>These counts are not a measurement of contagion.</b> The partner graph is generated — a few partners
+            per account, drawn mostly from the same sector, with extra dependents attached to every red account — so
+            “accounts within one link of a red” is a property of that construction. Validating contagion detection
+            needs a network defined <b>independently</b> of predicted risk (CRILC common exposures, a GST
+            buyer–supplier graph) and a test of incremental predictive value on held-out outcomes. That has not been
+            done, and nothing on this panel feeds a PD, a band or a threshold.
+          </p>
           <p className="mb-4 max-w-3xl text-xs leading-relaxed text-slate-600">
-            A supplier’s default becomes its buyers’ cash-flow problem — often before their own numbers move. This
-            second lens looks one link out from every red account. The model’s PD is untouched; these are accounts
-            that deserve a manual look <b>before</b> their own signals turn.
+            What the lens is <i>for</i>: a supplier’s default becomes its buyers’ cash-flow problem, often before
+            their own numbers move, so it looks one link out from every red account and surfaces names that deserve a
+            manual look <b>before</b> their own signals turn.
             {ecosystem.linkage && <> Linkage here is <b>{ecosystem.linkage}</b>.</>}
           </p>
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -334,8 +345,8 @@ export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, onS
             ))}
           </ul>
           <p className="mt-3 text-[11px] leading-relaxed text-slate-600">
-            Illustrative partner links; in production this lens plugs into CRILC common-exposure data and GST
-            buyer–supplier networks — the cockpit is already wired for it.
+            In production this lens plugs into CRILC common-exposure data and GST buyer–supplier networks — the
+            cockpit is already wired for it, and the numbers above would then mean something they do not mean yet.
           </p>
         </section>
       )}

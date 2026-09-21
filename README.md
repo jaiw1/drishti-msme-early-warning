@@ -106,7 +106,7 @@ population (8 portfolios, sourced mix) → shared latent stress S_t (one AR(1)/r
     → noise, silent defaulters, transient stress (keeps the panel from being trivially separable)
       → ONE LightGBM (`portfolio` scored as a feature, not a separate model per portfolio)
         → cost-minimising Amber/Red thresholds (rupee cost, not AUC or a validation band)
-          → watch-list, reason codes, runway estimate, network-contagion lens
+          → watch-list, reason codes, runway estimate, network lens (illustrative)
 ```
 
 - **Population.** `src/generator/portfolios.py` draws who exists — constitution, sector,
@@ -134,6 +134,15 @@ population (8 portfolios, sourced mix) → shared latent stress S_t (one AR(1)/r
   categorical features native, `portfolio` scored as one categorical feature among 62 — the
   mandate's "one holistic model" made literal in the training call, not just the pitch.
   `MODEL_CARD.md` §7.
+- **The network lens is ILLUSTRATIVE, and labelled so everywhere it appears.** The
+  trading-partner graph is *generated* — a few partners per account, drawn mostly from the same
+  sector, with extra dependents attached to every Red account — so "accounts within one link of
+  a Red" is a property of that construction, not a measurement of contagion. It is a second lens
+  an officer can look through, it never alters a PD, a band or a threshold, and no number in this
+  README or in the validation pack depends on it. Validating contagion detection would need a
+  network defined **independently** of predicted risk (CRILC common exposures, a GST
+  buyer–supplier graph) and a test of incremental predictive value on held-out outcomes; that has
+  not been done, and the export says so in `ecosystem.illustrative_note`.
 - **Cost-minimising Amber/Red.** The band split is not hand-set — it minimises the bank's
   expected rupee cost, subject to the pre-registered rank-order criteria as a feasibility
   filter. See "Thresholds and cost model" below.

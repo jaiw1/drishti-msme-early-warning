@@ -361,7 +361,7 @@ export default function AccountDetail({ accountId, live = true, thresholds: fall
               )}
               {rec.eco_red >= 1 && (
                 <p className="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-idbi-orangetx">
-                  <Share2 size={16} aria-hidden="true" /> Ecosystem: {rec.eco_flagged} of {rec.eco_partners} trading partners flagged ({rec.eco_red} red)
+                  <Share2 size={16} aria-hidden="true" /> Ecosystem (illustrative): {rec.eco_flagged} of {rec.eco_partners} generated trading partners flagged ({rec.eco_red} red)
                 </p>
               )}
             </div>
