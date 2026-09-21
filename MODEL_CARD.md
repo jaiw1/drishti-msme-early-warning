@@ -390,9 +390,10 @@ share 35% Red / 10% Amber (**the single most uncertain number here**), review co
 ₹1,500 Amber, relationship friction 15% Red / 2% Amber of one year's interest income on the
 flagged exposure. `effective_rate_pa` (12.75%) and `penal_rate_pa` (2.0%) **are** `BANK_API` —
 API 433's captured sandbox response — but every value derived from them carries
-`sandbox_fixture: true`: the Atlas sandbox returns the same static mock record to every caller
-whatever the request (BR-6a; a full 23-API pass on 17 Sep 2026 showed each endpoint has its own
-record, and that API 433 alone returns a composite one carrying a slice for every API). So these
+`sandbox_fixture: true`: the Atlas sandbox is a small keyed store of fabricated records rather
+than a live data source (BR-6a; a full 23-API pass on 17 Sep 2026 showed each endpoint has its own
+record, that it really does look the key up, and that API 433 alone returns a composite one
+carrying a slice for every API). So these
 are real *field values from the bank's own API contract*, not real *rates for our borrowers*. API 538's payoff interest split is reported `available: false` — the canned
 account is standard, so all three interest components read "0", which is an absence, not a
 measurement, and the code says so rather than silently loading a 0% penal split.
@@ -609,10 +610,12 @@ can and cannot be trusted to say:
   The two differ in horizon (2 years vs 12 months), in observation unit (company-year vs
   account-month), in features (filed balance-sheet ratios vs monthly account conduct) and in
   population. A number measured on one is not a number earned by the other.
-- **The bank sandbox is a static mock.** Each Atlas endpoint returns its own structured mock
-  record and returns the same one regardless of the request (`sandbox_fixture: true`, BR-6a;
-  API 433 is the one endpoint that returns a composite record with a slice for every API) —
-  nothing in this build has ever scored, thresholded, or banded a real bank record. See
+- **The bank sandbox holds fabricated records.** Each Atlas endpoint returns its own structured
+  mock record and really does look the key up, answering a "Data not found" error for a key it
+  does not hold (`sandbox_fixture: true`, BR-6a; API 433 is the one endpoint that returns a
+  composite record with a slice for every API). What it holds is a handful of sample customers and
+  accounts whose identifiers do not overlap this panel — nothing in this build has ever scored,
+  thresholded, or banded a real bank record. See
   §16's provenance legend for exactly which numbers that flag touches and which it does not.
 - **DR-18 (cash-flow-family ablation ≥ 0.04 AUC) is measured and FAILS, deliberately not chased.**
   Round 1's `08_ablation` measured 0.0099 [0.0043, 0.0156]; round 2's official rerun (same runner,

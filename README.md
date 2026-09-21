@@ -13,6 +13,18 @@ VPC and is reached by SSM port forwarding, so a judge with sandbox access reache
 a session, and nobody else reaches it at all. Do not read the Vercel link above as "the
 deployment."
 
+**The nightly job on that box calls the bank itself.** At 02:00 IST the server runs the whole
+pipeline — pull → enrich → generate → score → load → verify → publish. The pull is genuine: the
+box has a route to IDBI's API gateway and the Atlas client on it is configured live as of the
+night of 21–22 September 2026, so the batch queries the bank's sandbox endpoints rather than
+replaying a file. A family whose endpoint does not answer falls back to the committed
+`data/bank/fixture.json` and is badged `FIXTURE`, never silently promoted. Publication is
+fail-closed (see "Architecture"). **Disclosed: that job failed silently every night from 18 to 21
+September 2026** — the batch runs this repo's scripts inside a per-product Python environment
+(`RRSQUAD_MSME_EWS_PYTHON`) that no deploy script had ever created, and the only place the failure
+surfaced was the job's own log. Provisioned and fixed on 21 September; the gate behaved correctly
+throughout, leaving the last good run published.
+
 ## What DRISHTi is
 
 IDBI's mentors set four mandates for this track, and this card is organised around all four:
@@ -251,10 +263,11 @@ serves its own structured record — verified on 17 Sep 2026 by calling all 23 r
 APIs — and it really does look the key up: an id it does not hold answers a
 `{"message": "Data not found", "sentKey": "acctId#<the id sent>"}` shaped error. API 433 is the
 exception that misled us, returning a composite record carrying a slice for every API. What the
-store holds is a **handful** of sample customers and accounts. A pull on 17 Sep 2026 walked every
-documented identifier and found real records for three sandbox accounts (API 365; two of the
-three also answered 441 and 391) and two sandbox customers (402, 442, 456, 394) — nine accounts
-and CIFs in total, against a synthetic panel of 45,000. So a pull is
+store holds is a **handful** of sample customers and accounts. A pull on 17 Sep 2026 walked all
+**eleven** documented sample identifiers (six account numbers, five customer/CIF numbers) and
+found real records for three sandbox accounts (API 365; two of the three also answered 441 and
+391) and two sandbox customers (402, 442, 456, 394) — five of the eleven, against a synthetic
+panel of 45,000. So a pull is
 `BANK_API` **with** `sandbox_fixture: true`, every band and threshold in this build is computed
 on the synthetic panel, and nothing here has ever scored, thresholded or banded a real bank
 record (`MODEL_CARD.md` §15, "BR-6a").
@@ -420,11 +433,16 @@ day), shared with DRISHTi's sister product SANKET:
 - **Audit:** an append-only, hash-chained `audit_log` table — `UPDATE`/`DELETE` are both
   `REVOKE`d from the application's database role *and* blocked by a trigger, so tampering is
   rejected at the database, not merely discouraged.
-- **Batch gate:** scoring is a batch job, never a live request. Seven stages — pull → enrich →
-  generate → score → load → **verify** → publish. The verify stage runs this repo's own
-  `validation/run.py` and attaches the result to the run record; a run that fails validation
-  stays `candidate` and the previously-published run is left untouched — nothing this repo
-  produces reaches an officer's screen without clearing the table above first.
+- **Batch gate:** scoring is a batch job, never a live request, and it runs at 02:00 IST nightly.
+  Seven stages — pull → enrich → generate → score → load → **verify** → publish. The verify stage
+  runs this repo's own `validation/run.py` and attaches the result to the run record; a run that
+  fails validation stays `candidate` and the previously-published run is left untouched — nothing
+  this repo produces reaches an officer's screen without clearing the table above first. The gate
+  is **fail-closed**, not fail-open: the verdict is bound to fingerprints of the run, the model
+  artefact, the data and `validation/criteria.yaml`, so a verdict cannot be inherited from another
+  run or graded against a different rulebook, and a criterion allowed to fail has to sit on an
+  accepted list carrying its value, the tolerance it was accepted at and an expiry date. Consent
+  is re-checked at read time rather than once per run.
 
 ## How to run locally
 
@@ -476,10 +494,12 @@ python3 -m pytest -q                        # unit tests (repo root)
   horizon, different features, different unit of observation, different population. It does
   not transfer, and it is not offered as though it does. The company-clustered bootstrap
   behind the interval is retained precisely because rows within a company are not independent.
-- **The bank sandbox is a static mock, not a live data source.** Each Atlas endpoint returns its
-  own structured mock record, and returns the same one regardless of the request (API 433 is the
-  exception: a composite record with a slice for every API). Nothing here has ever scored,
-  thresholded, or banded a real bank record.
+- **The bank sandbox holds fabricated records, and none of them is one of our accounts.** It is a
+  small keyed store rather than a mock that ignores the caller — it looks the key up and answers a
+  `{"message": "Data not found", "sentKey": ...}` error for one it does not hold (API 433 is the
+  exception: a composite record with a slice for every API). What it holds is a handful of sample
+  customers and accounts whose identifiers do not overlap this panel, so nothing here has ever
+  scored, thresholded, or banded a real bank record.
 - **Enumeration — finding a real account without already knowing one — is not proven live.**
   API 404's `selRangeLoanAcctId` range plus paging is the leading candidate route
   (`data/bank/SCHEMA.md`), but as of this writing it has not been exercised against a live,
@@ -491,9 +511,11 @@ python3 -m pytest -q                        # unit tests (repo root)
 - **DR-12's literal-vs-CI-aware ruling is left open, not resolved.** The submission states both
   readings — the literal pre-registered fail and the CI-aware pass — rather than picking the one
   that clears the band.
-- **The role-based frontend (`app/src/screens/*` — Login, Model & Trust, Thresholds, Admin) is
-  still mid-build.** The deployed `drishti-ews.vercel.app` demo linked above runs the earlier
-  four-tab static cockpit (`app/src/components/*`), not this newer, role-scoped one.
+- **The two front ends are different builds, and only one is the deployment.** The role-scoped
+  cockpit (`app/src/screens/*` — Login, Watch-list, Portfolio risk, Model & Trust, Thresholds,
+  Data sources, Admin) is what runs behind the login on the bank's sandbox. The public
+  `drishti-ews.vercel.app` demo is the earlier four-tab static cockpit (`app/src/components/*`)
+  with no login and no backend, kept online as a development preview only.
 
 ## Data and model cards
 
