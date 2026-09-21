@@ -31,6 +31,20 @@ export const PATH_BY_VIEW = Object.fromEntries(NAV.map((n) => [n.key, n.path]))
 const VIEW_BY_PATH = Object.fromEntries(NAV.map((n) => [n.path, n.key]))
 export const viewForPath = (pathname) => VIEW_BY_PATH[pathname] || 'portfolio'
 
+/**
+ * Where a signed-in role should land.
+ *
+ * `/` used to send everyone to the watch-list, including a relationship manager — who has
+ * no `drishti/*` operation at all, so signing in put a permission-denied panel in front of
+ * a legitimate user. An RM's two screens are the ones the contract gives them:
+ * `meta/sync` and `meta/provenance`.
+ */
+export function homeFor(role, { isStatic = false } = {}) {
+  const allowed = navFor(role, { isStatic })
+  if (allowed.some((n) => n.key === 'portfolio')) return '/watchlist'
+  return allowed[0]?.path || '/data-sources'
+}
+
 export function navFor(role, { isStatic = false } = {}) {
   // The frozen bundle has no session, so it shows what it can actually render.
   if (isStatic) return NAV.filter((n) => !['admin', 'threshold'].includes(n.key))
@@ -60,13 +74,13 @@ export default function AppShell({
         to={n.path}
         aria-current={current ? 'page' : undefined}
         className={mobile
-          ? `flex min-w-[68px] flex-1 shrink-0 flex-col items-center gap-0.5 px-1 py-2 text-center text-[10px] font-semibold leading-tight transition focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white ${current ? 'bg-white/20 text-white' : 'text-white/80'}`
-          : `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${current ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'}`}
+          ? `flex min-w-[68px] flex-1 shrink-0 flex-col items-center gap-0.5 px-1 py-2 text-center text-[10px] font-semibold leading-tight transition focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white ${current ? 'bg-white/15 font-bold text-white ring-1 ring-inset ring-white/40' : 'text-white/80'}`
+          : `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${current ? 'bg-white/15 font-bold text-white ring-1 ring-inset ring-white/40' : 'text-white/80 hover:bg-white/10 hover:text-white'}`}
       >
         <n.icon size={mobile ? 18 : 18} aria-hidden="true" />
         {mobile ? n.short : <span className="flex-1 text-left">{n.label}</span>}
         {!mobile && n.badge && (
-          <span className="rounded bg-idbi-orange px-1.5 py-0.5 text-[9px] font-extrabold tracking-wide text-white">{n.badge}</span>
+          <span className="rounded bg-idbi-orangetx px-1.5 py-0.5 text-[9px] font-extrabold tracking-wide text-white">{n.badge}</span>
         )}
       </Link>
     )

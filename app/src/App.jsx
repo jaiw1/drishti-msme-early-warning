@@ -16,7 +16,7 @@ import StaticDemoBanner from './components/StaticDemoBanner'
 import { ToastProvider } from './components/Toasts'
 import Empty from './components/states/Empty'
 import Loading from './components/states/Loading'
-import { PATH_BY_VIEW } from './components/AppShell'
+import { PATH_BY_VIEW, homeFor } from './components/AppShell'
 import Admin from './screens/Admin'
 import ChangePassword from './screens/ChangePassword'
 import DataSources from './screens/DataSources'
@@ -30,8 +30,11 @@ import Watchlist from './screens/Watchlist'
 /** ?view=risk was how the old tab switcher deep-linked. Keep those links alive. */
 function LegacyViewRedirect() {
   const location = useLocation()
+  const { roleCode, isStatic } = useAuth()
   const params = new URLSearchParams(location.search)
-  const target = PATH_BY_VIEW[params.get('view')] || '/watchlist'
+  // With no ?view=, land on a screen this role can actually open. An RM sent to the
+  // watch-list met a permission-denied panel on every sign-in.
+  const target = PATH_BY_VIEW[params.get('view')] || homeFor(roleCode, { isStatic })
   params.delete('view')
   const search = params.toString()
   return <Navigate to={{ pathname: target, search: search ? `?${search}` : '' }} replace />

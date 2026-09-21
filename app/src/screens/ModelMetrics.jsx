@@ -176,7 +176,7 @@ function ValidationSummary({ validation }) {
           <Empty title="The report carries no criteria" hint="It was attached to the run, but has no per-criterion results in it." />
         </div>
       ) : (
-        <div className="max-h-[420px] overflow-auto scroll-thin">
+        <div className="max-h-[420px] overflow-auto scroll-thin" tabIndex={0} role="region" aria-label="Pre-registered validation criteria, scrollable">
           <DataTable caption={`${rows.length} pre-registered validation criteria and their outcomes`}>
             <thead className="sticky top-0 z-10 bg-slate-50 text-xs">
               <tr>

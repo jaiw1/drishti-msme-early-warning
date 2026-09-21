@@ -411,7 +411,7 @@ function AuditPanel() {
           <Empty title="No entries match those filters" hint="Nothing is hidden — the filters simply matched nothing. Clear them to see the whole log." />
         </div>
       ) : (
-        <div className="max-h-[520px] overflow-auto scroll-thin">
+        <div className="max-h-[520px] overflow-auto scroll-thin" tabIndex={0} role="region" aria-label="Audit log, scrollable">
           <DataTable caption={`${rows.length} of ${audit.meta?.total ?? rows.length} audit entries, newest first`}>
             <thead className="sticky top-0 z-10 bg-slate-50 text-xs">
               <tr>

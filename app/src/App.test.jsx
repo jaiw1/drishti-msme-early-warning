@@ -52,6 +52,21 @@ describe('App shell', () => {
     expect(await screen.findByRole('heading', { name: /Portfolio Risk/i })).toBeInTheDocument()
   })
 
+  // `/` used to send every role to the watch-list, so a relationship manager — who has no
+  // drishti/* operation in the contract — met a permission-denied panel on every sign-in.
+  it('lands a relationship manager on a screen their role can open', async () => {
+    mockApi(apiRoutes(), { vi })
+    renderApp('/', { user: session('relationship_manager') })
+    expect(await screen.findByRole('heading', { name: /Real-Data Validation|Data sources/i })).toBeInTheDocument()
+    expect(screen.queryByTestId('state-denied')).not.toBeInTheDocument()
+  })
+
+  it('still lands a credit officer on the watch-list', async () => {
+    mockApi(apiRoutes(), { vi })
+    renderApp('/', { user: session('credit_officer') })
+    expect(await screen.findByRole('heading', { name: /Borrower Watch-list/i })).toBeInTheDocument()
+  })
+
   it('renders the watch-list for a signed-in credit officer, with the session bar', async () => {
     mockApi(apiRoutes(), { vi })
     renderApp('/watchlist', { user: session('credit_officer') })
