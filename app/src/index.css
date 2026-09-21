@@ -1,4 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* No web font is fetched.
+ *
+ * The deploy's CSP is `connect-src 'self'`, so this @import was blocked on every page
+ * load: two console errors per screen, and Inter never arrived anyway — every DRISHTi
+ * screen has been rendering in the system stack since the deployment went up. Asking for
+ * a font we cannot receive is worse than not asking: the stack below is what the user
+ * actually sees, and `tailwind.config.js` lists it in the same order.
+ *
+ * (SANKET self-hosts IBM Plex under `public/fonts/`, which is the other way to solve
+ * this and the one to copy if a brand face is wanted here later.)
+ */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

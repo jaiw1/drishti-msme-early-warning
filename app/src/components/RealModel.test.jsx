@@ -35,4 +35,13 @@ describe('RealModel — the honesty wording', () => {
     draw()
     expect(document.body.textContent).toMatch(/is illustrative, not a real-world claim/)
   })
+
+  // `drishti/metrics` is A/M/CO only, so a relationship manager reaches this screen with
+  // no cockpit AUC. It used to print a hard-coded 0.95 in that case — a number no run
+  // produced.
+  it('prints no cockpit score at all when the role cannot read the metrics', () => {
+    render(<RealModel data={realModel} syntheticAuc={undefined} />)
+    expect(document.body.textContent).toMatch(/its score is illustrative/)
+    expect(document.body.textContent).not.toMatch(/~0\.95/)
+  })
 })

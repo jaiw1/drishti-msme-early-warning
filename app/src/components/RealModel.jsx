@@ -29,7 +29,8 @@ export default function RealModel({ data, syntheticAuc }) {
           <BadgeCheck size={20} /><h2 className="font-extrabold text-lg">Validated on REAL Indian MSME data</h2>
         </div>
         <p className="text-sm text-slate-600 leading-relaxed max-w-4xl">
-          The cockpit runs on synthetic data (its ~{Math.round((syntheticAuc || 0.95) * 100) / 100} score is illustrative, not a real-world claim).
+          The cockpit runs on synthetic data
+          {syntheticAuc ? <> (its ~{Math.round(syntheticAuc * 100) / 100} score is illustrative, not a real-world claim)</> : <> (its score is illustrative, not a real-world claim)</>}.
           To prove the <b>method</b> holds up, we ran the <b>same modelling approach on {meta.n_companies.toLocaleString('en-IN')} real Indian
           MSMEs</b> ({meta.n_company_years.toLocaleString('en-IN')} company-years, FY2018–FY2026) with{' '}
           <b>{meta.n_defaults.toLocaleString('en-IN')} positive company-year rows</b>
