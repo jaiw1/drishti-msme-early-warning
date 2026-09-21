@@ -199,6 +199,29 @@ reliability table). The calibrator never saw a test row; the model never saw a p
 | **`decision_score`** | **the same trailing mean, under the name the thresholds were searched over** | **yes — every band, sort order, timeline band and memo** |
 | `pd_calibrated` | `decision_score` through the policy-fold isotonic map | no — read as a probability, not a band |
 
+**Is it actually calibrated, and calibrated everywhere?** Measured, per portfolio, in
+`validation/report/experiments/calibration_by_portfolio/` (experiment E1, run off the frozen
+artefact; standard errors clustered on `account_id` because one borrower contributes up to 36
+correlated months). Three findings, none of them flattering by default:
+
+* The **served** score is **under-confident**: Cox calibration slope **1.206 [1.179, 1.233]**
+  pooled — the interval excludes 1, so this is a real departure, not noise. It understates how
+  far apart the risky and the safe actually are.
+* The **policy-fold isotonic map fixes that pooled**: slope **0.992 [0.967, 1.017]**, ECE
+  0.00561 → **0.00082**, Brier 0.01948 → **0.01859**. So `pd_calibrated`, not `decision_score`,
+  is the field to read as a probability.
+* It does **not** fix it in every portfolio. After calibration **MSME-CC 1.214 [1.121, 1.308]**
+  and **LAP 1.128 [1.033, 1.223]** still exclude 1, and Agri sits just below at 0.962
+  [0.925, 0.998]. One pooled calibrator is not a per-portfolio calibrator, and the deck must
+  not claim "a displayed 40% means 40%" inside MSME-CC or LAP on this evidence.
+
+**And where it cannot be answered at all.** At the reference month — the book an officer opens
+— six of the eight portfolios have a Red band of 6 to 24 accounts (Auto 6, Housing 7,
+Retail-Unsecured 7, Education 11, LAP 15, MSME-TL 24). Auto's Red band reads 100% [61.0–100.0]:
+an interval 39 points wide that one account moves by 17. Only Agri (143) and MSME-CC (32) carry
+a readable high-risk calibration point. The pooled account-MONTH view hides this completely —
+Agri's Red band looks like 4,989 observations there — which is why E1 reports both shapes.
+
 `meta.policy_version` and `meta.decision_score` state the transform in the export itself, so a
 consumer cannot band a different quantity from the one the thresholds were chosen over without
 contradicting the file it loaded. It could before: the platform API banded raw `pd`, which at

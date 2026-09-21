@@ -1,0 +1,35 @@
+{
+ "policy_version": "drishti-policy-2.0",
+ "split_seed": 7,
+ "policy_fold_fraction": 0.3,
+ "smooth_window": 4,
+ "reference_month_idx": 24,
+ "policy_month_idx": 24,
+ "horizon_months": 8,
+ "panel": "data/msme_loan_panel.csv",
+ "panel_sha256": "7e0e3ab0855a25d0c3569f6911b76c8889458fc69eece9f4e297eacec1809332",
+ "panel_rows": 2039678,
+ "panel_accounts": 45000,
+ "n_fit_accounts": 22050,
+ "n_policy_accounts": 9450,
+ "n_test_accounts": 13500,
+ "n_fit_rows_used": 762376,
+ "eligibility": "labelable == 1",
+ "thresholds": {
+  "amber": 0.069298,
+  "red": 0.343723,
+  "applied": "cost_minimising"
+ },
+ "shipped_thresholds": {
+  "amber": 0.069298,
+  "red": 0.343723
+ },
+ "reproduces_shipped_thresholds": true,
+ "versions": {
+  "lightgbm": "4.6.0",
+  "scikit_learn": "1.8.0",
+  "numpy": "2.4.4",
+  "pandas": "3.0.2"
+ },
+ "note": "Trained by validation/experiments/artefact.py with the exporter's own CAT/DROP/split/hyperparameters, imported rather than restated. `reproduces_shipped_thresholds` records whether this fit lands on the same operating point the committed export shipped; a False there means the two have diverged and every experiment below is describing a different model from the one in the cockpit."
+}

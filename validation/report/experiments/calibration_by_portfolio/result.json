@@ -1,0 +1,2954 @@
+{
+ "experiment": "calibration_by_portfolio",
+ "question": "Is the score DRISHTi actually serves calibrated, and is it calibrated inside every portfolio rather than only on average?",
+ "artefact": {
+  "policy_version": "drishti-policy-2.0",
+  "split_seed": 7,
+  "policy_fold_fraction": 0.3,
+  "smooth_window": 4,
+  "reference_month_idx": 24,
+  "policy_month_idx": 24,
+  "horizon_months": 8,
+  "panel": "data/msme_loan_panel.csv",
+  "panel_sha256": "7e0e3ab0855a25d0c3569f6911b76c8889458fc69eece9f4e297eacec1809332",
+  "panel_rows": 2039678,
+  "panel_accounts": 45000,
+  "n_fit_accounts": 22050,
+  "n_policy_accounts": 9450,
+  "n_test_accounts": 13500,
+  "n_fit_rows_used": 762376,
+  "eligibility": "labelable == 1",
+  "thresholds": {
+   "amber": 0.069298,
+   "red": 0.343723,
+   "applied": "cost_minimising"
+  },
+  "shipped_thresholds": {
+   "amber": 0.069298,
+   "red": 0.343723
+  },
+  "reproduces_shipped_thresholds": true,
+  "versions": {
+   "lightgbm": "4.6.0",
+   "scikit_learn": "1.8.0",
+   "numpy": "2.4.4",
+   "pandas": "3.0.2"
+  },
+  "note": "Trained by validation/experiments/artefact.py with the exporter's own CAT/DROP/split/hyperparameters, imported rather than restated. `reproduces_shipped_thresholds` records whether this fit lands on the same operating point the committed export shipped; a False there means the two have diverged and every experiment below is describing a different model from the one in the cockpit."
+ },
+ "thresholds": {
+  "amber": 0.069298,
+  "red": 0.343723
+ },
+ "population": "the frozen artefact's own test fold, labelable rows only; 467,617 rows / 13,500 accounts",
+ "method": {
+  "reliability": "equal-count bins, Wilson interval per bin",
+  "bins": 10,
+  "calibration_slope": "Cox calibration y ~ a + b*logit(p), IRLS",
+  "standard_errors": "sandwich, clustered on account_id",
+  "min_informative_n": 30
+ },
+ "cells": [
+  {
+   "cell": "POOLED",
+   "n": 467617,
+   "n_accounts": 13500,
+   "n_defaulted": 16438,
+   "base_rate": 0.035153,
+   "decision_score": {
+    "brier": 0.019482,
+    "ece": 0.005611,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 46762,
+      "predicted": 0.002303,
+      "observed": 0.003464,
+      "observed_ci": [
+       0.002971,
+       0.004039
+      ],
+      "n_defaulted": 162,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 46762,
+      "predicted": 0.004002,
+      "observed": 0.005389,
+      "observed_ci": [
+       0.004765,
+       0.006094
+      ],
+      "n_defaulted": 252,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 46761,
+      "predicted": 0.005557,
+      "observed": 0.007271,
+      "observed_ci": [
+       0.00654,
+       0.008083
+      ],
+      "n_defaulted": 340,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 46762,
+      "predicted": 0.007299,
+      "observed": 0.00896,
+      "observed_ci": [
+       0.008146,
+       0.009856
+      ],
+      "n_defaulted": 419,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 46761,
+      "predicted": 0.009375,
+      "observed": 0.011398,
+      "observed_ci": [
+       0.010476,
+       0.012401
+      ],
+      "n_defaulted": 533,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 46762,
+      "predicted": 0.011901,
+      "observed": 0.012596,
+      "observed_ci": [
+       0.011624,
+       0.013647
+      ],
+      "n_defaulted": 589,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 46762,
+      "predicted": 0.01508,
+      "observed": 0.01514,
+      "observed_ci": [
+       0.014073,
+       0.016288
+      ],
+      "n_defaulted": 708,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 46761,
+      "predicted": 0.019637,
+      "observed": 0.017408,
+      "observed_ci": [
+       0.016261,
+       0.018633
+      ],
+      "n_defaulted": 814,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 46762,
+      "predicted": 0.028695,
+      "observed": 0.025961,
+      "observed_ci": [
+       0.024558,
+       0.027442
+      ],
+      "n_defaulted": 1214,
+      "informative": true
+     },
+     {
+      "bin": 10,
+      "n": 46762,
+      "predicted": 0.20149,
+      "observed": 0.243937,
+      "observed_ci": [
+       0.240066,
+       0.247851
+      ],
+      "n_defaulted": 11407,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 1.2059,
+     "slope_ci": [
+      1.1789,
+      1.2329
+     ],
+     "intercept": 0.8476,
+     "intercept_ci": [
+      0.7533,
+      0.9419
+     ],
+     "n_clusters": 13500,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "high_risk": {
+     "n": 8083,
+     "n_defaulted": 7293,
+     "predicted": 0.75037,
+     "observed": 0.902264,
+     "observed_ci": [
+      0.895598,
+      0.908548
+     ],
+     "ci_width": 0.013,
+     "informative": true,
+     "note": ""
+    },
+    "high_risk_snapshot": {
+     "n": 245,
+     "n_defaulted": 217,
+     "predicted": 0.766511,
+     "observed": 0.885714,
+     "observed_ci": [
+      0.839784,
+      0.919736
+     ],
+     "ci_width": 0.08,
+     "informative": true,
+     "horizon_months": 8,
+     "note": ""
+    }
+   },
+   "pd_calibrated": {
+    "brier": 0.018592,
+    "ece": 0.000823,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 42166,
+      "predicted": 0.004136,
+      "observed": 0.003534,
+      "observed_ci": [
+       0.003011,
+       0.004147
+      ],
+      "n_defaulted": 149,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 22540,
+      "predicted": 0.005993,
+      "observed": 0.003416,
+      "observed_ci": [
+       0.002734,
+       0.004267
+      ],
+      "n_defaulted": 77,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 73965,
+      "predicted": 0.007446,
+      "observed": 0.006922,
+      "observed_ci": [
+       0.00635,
+       0.007546
+      ],
+      "n_defaulted": 512,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 87551,
+      "predicted": 0.009094,
+      "observed": 0.010143,
+      "observed_ci": [
+       0.0095,
+       0.010828
+      ],
+      "n_defaulted": 888,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 52629,
+      "predicted": 0.012306,
+      "observed": 0.012294,
+      "observed_ci": [
+       0.011387,
+       0.013271
+      ],
+      "n_defaulted": 647,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 39159,
+      "predicted": 0.015825,
+      "observed": 0.014556,
+      "observed_ci": [
+       0.013417,
+       0.015791
+      ],
+      "n_defaulted": 570,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 52459,
+      "predicted": 0.018392,
+      "observed": 0.017042,
+      "observed_ci": [
+       0.015969,
+       0.018185
+      ],
+      "n_defaulted": 894,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 47833,
+      "predicted": 0.025282,
+      "observed": 0.025087,
+      "observed_ci": [
+       0.023723,
+       0.026527
+      ],
+      "n_defaulted": 1200,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 49315,
+      "predicted": 0.232399,
+      "observed": 0.233215,
+      "observed_ci": [
+       0.229504,
+       0.236968
+      ],
+      "n_defaulted": 11501,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 0.9922,
+     "slope_ci": [
+      0.9672,
+      1.0172
+     ],
+     "intercept": -0.038,
+     "intercept_ci": [
+      -0.1409,
+      0.0649
+     ],
+     "n_clusters": 13500,
+     "slope_differs_from_1": false,
+     "reading": "no detectable departure from slope 1 on this cell"
+    },
+    "high_risk": {
+     "n": 10306,
+     "n_defaulted": 8395,
+     "predicted": 0.823113,
+     "observed": 0.814574,
+     "observed_ci": [
+      0.806954,
+      0.82196
+     ],
+     "ci_width": 0.015,
+     "informative": true,
+     "note": ""
+    }
+   }
+  },
+  {
+   "cell": "Agri",
+   "n": 134224,
+   "n_accounts": 3977,
+   "n_defaulted": 8121,
+   "base_rate": 0.060503,
+   "decision_score": {
+    "brier": 0.027645,
+    "ece": 0.009065,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 13423,
+      "predicted": 0.006785,
+      "observed": 0.005066,
+      "observed_ci": [
+       0.003998,
+       0.006417
+      ],
+      "n_defaulted": 68,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 13422,
+      "predicted": 0.009852,
+      "observed": 0.010878,
+      "observed_ci": [
+       0.009257,
+       0.012778
+      ],
+      "n_defaulted": 146,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 13422,
+      "predicted": 0.012097,
+      "observed": 0.01356,
+      "observed_ci": [
+       0.011738,
+       0.01566
+      ],
+      "n_defaulted": 182,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 13423,
+      "predicted": 0.014269,
+      "observed": 0.013559,
+      "observed_ci": [
+       0.011737,
+       0.015659
+      ],
+      "n_defaulted": 182,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 13422,
+      "predicted": 0.016651,
+      "observed": 0.014975,
+      "observed_ci": [
+       0.013055,
+       0.017173
+      ],
+      "n_defaulted": 201,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 13422,
+      "predicted": 0.01946,
+      "observed": 0.015646,
+      "observed_ci": [
+       0.013681,
+       0.017888
+      ],
+      "n_defaulted": 210,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 13423,
+      "predicted": 0.023341,
+      "observed": 0.021903,
+      "observed_ci": [
+       0.01956,
+       0.024519
+      ],
+      "n_defaulted": 294,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 13422,
+      "predicted": 0.029863,
+      "observed": 0.025481,
+      "observed_ci": [
+       0.022947,
+       0.028285
+      ],
+      "n_defaulted": 342,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 13422,
+      "predicted": 0.046835,
+      "observed": 0.041052,
+      "observed_ci": [
+       0.037825,
+       0.044542
+      ],
+      "n_defaulted": 551,
+      "informative": true
+     },
+     {
+      "bin": 10,
+      "n": 13423,
+      "predicted": 0.374261,
+      "observed": 0.442897,
+      "observed_ci": [
+       0.434511,
+       0.451315
+      ],
+      "n_defaulted": 5945,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 1.2863,
+     "slope_ci": [
+      1.2473,
+      1.3253
+     ],
+     "intercept": 0.9083,
+     "intercept_ci": [
+      0.7778,
+      1.0388
+     ],
+     "n_clusters": 3977,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "high_risk": {
+     "n": 4989,
+     "n_defaulted": 4499,
+     "predicted": 0.76647,
+     "observed": 0.901784,
+     "observed_ci": [
+      0.893214,
+      0.909736
+     ],
+     "ci_width": 0.0165,
+     "informative": true,
+     "note": ""
+    },
+    "high_risk_snapshot": {
+     "n": 143,
+     "n_defaulted": 125,
+     "predicted": 0.801668,
+     "observed": 0.874126,
+     "observed_ci": [
+      0.809802,
+      0.918875
+     ],
+     "ci_width": 0.1091,
+     "informative": true,
+     "horizon_months": 8,
+     "note": ""
+    }
+   },
+   "pd_calibrated": {
+    "brier": 0.026228,
+    "ece": 0.00318,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 12908,
+      "predicted": 0.008158,
+      "observed": 0.005036,
+      "observed_ci": [
+       0.003953,
+       0.006413
+      ],
+      "n_defaulted": 65,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 13912,
+      "predicted": 0.010586,
+      "observed": 0.01071,
+      "observed_ci": [
+       0.00913,
+       0.012561
+      ],
+      "n_defaulted": 149,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 4507,
+      "predicted": 0.012455,
+      "observed": 0.013535,
+      "observed_ci": [
+       0.010551,
+       0.017346
+      ],
+      "n_defaulted": 61,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 16977,
+      "predicted": 0.013865,
+      "observed": 0.013489,
+      "observed_ci": [
+       0.01186,
+       0.015337
+      ],
+      "n_defaulted": 229,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 17446,
+      "predicted": 0.016688,
+      "observed": 0.014617,
+      "observed_ci": [
+       0.01294,
+       0.016507
+      ],
+      "n_defaulted": 255,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 18507,
+      "predicted": 0.018975,
+      "observed": 0.016804,
+      "observed_ci": [
+       0.01505,
+       0.018759
+      ],
+      "n_defaulted": 311,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 15705,
+      "predicted": 0.022722,
+      "observed": 0.022095,
+      "observed_ci": [
+       0.01991,
+       0.024513
+      ],
+      "n_defaulted": 347,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 20707,
+      "predicted": 0.038455,
+      "observed": 0.03622,
+      "observed_ci": [
+       0.03376,
+       0.038852
+      ],
+      "n_defaulted": 750,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 13555,
+      "predicted": 0.457034,
+      "observed": 0.439248,
+      "observed_ci": [
+       0.430911,
+       0.447618
+      ],
+      "n_defaulted": 5954,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 0.9615,
+     "slope_ci": [
+      0.9255,
+      0.9976
+     ],
+     "intercept": -0.2143,
+     "intercept_ci": [
+      -0.3517,
+      -0.0769
+     ],
+     "n_clusters": 3977,
+     "slope_differs_from_1": true,
+     "reading": "over-confident: the score spreads risk wider than the outcomes do"
+    },
+    "high_risk": {
+     "n": 6237,
+     "n_defaulted": 5078,
+     "predicted": 0.835575,
+     "observed": 0.814173,
+     "observed_ci": [
+      0.804328,
+      0.823632
+     ],
+     "ci_width": 0.0193,
+     "informative": true,
+     "note": ""
+    }
+   }
+  },
+  {
+   "cell": "Auto",
+   "n": 39942,
+   "n_accounts": 1131,
+   "n_defaulted": 723,
+   "base_rate": 0.018101,
+   "decision_score": {
+    "brier": 0.014401,
+    "ece": 0.003999,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 3995,
+      "predicted": 0.001945,
+      "observed": 0.003254,
+      "observed_ci": [
+       0.001903,
+       0.00556
+      ],
+      "n_defaulted": 13,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 3994,
+      "predicted": 0.002946,
+      "observed": 0.002504,
+      "observed_ci": [
+       0.001361,
+       0.004603
+      ],
+      "n_defaulted": 10,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 3994,
+      "predicted": 0.00375,
+      "observed": 0.005759,
+      "observed_ci": [
+       0.00384,
+       0.008627
+      ],
+      "n_defaulted": 23,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 3994,
+      "predicted": 0.004581,
+      "observed": 0.007011,
+      "observed_ci": [
+       0.004855,
+       0.010114
+      ],
+      "n_defaulted": 28,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 3994,
+      "predicted": 0.005543,
+      "observed": 0.009014,
+      "observed_ci": [
+       0.006518,
+       0.012453
+      ],
+      "n_defaulted": 36,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 3994,
+      "predicted": 0.006746,
+      "observed": 0.010766,
+      "observed_ci": [
+       0.008003,
+       0.01447
+      ],
+      "n_defaulted": 43,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 3994,
+      "predicted": 0.008447,
+      "observed": 0.012268,
+      "observed_ci": [
+       0.009293,
+       0.016181
+      ],
+      "n_defaulted": 49,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 3994,
+      "predicted": 0.011024,
+      "observed": 0.013771,
+      "observed_ci": [
+       0.010595,
+       0.01788
+      ],
+      "n_defaulted": 55,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 3994,
+      "predicted": 0.016478,
+      "observed": 0.017777,
+      "observed_ci": [
+       0.014118,
+       0.022362
+      ],
+      "n_defaulted": 71,
+      "informative": true
+     },
+     {
+      "bin": 10,
+      "n": 3995,
+      "predicted": 0.080436,
+      "observed": 0.098874,
+      "observed_ci": [
+       0.089999,
+       0.108518
+      ],
+      "n_defaulted": 395,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 1.0467,
+     "slope_ci": [
+      0.9482,
+      1.1451
+     ],
+     "intercept": 0.4624,
+     "intercept_ci": [
+      0.0256,
+      0.8993
+     ],
+     "n_clusters": 1131,
+     "slope_differs_from_1": false,
+     "reading": "no detectable departure from slope 1 on this cell"
+    },
+    "high_risk": {
+     "n": 180,
+     "n_defaulted": 140,
+     "predicted": 0.608079,
+     "observed": 0.777778,
+     "observed_ci": [
+      0.711598,
+      0.832349
+     ],
+     "ci_width": 0.1208,
+     "informative": true,
+     "note": ""
+    },
+    "high_risk_snapshot": {
+     "n": 6,
+     "n_defaulted": 6,
+     "predicted": 0.648435,
+     "observed": 1.0,
+     "observed_ci": [
+      0.609666,
+      1.0
+     ],
+     "ci_width": 0.3903,
+     "informative": false,
+     "horizon_months": 8,
+     "note": "n=6 accounts \u2014 the interval spans 39%; one account moves it by 17%, so this cell cannot support a calibration claim"
+    }
+   },
+   "pd_calibrated": {
+    "brier": 0.014278,
+    "ece": 0.001656,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 17,
+      "predicted": 2.7e-05,
+      "observed": 0.0,
+      "observed_ci": [
+       0.0,
+       0.184318
+      ],
+      "n_defaulted": 0,
+      "informative": false
+     },
+     {
+      "bin": 2,
+      "n": 6595,
+      "predicted": 0.00417,
+      "observed": 0.003184,
+      "observed_ci": [
+       0.002084,
+       0.004863
+      ],
+      "n_defaulted": 21,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 3781,
+      "predicted": 0.005993,
+      "observed": 0.003703,
+      "observed_ci": [
+       0.002207,
+       0.006206
+      ],
+      "n_defaulted": 14,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 5749,
+      "predicted": 0.006667,
+      "observed": 0.007132,
+      "observed_ci": [
+       0.005262,
+       0.00966
+      ],
+      "n_defaulted": 41,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 4619,
+      "predicted": 0.008277,
+      "observed": 0.00801,
+      "observed_ci": [
+       0.005817,
+       0.011021
+      ],
+      "n_defaulted": 37,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 5382,
+      "predicted": 0.00847,
+      "observed": 0.011891,
+      "observed_ci": [
+       0.009324,
+       0.015155
+      ],
+      "n_defaulted": 64,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 4751,
+      "predicted": 0.010819,
+      "observed": 0.012839,
+      "observed_ci": [
+       0.010009,
+       0.016457
+      ],
+      "n_defaulted": 61,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 3763,
+      "predicted": 0.014985,
+      "observed": 0.017008,
+      "observed_ci": [
+       0.013342,
+       0.021659
+      ],
+      "n_defaulted": 64,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 5285,
+      "predicted": 0.077489,
+      "observed": 0.079659,
+      "observed_ci": [
+       0.072661,
+       0.087268
+      ],
+      "n_defaulted": 421,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 0.9408,
+     "slope_ci": [
+      0.8398,
+      1.0418
+     ],
+     "intercept": -0.1514,
+     "intercept_ci": [
+      -0.6408,
+      0.3381
+     ],
+     "n_clusters": 1131,
+     "slope_differs_from_1": false,
+     "reading": "no detectable departure from slope 1 on this cell"
+    },
+    "high_risk": {
+     "n": 273,
+     "n_defaulted": 176,
+     "predicted": 0.729108,
+     "observed": 0.644689,
+     "observed_ci": [
+      0.586267,
+      0.699095
+     ],
+     "ci_width": 0.1128,
+     "informative": true,
+     "note": ""
+    }
+   }
+  },
+  {
+   "cell": "Education",
+   "n": 40860,
+   "n_accounts": 1167,
+   "n_defaulted": 1107,
+   "base_rate": 0.027093,
+   "decision_score": {
+    "brier": 0.019582,
+    "ece": 0.00779,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 4086,
+      "predicted": 0.002776,
+      "observed": 0.006363,
+      "observed_ci": [
+       0.004346,
+       0.009308
+      ],
+      "n_defaulted": 26,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 4086,
+      "predicted": 0.004139,
+      "observed": 0.005874,
+      "observed_ci": [
+       0.00395,
+       0.008725
+      ],
+      "n_defaulted": 24,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 4086,
+      "predicted": 0.00522,
+      "observed": 0.0093,
+      "observed_ci": [
+       0.006783,
+       0.012739
+      ],
+      "n_defaulted": 38,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 4086,
+      "predicted": 0.006363,
+      "observed": 0.006853,
+      "observed_ci": [
+       0.004745,
+       0.009886
+      ],
+      "n_defaulted": 28,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 4086,
+      "predicted": 0.007646,
+      "observed": 0.011992,
+      "observed_ci": [
+       0.009083,
+       0.015818
+      ],
+      "n_defaulted": 49,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 4086,
+      "predicted": 0.009302,
+      "observed": 0.010034,
+      "observed_ci": [
+       0.007405,
+       0.013583
+      ],
+      "n_defaulted": 41,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 4086,
+      "predicted": 0.011513,
+      "observed": 0.009055,
+      "observed_ci": [
+       0.006577,
+       0.012456
+      ],
+      "n_defaulted": 37,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 4086,
+      "predicted": 0.014857,
+      "observed": 0.011992,
+      "observed_ci": [
+       0.009083,
+       0.015818
+      ],
+      "n_defaulted": 49,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 4086,
+      "predicted": 0.021868,
+      "observed": 0.025453,
+      "observed_ci": [
+       0.021051,
+       0.030746
+      ],
+      "n_defaulted": 104,
+      "informative": true
+     },
+     {
+      "bin": 10,
+      "n": 4086,
+      "predicted": 0.119986,
+      "observed": 0.174009,
+      "observed_ci": [
+       0.162692,
+       0.185938
+      ],
+      "n_defaulted": 711,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 1.1753,
+     "slope_ci": [
+      1.0786,
+      1.272
+     ],
+     "intercept": 0.9365,
+     "intercept_ci": [
+      0.5486,
+      1.3244
+     ],
+     "n_clusters": 1167,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "high_risk": {
+     "n": 346,
+     "n_defaulted": 280,
+     "predicted": 0.603142,
+     "observed": 0.809249,
+     "observed_ci": [
+      0.764542,
+      0.847163
+     ],
+     "ci_width": 0.0826,
+     "informative": true,
+     "note": ""
+    },
+    "high_risk_snapshot": {
+     "n": 11,
+     "n_defaulted": 11,
+     "predicted": 0.687467,
+     "observed": 1.0,
+     "observed_ci": [
+      0.741167,
+      1.0
+     ],
+     "ci_width": 0.2588,
+     "informative": false,
+     "horizon_months": 8,
+     "note": "n=11 accounts \u2014 the interval spans 26%; one account moves it by 9%, so this cell cannot support a calibration claim"
+    }
+   },
+   "pd_calibrated": {
+    "brier": 0.018894,
+    "ece": 0.004097,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 2605,
+      "predicted": 0.004211,
+      "observed": 0.008061,
+      "observed_ci": [
+       0.005279,
+       0.012293
+      ],
+      "n_defaulted": 21,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 2340,
+      "predicted": 0.005993,
+      "observed": 0.002991,
+      "observed_ci": [
+       0.00145,
+       0.006162
+      ],
+      "n_defaulted": 7,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 4719,
+      "predicted": 0.006667,
+      "observed": 0.007417,
+      "observed_ci": [
+       0.005338,
+       0.010297
+      ],
+      "n_defaulted": 35,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 4522,
+      "predicted": 0.008277,
+      "observed": 0.009288,
+      "observed_ci": [
+       0.006879,
+       0.01253
+      ],
+      "n_defaulted": 42,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 10093,
+      "predicted": 0.009039,
+      "observed": 0.00971,
+      "observed_ci": [
+       0.007974,
+       0.011818
+      ],
+      "n_defaulted": 98,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 2720,
+      "predicted": 0.011884,
+      "observed": 0.009559,
+      "observed_ci": [
+       0.006532,
+       0.013969
+      ],
+      "n_defaulted": 26,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 5651,
+      "predicted": 0.014856,
+      "observed": 0.011148,
+      "observed_ci": [
+       0.008724,
+       0.014237
+      ],
+      "n_defaulted": 63,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 3877,
+      "predicted": 0.020178,
+      "observed": 0.025277,
+      "observed_ci": [
+       0.020786,
+       0.030708
+      ],
+      "n_defaulted": 98,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 4333,
+      "predicted": 0.145066,
+      "observed": 0.165474,
+      "observed_ci": [
+       0.154707,
+       0.176834
+      ],
+      "n_defaulted": 717,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 1.0101,
+     "slope_ci": [
+      0.9171,
+      1.1031
+     ],
+     "intercept": 0.171,
+     "intercept_ci": [
+      -0.2447,
+      0.5868
+     ],
+     "n_clusters": 1167,
+     "slope_differs_from_1": false,
+     "reading": "no detectable departure from slope 1 on this cell"
+    },
+    "high_risk": {
+     "n": 529,
+     "n_defaulted": 370,
+     "predicted": 0.716045,
+     "observed": 0.699433,
+     "observed_ci": [
+      0.659038,
+      0.736952
+     ],
+     "ci_width": 0.0779,
+     "informative": true,
+     "note": ""
+    }
+   }
+  },
+  {
+   "cell": "Housing",
+   "n": 69229,
+   "n_accounts": 1954,
+   "n_defaulted": 891,
+   "base_rate": 0.01287,
+   "decision_score": {
+    "brier": 0.010048,
+    "ece": 0.003356,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 6923,
+      "predicted": 0.001355,
+      "observed": 0.002889,
+      "observed_ci": [
+       0.001871,
+       0.004458
+      ],
+      "n_defaulted": 20,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 6923,
+      "predicted": 0.002066,
+      "observed": 0.003322,
+      "observed_ci": [
+       0.002215,
+       0.004981
+      ],
+      "n_defaulted": 23,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 6923,
+      "predicted": 0.002682,
+      "observed": 0.004478,
+      "observed_ci": [
+       0.003156,
+       0.006349
+      ],
+      "n_defaulted": 31,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 6923,
+      "predicted": 0.003337,
+      "observed": 0.001444,
+      "observed_ci": [
+       0.000785,
+       0.002657
+      ],
+      "n_defaulted": 10,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 6922,
+      "predicted": 0.004088,
+      "observed": 0.004623,
+      "observed_ci": [
+       0.003277,
+       0.006519
+      ],
+      "n_defaulted": 32,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 6923,
+      "predicted": 0.004995,
+      "observed": 0.004622,
+      "observed_ci": [
+       0.003276,
+       0.006518
+      ],
+      "n_defaulted": 32,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 6923,
+      "predicted": 0.006184,
+      "observed": 0.005922,
+      "observed_ci": [
+       0.004369,
+       0.008024
+      ],
+      "n_defaulted": 41,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 6923,
+      "predicted": 0.008052,
+      "observed": 0.007367,
+      "observed_ci": [
+       0.005608,
+       0.009672
+      ],
+      "n_defaulted": 51,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 6923,
+      "predicted": 0.0117,
+      "observed": 0.012711,
+      "observed_ci": [
+       0.01033,
+       0.015633
+      ],
+      "n_defaulted": 88,
+      "informative": true
+     },
+     {
+      "bin": 10,
+      "n": 6923,
+      "predicted": 0.057104,
+      "observed": 0.081323,
+      "observed_ci": [
+       0.075114,
+       0.087996
+      ],
+      "n_defaulted": 563,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 1.1747,
+     "slope_ci": [
+      1.0777,
+      1.2717
+     ],
+     "intercept": 0.9523,
+     "intercept_ci": [
+      0.5083,
+      1.3962
+     ],
+     "n_clusters": 1954,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "high_risk": {
+     "n": 219,
+     "n_defaulted": 180,
+     "predicted": 0.608371,
+     "observed": 0.821918,
+     "observed_ci": [
+      0.765831,
+      0.866905
+     ],
+     "ci_width": 0.1011,
+     "informative": true,
+     "note": ""
+    },
+    "high_risk_snapshot": {
+     "n": 7,
+     "n_defaulted": 6,
+     "predicted": 0.585725,
+     "observed": 0.857143,
+     "observed_ci": [
+      0.486872,
+      0.97432
+     ],
+     "ci_width": 0.4874,
+     "informative": false,
+     "horizon_months": 8,
+     "note": "n=7 accounts \u2014 the interval spans 49%; one account moves it by 14%, so this cell cannot support a calibration claim"
+    }
+   },
+   "pd_calibrated": {
+    "brier": 0.009846,
+    "ece": 0.002816,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 244,
+      "predicted": 7e-06,
+      "observed": 0.0,
+      "observed_ci": [
+       0.0,
+       0.0155
+      ],
+      "n_defaulted": 0,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 20483,
+      "predicted": 0.004086,
+      "observed": 0.003613,
+      "observed_ci": [
+       0.002879,
+       0.004533
+      ],
+      "n_defaulted": 74,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 844,
+      "predicted": 0.005471,
+      "observed": 0.003555,
+      "observed_ci": [
+       0.00121,
+       0.010398
+      ],
+      "n_defaulted": 3,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 7376,
+      "predicted": 0.005993,
+      "observed": 0.001356,
+      "observed_ci": [
+       0.000737,
+       0.002494
+      ],
+      "n_defaulted": 10,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 9731,
+      "predicted": 0.006667,
+      "observed": 0.00483,
+      "observed_ci": [
+       0.003634,
+       0.006416
+      ],
+      "n_defaulted": 47,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 7146,
+      "predicted": 0.008277,
+      "observed": 0.005038,
+      "observed_ci": [
+       0.003641,
+       0.006966
+      ],
+      "n_defaulted": 36,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 7508,
+      "predicted": 0.00847,
+      "observed": 0.007459,
+      "observed_ci": [
+       0.005749,
+       0.009673
+      ],
+      "n_defaulted": 56,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 8588,
+      "predicted": 0.011734,
+      "observed": 0.010829,
+      "observed_ci": [
+       0.008848,
+       0.013247
+      ],
+      "n_defaulted": 93,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 7309,
+      "predicted": 0.065531,
+      "observed": 0.07826,
+      "observed_ci": [
+       0.072322,
+       0.084641
+      ],
+      "n_defaulted": 572,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 1.0959,
+     "slope_ci": [
+      0.9837,
+      1.2081
+     ],
+     "intercept": 0.3574,
+     "intercept_ci": [
+      -0.1891,
+      0.9039
+     ],
+     "n_clusters": 1954,
+     "slope_differs_from_1": false,
+     "reading": "no detectable departure from slope 1 on this cell"
+    },
+    "high_risk": {
+     "n": 321,
+     "n_defaulted": 225,
+     "predicted": 0.731173,
+     "observed": 0.700935,
+     "observed_ci": [
+      0.648713,
+      0.748404
+     ],
+     "ci_width": 0.0997,
+     "informative": true,
+     "note": ""
+    }
+   }
+  },
+  {
+   "cell": "LAP",
+   "n": 49511,
+   "n_accounts": 1415,
+   "n_defaulted": 1248,
+   "base_rate": 0.025207,
+   "decision_score": {
+    "brier": 0.016288,
+    "ece": 0.005633,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 4951,
+      "predicted": 0.002737,
+      "observed": 0.00202,
+      "observed_ci": [
+       0.001098,
+       0.003714
+      ],
+      "n_defaulted": 10,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 4951,
+      "predicted": 0.004081,
+      "observed": 0.004848,
+      "observed_ci": [
+       0.00326,
+       0.007203
+      ],
+      "n_defaulted": 24,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 4952,
+      "predicted": 0.005164,
+      "observed": 0.006058,
+      "observed_ci": [
+       0.004247,
+       0.008635
+      ],
+      "n_defaulted": 30,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 4950,
+      "predicted": 0.006316,
+      "observed": 0.005455,
+      "observed_ci": [
+       0.003751,
+       0.007925
+      ],
+      "n_defaulted": 27,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 4951,
+      "predicted": 0.007695,
+      "observed": 0.010907,
+      "observed_ci": [
+       0.008369,
+       0.014203
+      ],
+      "n_defaulted": 54,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 4952,
+      "predicted": 0.009487,
+      "observed": 0.013732,
+      "observed_ci": [
+       0.010847,
+       0.017371
+      ],
+      "n_defaulted": 68,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 4950,
+      "predicted": 0.011864,
+      "observed": 0.013535,
+      "observed_ci": [
+       0.010673,
+       0.017152
+      ],
+      "n_defaulted": 67,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 4951,
+      "predicted": 0.015379,
+      "observed": 0.016562,
+      "observed_ci": [
+       0.013364,
+       0.02051
+      ],
+      "n_defaulted": 82,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 4951,
+      "predicted": 0.022201,
+      "observed": 0.017976,
+      "observed_ci": [
+       0.014632,
+       0.022068
+      ],
+      "n_defaulted": 89,
+      "informative": true
+     },
+     {
+      "bin": 10,
+      "n": 4952,
+      "predicted": 0.122396,
+      "observed": 0.160945,
+      "observed_ci": [
+       0.150973,
+       0.171442
+      ],
+      "n_defaulted": 797,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 1.2661,
+     "slope_ci": [
+      1.1755,
+      1.3567
+     ],
+     "intercept": 1.1746,
+     "intercept_ci": [
+      0.8229,
+      1.5264
+     ],
+     "n_clusters": 1415,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "high_risk": {
+     "n": 443,
+     "n_defaulted": 416,
+     "predicted": 0.729572,
+     "observed": 0.939052,
+     "observed_ci": [
+      0.912777,
+      0.957778
+     ],
+     "ci_width": 0.045,
+     "informative": true,
+     "note": ""
+    },
+    "high_risk_snapshot": {
+     "n": 15,
+     "n_defaulted": 14,
+     "predicted": 0.749413,
+     "observed": 0.933333,
+     "observed_ci": [
+      0.701835,
+      0.988133
+     ],
+     "ci_width": 0.2863,
+     "informative": false,
+     "horizon_months": 8,
+     "note": "n=15 accounts \u2014 the interval spans 29%; one account moves it by 7%, so this cell cannot support a calibration claim"
+    }
+   },
+   "pd_calibrated": {
+    "brier": 0.015371,
+    "ece": 0.003629,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 3240,
+      "predicted": 0.004202,
+      "observed": 0.000926,
+      "observed_ci": [
+       0.000315,
+       0.002719
+      ],
+      "n_defaulted": 3,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 3003,
+      "predicted": 0.005993,
+      "observed": 0.003996,
+      "observed_ci": [
+       0.002287,
+       0.006972
+      ],
+      "n_defaulted": 12,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 5723,
+      "predicted": 0.006667,
+      "observed": 0.005242,
+      "observed_ci": [
+       0.003674,
+       0.007473
+      ],
+      "n_defaulted": 30,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 5445,
+      "predicted": 0.008277,
+      "observed": 0.005142,
+      "observed_ci": [
+       0.00356,
+       0.007422
+      ],
+      "n_defaulted": 28,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 7325,
+      "predicted": 0.00847,
+      "observed": 0.009693,
+      "observed_ci": [
+       0.007692,
+       0.012208
+      ],
+      "n_defaulted": 71,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 4091,
+      "predicted": 0.010075,
+      "observed": 0.014666,
+      "observed_ci": [
+       0.011412,
+       0.018832
+      ],
+      "n_defaulted": 60,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 5699,
+      "predicted": 0.012285,
+      "observed": 0.012809,
+      "observed_ci": [
+       0.010201,
+       0.016074
+      ],
+      "n_defaulted": 73,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 4859,
+      "predicted": 0.016131,
+      "observed": 0.017288,
+      "observed_ci": [
+       0.013986,
+       0.021352
+      ],
+      "n_defaulted": 84,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 4958,
+      "predicted": 0.02033,
+      "observed": 0.016741,
+      "observed_ci": [
+       0.013525,
+       0.020704
+      ],
+      "n_defaulted": 83,
+      "informative": true
+     },
+     {
+      "bin": 10,
+      "n": 5168,
+      "predicted": 0.139381,
+      "observed": 0.155573,
+      "observed_ci": [
+       0.145947,
+       0.16571
+      ],
+      "n_defaulted": 804,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 1.1283,
+     "slope_ci": [
+      1.0333,
+      1.2233
+     ],
+     "intercept": 0.5252,
+     "intercept_ci": [
+      0.1128,
+      0.9375
+     ],
+     "n_clusters": 1415,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "high_risk": {
+     "n": 570,
+     "n_defaulted": 495,
+     "predicted": 0.815848,
+     "observed": 0.868421,
+     "observed_ci": [
+      0.838188,
+      0.893722
+     ],
+     "ci_width": 0.0555,
+     "informative": true,
+     "note": ""
+    }
+   }
+  },
+  {
+   "cell": "MSME-CC",
+   "n": 47713,
+   "n_accounts": 1380,
+   "n_defaulted": 1726,
+   "base_rate": 0.036175,
+   "decision_score": {
+    "brier": 0.016921,
+    "ece": 0.007197,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 4772,
+      "predicted": 0.00423,
+      "observed": 0.006287,
+      "observed_ci": [
+       0.004407,
+       0.00896
+      ],
+      "n_defaulted": 30,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 4771,
+      "predicted": 0.006384,
+      "observed": 0.008594,
+      "observed_ci": [
+       0.006341,
+       0.011637
+      ],
+      "n_defaulted": 41,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 4771,
+      "predicted": 0.008028,
+      "observed": 0.011947,
+      "observed_ci": [
+       0.009233,
+       0.015446
+      ],
+      "n_defaulted": 57,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 4771,
+      "predicted": 0.00972,
+      "observed": 0.007965,
+      "observed_ci": [
+       0.005808,
+       0.010913
+      ],
+      "n_defaulted": 38,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 4771,
+      "predicted": 0.011599,
+      "observed": 0.012576,
+      "observed_ci": [
+       0.009783,
+       0.016153
+      ],
+      "n_defaulted": 60,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 4772,
+      "predicted": 0.013821,
+      "observed": 0.013831,
+      "observed_ci": [
+       0.010886,
+       0.017557
+      ],
+      "n_defaulted": 66,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 4771,
+      "predicted": 0.016667,
+      "observed": 0.013205,
+      "observed_ci": [
+       0.010335,
+       0.016858
+      ],
+      "n_defaulted": 63,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 4771,
+      "predicted": 0.020777,
+      "observed": 0.016349,
+      "observed_ci": [
+       0.01312,
+       0.020356
+      ],
+      "n_defaulted": 78,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 4771,
+      "predicted": 0.028405,
+      "observed": 0.01593,
+      "observed_ci": [
+       0.012746,
+       0.019892
+      ],
+      "n_defaulted": 76,
+      "informative": true
+     },
+     {
+      "bin": 10,
+      "n": 4772,
+      "predicted": 0.214352,
+      "observed": 0.255029,
+      "observed_ci": [
+       0.242863,
+       0.26759
+      ],
+      "n_defaulted": 1217,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 1.3978,
+     "slope_ci": [
+      1.3003,
+      1.4953
+     ],
+     "intercept": 1.4329,
+     "intercept_ci": [
+      1.1262,
+      1.7396
+     ],
+     "n_clusters": 1380,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "high_risk": {
+     "n": 911,
+     "n_defaulted": 896,
+     "predicted": 0.831842,
+     "observed": 0.983535,
+     "observed_ci": [
+      0.973012,
+      0.989997
+     ],
+     "ci_width": 0.017,
+     "informative": true,
+     "note": ""
+    },
+    "high_risk_snapshot": {
+     "n": 32,
+     "n_defaulted": 31,
+     "predicted": 0.800974,
+     "observed": 0.96875,
+     "observed_ci": [
+      0.842557,
+      0.994462
+     ],
+     "ci_width": 0.1519,
+     "informative": true,
+     "horizon_months": 8,
+     "note": ""
+    }
+   },
+   "pd_calibrated": {
+    "brier": 0.015303,
+    "ece": 0.00287,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 3787,
+      "predicted": 0.006127,
+      "observed": 0.005809,
+      "observed_ci": [
+       0.00384,
+       0.008781
+      ],
+      "n_defaulted": 22,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 3168,
+      "predicted": 0.008277,
+      "observed": 0.007891,
+      "observed_ci": [
+       0.005351,
+       0.011624
+      ],
+      "n_defaulted": 25,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 6364,
+      "predicted": 0.00847,
+      "observed": 0.011471,
+      "observed_ci": [
+       0.009134,
+       0.014397
+      ],
+      "n_defaulted": 73,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 4551,
+      "predicted": 0.010075,
+      "observed": 0.00791,
+      "observed_ci": [
+       0.005719,
+       0.010931
+      ],
+      "n_defaulted": 36,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 3984,
+      "predicted": 0.011898,
+      "observed": 0.009789,
+      "observed_ci": [
+       0.007169,
+       0.013353
+      ],
+      "n_defaulted": 39,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 5704,
+      "predicted": 0.013833,
+      "observed": 0.014201,
+      "observed_ci": [
+       0.011441,
+       0.017614
+      ],
+      "n_defaulted": 81,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 4933,
+      "predicted": 0.016676,
+      "observed": 0.013987,
+      "observed_ci": [
+       0.011068,
+       0.017663
+      ],
+      "n_defaulted": 69,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 4665,
+      "predicted": 0.018976,
+      "observed": 0.015648,
+      "observed_ci": [
+       0.012465,
+       0.019629
+      ],
+      "n_defaulted": 73,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 3933,
+      "predicted": 0.022713,
+      "observed": 0.013984,
+      "observed_ci": [
+       0.01076,
+       0.018157
+      ],
+      "n_defaulted": 55,
+      "informative": true
+     },
+     {
+      "bin": 10,
+      "n": 6624,
+      "predicted": 0.184342,
+      "observed": 0.189161,
+      "observed_ci": [
+       0.179911,
+       0.198771
+      ],
+      "n_defaulted": 1253,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 1.2145,
+     "slope_ci": [
+      1.1209,
+      1.308
+     ],
+     "intercept": 0.6881,
+     "intercept_ci": [
+      0.3487,
+      1.0275
+     ],
+     "n_clusters": 1380,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "high_risk": {
+     "n": 1047,
+     "n_defaulted": 1012,
+     "predicted": 0.894611,
+     "observed": 0.966571,
+     "observed_ci": [
+      0.953864,
+      0.975867
+     ],
+     "ci_width": 0.022,
+     "informative": true,
+     "note": ""
+    }
+   }
+  },
+  {
+   "cell": "MSME-TL",
+   "n": 39013,
+   "n_accounts": 1127,
+   "n_defaulted": 1448,
+   "base_rate": 0.037116,
+   "decision_score": {
+    "brier": 0.021703,
+    "ece": 0.006488,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 3902,
+      "predicted": 0.003412,
+      "observed": 0.006151,
+      "observed_ci": [
+       0.004137,
+       0.009136
+      ],
+      "n_defaulted": 24,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 3901,
+      "predicted": 0.005418,
+      "observed": 0.009741,
+      "observed_ci": [
+       0.007105,
+       0.013341
+      ],
+      "n_defaulted": 38,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 3901,
+      "predicted": 0.007049,
+      "observed": 0.008459,
+      "observed_ci": [
+       0.00603,
+       0.011856
+      ],
+      "n_defaulted": 33,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 3901,
+      "predicted": 0.008707,
+      "observed": 0.011536,
+      "observed_ci": [
+       0.008633,
+       0.0154
+      ],
+      "n_defaulted": 45,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 3901,
+      "predicted": 0.010723,
+      "observed": 0.014355,
+      "observed_ci": [
+       0.011072,
+       0.018594
+      ],
+      "n_defaulted": 56,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 3902,
+      "predicted": 0.013272,
+      "observed": 0.011533,
+      "observed_ci": [
+       0.00863,
+       0.015396
+      ],
+      "n_defaulted": 45,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 3901,
+      "predicted": 0.01659,
+      "observed": 0.016919,
+      "observed_ci": [
+       0.013321,
+       0.021467
+      ],
+      "n_defaulted": 66,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 3901,
+      "predicted": 0.021803,
+      "observed": 0.017944,
+      "observed_ci": [
+       0.014228,
+       0.022609
+      ],
+      "n_defaulted": 70,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 3901,
+      "predicted": 0.032114,
+      "observed": 0.035119,
+      "observed_ci": [
+       0.029785,
+       0.041368
+      ],
+      "n_defaulted": 137,
+      "informative": true
+     },
+     {
+      "bin": 10,
+      "n": 3902,
+      "predicted": 0.198356,
+      "observed": 0.239364,
+      "observed_ci": [
+       0.226237,
+       0.253005
+      ],
+      "n_defaulted": 934,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 1.1979,
+     "slope_ci": [
+      1.1054,
+      1.2904
+     ],
+     "intercept": 0.8481,
+     "intercept_ci": [
+      0.5179,
+      1.1783
+     ],
+     "n_clusters": 1127,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "high_risk": {
+     "n": 638,
+     "n_defaulted": 589,
+     "predicted": 0.759551,
+     "observed": 0.923197,
+     "observed_ci": [
+      0.899909,
+      0.94142
+     ],
+     "ci_width": 0.0415,
+     "informative": true,
+     "note": ""
+    },
+    "high_risk_snapshot": {
+     "n": 24,
+     "n_defaulted": 19,
+     "predicted": 0.6792,
+     "observed": 0.791667,
+     "observed_ci": [
+      0.595295,
+      0.907552
+     ],
+     "ci_width": 0.3123,
+     "informative": false,
+     "horizon_months": 8,
+     "note": "n=24 accounts \u2014 the interval spans 31%; one account moves it by 4%, so this cell cannot support a calibration claim"
+    }
+   },
+   "pd_calibrated": {
+    "brier": 0.020708,
+    "ece": 0.001707,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 2496,
+      "predicted": 0.005098,
+      "observed": 0.004407,
+      "observed_ci": [
+       0.002463,
+       0.007875
+      ],
+      "n_defaulted": 11,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 2554,
+      "predicted": 0.006667,
+      "observed": 0.007831,
+      "observed_ci": [
+       0.005075,
+       0.012065
+      ],
+      "n_defaulted": 20,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 2877,
+      "predicted": 0.008277,
+      "observed": 0.01147,
+      "observed_ci": [
+       0.008179,
+       0.016064
+      ],
+      "n_defaulted": 33,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 5273,
+      "predicted": 0.00847,
+      "observed": 0.008724,
+      "observed_ci": [
+       0.006547,
+       0.011616
+      ],
+      "n_defaulted": 46,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 6051,
+      "predicted": 0.010868,
+      "observed": 0.01289,
+      "observed_ci": [
+       0.010341,
+       0.016058
+      ],
+      "n_defaulted": 78,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 3796,
+      "predicted": 0.013785,
+      "observed": 0.011855,
+      "observed_ci": [
+       0.008872,
+       0.015825
+      ],
+      "n_defaulted": 45,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 3390,
+      "predicted": 0.016671,
+      "observed": 0.017699,
+      "observed_ci": [
+       0.013775,
+       0.022715
+      ],
+      "n_defaulted": 60,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 3141,
+      "predicted": 0.018975,
+      "observed": 0.01751,
+      "observed_ci": [
+       0.013478,
+       0.022722
+      ],
+      "n_defaulted": 55,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 4964,
+      "predicted": 0.025962,
+      "observed": 0.027196,
+      "observed_ci": [
+       0.023024,
+       0.032099
+      ],
+      "n_defaulted": 135,
+      "informative": true
+     },
+     {
+      "bin": 10,
+      "n": 4471,
+      "predicted": 0.2119,
+      "observed": 0.215835,
+      "observed_ci": [
+       0.204023,
+       0.228136
+      ],
+      "n_defaulted": 965,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 0.9931,
+     "slope_ci": [
+      0.906,
+      1.0802
+     ],
+     "intercept": 0.0281,
+     "intercept_ci": [
+      -0.3303,
+      0.3866
+     ],
+     "n_clusters": 1127,
+     "slope_differs_from_1": false,
+     "reading": "no detectable departure from slope 1 on this cell"
+    },
+    "high_risk": {
+     "n": 806,
+     "n_defaulted": 677,
+     "predicted": 0.834562,
+     "observed": 0.83995,
+     "observed_ci": [
+      0.813034,
+      0.863642
+     ],
+     "ci_width": 0.0506,
+     "informative": true,
+     "note": ""
+    }
+   }
+  },
+  {
+   "cell": "Retail-Unsecured",
+   "n": 47125,
+   "n_accounts": 1349,
+   "n_defaulted": 1174,
+   "base_rate": 0.024912,
+   "decision_score": {
+    "brier": 0.018416,
+    "ece": 0.00616,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 4713,
+      "predicted": 0.00211,
+      "observed": 0.002758,
+      "observed_ci": [
+       0.001613,
+       0.004714
+      ],
+      "n_defaulted": 13,
+      "informative": true
+     },
+     {
+      "bin": 2,
+      "n": 4712,
+      "predicted": 0.00327,
+      "observed": 0.00573,
+      "observed_ci": [
+       0.003941,
+       0.008324
+      ],
+      "n_defaulted": 27,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 4713,
+      "predicted": 0.004228,
+      "observed": 0.010821,
+      "observed_ci": [
+       0.00824,
+       0.014199
+      ],
+      "n_defaulted": 51,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 4712,
+      "predicted": 0.005191,
+      "observed": 0.008277,
+      "observed_ci": [
+       0.006061,
+       0.011294
+      ],
+      "n_defaulted": 39,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 4712,
+      "predicted": 0.006316,
+      "observed": 0.012097,
+      "observed_ci": [
+       0.009349,
+       0.015639
+      ],
+      "n_defaulted": 57,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 4713,
+      "predicted": 0.007781,
+      "observed": 0.012094,
+      "observed_ci": [
+       0.009347,
+       0.015636
+      ],
+      "n_defaulted": 57,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 4712,
+      "predicted": 0.009947,
+      "observed": 0.012097,
+      "observed_ci": [
+       0.009349,
+       0.015639
+      ],
+      "n_defaulted": 57,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 4713,
+      "predicted": 0.013572,
+      "observed": 0.01655,
+      "observed_ci": [
+       0.013282,
+       0.020606
+      ],
+      "n_defaulted": 78,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 4712,
+      "predicted": 0.021564,
+      "observed": 0.02101,
+      "observed_ci": [
+       0.017289,
+       0.025512
+      ],
+      "n_defaulted": 99,
+      "informative": true
+     },
+     {
+      "bin": 10,
+      "n": 4713,
+      "predicted": 0.114645,
+      "observed": 0.147677,
+      "observed_ci": [
+       0.137835,
+       0.158092
+      ],
+      "n_defaulted": 696,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 1.0537,
+     "slope_ci": [
+      0.9674,
+      1.1399
+     ],
+     "intercept": 0.537,
+     "intercept_ci": [
+      0.1937,
+      0.8803
+     ],
+     "n_clusters": 1349,
+     "slope_differs_from_1": false,
+     "reading": "no detectable departure from slope 1 on this cell"
+    },
+    "high_risk": {
+     "n": 357,
+     "n_defaulted": 293,
+     "predicted": 0.628412,
+     "observed": 0.820728,
+     "observed_ci": [
+      0.77759,
+      0.857038
+     ],
+     "ci_width": 0.0794,
+     "informative": true,
+     "note": ""
+    },
+    "high_risk_snapshot": {
+     "n": 7,
+     "n_defaulted": 5,
+     "predicted": 0.632959,
+     "observed": 0.714286,
+     "observed_ci": [
+      0.358934,
+      0.917781
+     ],
+     "ci_width": 0.5588,
+     "informative": false,
+     "horizon_months": 8,
+     "note": "n=7 accounts \u2014 the interval spans 56%; one account moves it by 14%, so this cell cannot support a calibration claim"
+    }
+   },
+   "pd_calibrated": {
+    "brier": 0.018045,
+    "ece": 0.002321,
+    "reliability": [
+     {
+      "bin": 1,
+      "n": 11,
+      "predicted": 0.0,
+      "observed": 0.0,
+      "observed_ci": [
+       0.0,
+       0.258833
+      ],
+      "n_defaulted": 0,
+      "informative": false
+     },
+     {
+      "bin": 2,
+      "n": 6110,
+      "predicted": 0.004175,
+      "observed": 0.003601,
+      "observed_ci": [
+       0.002379,
+       0.005446
+      ],
+      "n_defaulted": 22,
+      "informative": true
+     },
+     {
+      "bin": 3,
+      "n": 3651,
+      "predicted": 0.005993,
+      "observed": 0.005752,
+      "observed_ci": [
+       0.003765,
+       0.008777
+      ],
+      "n_defaulted": 21,
+      "informative": true
+     },
+     {
+      "bin": 4,
+      "n": 6193,
+      "predicted": 0.006667,
+      "observed": 0.010496,
+      "observed_ci": [
+       0.008244,
+       0.013355
+      ],
+      "n_defaulted": 65,
+      "informative": true
+     },
+     {
+      "bin": 5,
+      "n": 5306,
+      "predicted": 0.008277,
+      "observed": 0.009423,
+      "observed_ci": [
+       0.007155,
+       0.012401
+      ],
+      "n_defaulted": 50,
+      "informative": true
+     },
+     {
+      "bin": 6,
+      "n": 6554,
+      "predicted": 0.00847,
+      "observed": 0.011749,
+      "observed_ci": [
+       0.009411,
+       0.014658
+      ],
+      "n_defaulted": 77,
+      "informative": true
+     },
+     {
+      "bin": 7,
+      "n": 4632,
+      "predicted": 0.010485,
+      "observed": 0.013385,
+      "observed_ci": [
+       0.010456,
+       0.017121
+      ],
+      "n_defaulted": 62,
+      "informative": true
+     },
+     {
+      "bin": 8,
+      "n": 5130,
+      "predicted": 0.014154,
+      "observed": 0.015595,
+      "observed_ci": [
+       0.012548,
+       0.019366
+      ],
+      "n_defaulted": 80,
+      "informative": true
+     },
+     {
+      "bin": 9,
+      "n": 4733,
+      "predicted": 0.019996,
+      "observed": 0.020494,
+      "observed_ci": [
+       0.01683,
+       0.024937
+      ],
+      "n_defaulted": 97,
+      "informative": true
+     },
+     {
+      "bin": 10,
+      "n": 4805,
+      "predicted": 0.13933,
+      "observed": 0.145682,
+      "observed_ci": [
+       0.13599,
+       0.15594
+      ],
+      "n_defaulted": 700,
+      "informative": true
+     }
+    ],
+    "cox": {
+     "slope": 0.9325,
+     "slope_ci": [
+      0.8542,
+      1.0108
+     ],
+     "intercept": -0.0952,
+     "intercept_ci": [
+      -0.4525,
+      0.2621
+     ],
+     "n_clusters": 1349,
+     "slope_differs_from_1": false,
+     "reading": "no detectable departure from slope 1 on this cell"
+    },
+    "high_risk": {
+     "n": 523,
+     "n_defaulted": 362,
+     "predicted": 0.735427,
+     "observed": 0.692161,
+     "observed_ci": [
+      0.651318,
+      0.7302
+     ],
+     "ci_width": 0.0789,
+     "informative": true,
+     "note": ""
+    }
+   }
+  }
+ ]
+}
