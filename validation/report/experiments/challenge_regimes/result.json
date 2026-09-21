@@ -1,0 +1,811 @@
+{
+ "experiment": "challenge_regimes",
+ "question": "How does the SHIPPED model behave on generator regimes it was never fitted to, with nothing retuned afterwards?",
+ "model_seed": 7,
+ "development_generator_seed": 20260709,
+ "no_retuning": "No generator parameter was adjusted after seeing any result below, and no threshold was re-derived. The artefact is the one the cockpit ships.",
+ "panel_shape": {
+  "n_accounts": 9000,
+  "months": 36
+ },
+ "artefact": {
+  "policy_version": "drishti-policy-2.0",
+  "split_seed": 7,
+  "policy_fold_fraction": 0.3,
+  "smooth_window": 4,
+  "reference_month_idx": 24,
+  "policy_month_idx": 24,
+  "horizon_months": 8,
+  "panel": "data/msme_loan_panel.csv",
+  "panel_sha256": "7e0e3ab0855a25d0c3569f6911b76c8889458fc69eece9f4e297eacec1809332",
+  "panel_rows": 2039678,
+  "panel_accounts": 45000,
+  "n_fit_accounts": 22050,
+  "n_policy_accounts": 9450,
+  "n_test_accounts": 13500,
+  "n_fit_rows_used": 762376,
+  "eligibility": "labelable == 1",
+  "thresholds": {
+   "amber": 0.069298,
+   "red": 0.343723,
+   "applied": "cost_minimising"
+  },
+  "shipped_thresholds": {
+   "amber": 0.069298,
+   "red": 0.343723
+  },
+  "reproduces_shipped_thresholds": true,
+  "versions": {
+   "lightgbm": "4.6.0",
+   "scikit_learn": "1.8.0",
+   "numpy": "2.4.4",
+   "pandas": "3.0.2"
+  },
+  "note": "Trained by validation/experiments/artefact.py with the exporter's own CAT/DROP/split/hyperparameters, imported rather than restated. `reproduces_shipped_thresholds` records whether this fit lands on the same operating point the committed export shipped; a False there means the two have diverged and every experiment below is describing a different model from the one in the cockpit."
+ },
+ "thresholds": {
+  "amber": 0.069298,
+  "red": 0.343723
+ },
+ "control_band": {
+  "auc": {
+   "lo": 0.8631,
+   "hi": 0.8709,
+   "width": 0.0078,
+   "n": 3
+  },
+  "red_precision": {
+   "lo": 0.8258,
+   "hi": 0.8571,
+   "width": 0.0313,
+   "n": 3
+  },
+  "missed_npa_share": {
+   "lo": 0.1697,
+   "hi": 0.195,
+   "width": 0.0253,
+   "n": 3
+  },
+  "flagged_share": {
+   "lo": 0.0571,
+   "hi": 0.0607,
+   "width": 0.0036,
+   "n": 3
+  },
+  "ece_served": {
+   "lo": 0.0043,
+   "hi": 0.0059,
+   "width": 0.0015,
+   "n": 3
+  }
+ },
+ "control_band_note": "the range spanned by three development-parameter panels differing only in generator seed. A regime inside this range has moved a metric no further than the seed alone does.",
+ "regimes": {
+  "unseen_seed": {
+   "regime": "unseen_seed",
+   "generator_seed": 20260931,
+   "mechanism": "generator seed only",
+   "why": "the control: how much does a metric move when NOTHING but the seed changes? A regime that moves a number less than this has shown nothing.",
+   "n_rows": 312380,
+   "n_accounts": 9000,
+   "n_eligible_rows": 211760,
+   "base_rate_12m": 0.032509,
+   "auc": 0.8657,
+   "calibration": {
+    "brier_served": 0.018961,
+    "ece_served": 0.004335,
+    "cox_served": {
+     "slope": 1.1566,
+     "slope_ci": [
+      1.1202,
+      1.193
+     ],
+     "intercept": 0.6104,
+     "intercept_ci": [
+      0.482,
+      0.7389
+     ],
+     "n_clusters": 9000,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "brier_calibrated": 0.018441,
+    "ece_calibrated": 0.0023
+   },
+   "snapshot": {
+    "month_idx": 23,
+    "n_accounts": 8548,
+    "n_bad_8m": 200,
+    "red_n": 155,
+    "red_hits": 128,
+    "red_precision": 0.8258,
+    "red_precision_ci": [
+     0.7584,
+     0.8774
+    ],
+    "missed_npa_share": 0.195,
+    "flagged_share": 0.0607
+   },
+   "simulated_cost": {
+    "expected_cost_inr": 73143584.97,
+    "per_account_inr": 8556.81,
+    "label": "SIMULATION RESULT at the frozen operating point, on a synthetic book",
+    "caveat": "Not a projected bank saving. Every cost parameter is an ASSUMPTION (src/costs.py PARAM_NOTES); the book is synthetic; and the regime's own parameters are deliberately outside the development setting. Compare regimes to each other, never read the absolute figure as rupees the bank would keep."
+   },
+   "vs_control": {
+    "auc_delta": 0.0,
+    "red_precision_delta": 0.0,
+    "missed_npa_delta": 0.0,
+    "flagged_delta": 0.0,
+    "ece_delta": 0.0
+   },
+   "beyond_seed_noise": {
+    "auc": false,
+    "red_precision": false,
+    "missed_npa_share": false,
+    "flagged_share": false,
+    "ece_served": false
+   }
+  },
+  "unseen_seed_b": {
+   "regime": "unseen_seed_b",
+   "generator_seed": 20260941,
+   "mechanism": "generator seed only (control replicate)",
+   "why": "a second control. One control gives a point; three give a BAND, and without that band no single-seed regime difference below is readable.",
+   "n_rows": 311110,
+   "n_accounts": 9000,
+   "n_eligible_rows": 211323,
+   "base_rate_12m": 0.036182,
+   "auc": 0.8631,
+   "calibration": {
+    "brier_served": 0.020397,
+    "ece_served": 0.005548,
+    "cox_served": {
+     "slope": 1.1506,
+     "slope_ci": [
+      1.1139,
+      1.1873
+     ],
+     "intercept": 0.688,
+     "intercept_ci": [
+      0.5641,
+      0.812
+     ],
+     "n_clusters": 9000,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "brier_calibrated": 0.019617,
+    "ece_calibrated": 0.002056
+   },
+   "snapshot": {
+    "month_idx": 23,
+    "n_accounts": 8500,
+    "n_bad_8m": 221,
+    "red_n": 162,
+    "red_hits": 138,
+    "red_precision": 0.8519,
+    "red_precision_ci": [
+     0.789,
+     0.8984
+    ],
+    "missed_npa_share": 0.19,
+    "flagged_share": 0.0601
+   },
+   "simulated_cost": {
+    "expected_cost_inr": 52957703.87,
+    "per_account_inr": 6230.32,
+    "label": "SIMULATION RESULT at the frozen operating point, on a synthetic book",
+    "caveat": "Not a projected bank saving. Every cost parameter is an ASSUMPTION (src/costs.py PARAM_NOTES); the book is synthetic; and the regime's own parameters are deliberately outside the development setting. Compare regimes to each other, never read the absolute figure as rupees the bank would keep."
+   },
+   "vs_control": {
+    "auc_delta": -0.0026,
+    "red_precision_delta": 0.0261,
+    "missed_npa_delta": -0.005,
+    "flagged_delta": -0.0006,
+    "ece_delta": 0.0012
+   },
+   "beyond_seed_noise": {
+    "auc": false,
+    "red_precision": false,
+    "missed_npa_share": false,
+    "flagged_share": false,
+    "ece_served": false
+   }
+  },
+  "unseen_seed_c": {
+   "regime": "unseen_seed_c",
+   "generator_seed": 20260942,
+   "mechanism": "generator seed only (control replicate)",
+   "why": "a third control, for the same reason.",
+   "n_rows": 310747,
+   "n_accounts": 9000,
+   "n_eligible_rows": 211230,
+   "base_rate_12m": 0.037675,
+   "auc": 0.8709,
+   "calibration": {
+    "brier_served": 0.02082,
+    "ece_served": 0.005878,
+    "cox_served": {
+     "slope": 1.1698,
+     "slope_ci": [
+      1.1336,
+      1.206
+     ],
+     "intercept": 0.7745,
+     "intercept_ci": [
+      0.651,
+      0.8979
+     ],
+     "n_clusters": 9000,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "brier_calibrated": 0.019955,
+    "ece_calibrated": 0.001175
+   },
+   "snapshot": {
+    "month_idx": 23,
+    "n_accounts": 8474,
+    "n_bad_8m": 218,
+    "red_n": 175,
+    "red_hits": 150,
+    "red_precision": 0.8571,
+    "red_precision_ci": [
+     0.7976,
+     0.9013
+    ],
+    "missed_npa_share": 0.1697,
+    "flagged_share": 0.0571
+   },
+   "simulated_cost": {
+    "expected_cost_inr": 88656976.16,
+    "per_account_inr": 10462.23,
+    "label": "SIMULATION RESULT at the frozen operating point, on a synthetic book",
+    "caveat": "Not a projected bank saving. Every cost parameter is an ASSUMPTION (src/costs.py PARAM_NOTES); the book is synthetic; and the regime's own parameters are deliberately outside the development setting. Compare regimes to each other, never read the absolute figure as rupees the bank would keep."
+   },
+   "vs_control": {
+    "auc_delta": 0.0052,
+    "red_precision_delta": 0.0313,
+    "missed_npa_delta": -0.0253,
+    "flagged_delta": -0.0036,
+    "ece_delta": 0.0015
+   },
+   "beyond_seed_noise": {
+    "auc": false,
+    "red_precision": false,
+    "missed_npa_share": false,
+    "flagged_share": false,
+    "ece_served": false
+   }
+  },
+  "base_rate_up": {
+   "regime": "base_rate_up",
+   "generator_seed": 20260932,
+   "mechanism": "risk_intercept -2.35 -> -1.75",
+   "why": "a materially worse book. Base rate is the first thing that differs between a simulator and a real portfolio, and between one bank's book and another's.",
+   "n_rows": 303622,
+   "n_accounts": 9000,
+   "n_eligible_rows": 208526,
+   "base_rate_12m": 0.057417,
+   "auc": 0.8683,
+   "calibration": {
+    "brier_served": 0.032428,
+    "ece_served": 0.019944,
+    "cox_served": {
+     "slope": 1.1469,
+     "slope_ci": [
+      1.1145,
+      1.1793
+     ],
+     "intercept": 1.2119,
+     "intercept_ci": [
+      1.0943,
+      1.3294
+     ],
+     "n_clusters": 9000,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "brier_calibrated": 0.030287,
+    "ece_calibrated": 0.01329
+   },
+   "snapshot": {
+    "month_idx": 23,
+    "n_accounts": 8223,
+    "n_bad_8m": 365,
+    "red_n": 250,
+    "red_hits": 218,
+    "red_precision": 0.872,
+    "red_precision_ci": [
+     0.8249,
+     0.9079
+    ],
+    "missed_npa_share": 0.1616,
+    "flagged_share": 0.0743
+   },
+   "simulated_cost": {
+    "expected_cost_inr": 130758911.47,
+    "per_account_inr": 15901.61,
+    "label": "SIMULATION RESULT at the frozen operating point, on a synthetic book",
+    "caveat": "Not a projected bank saving. Every cost parameter is an ASSUMPTION (src/costs.py PARAM_NOTES); the book is synthetic; and the regime's own parameters are deliberately outside the development setting. Compare regimes to each other, never read the absolute figure as rupees the bank would keep."
+   },
+   "vs_control": {
+    "auc_delta": 0.0026,
+    "red_precision_delta": 0.0462,
+    "missed_npa_delta": -0.0334,
+    "flagged_delta": 0.0136,
+    "ece_delta": 0.0156
+   },
+   "beyond_seed_noise": {
+    "auc": false,
+    "red_precision": true,
+    "missed_npa_share": true,
+    "flagged_share": true,
+    "ece_served": true
+   }
+  },
+  "base_rate_down": {
+   "regime": "base_rate_down",
+   "generator_seed": 20260933,
+   "mechanism": "risk_intercept -2.35 -> -3.05",
+   "why": "a benign book. Rarity is its own difficulty: precision falls when positives are scarce even if ranking is unchanged.",
+   "n_rows": 316640,
+   "n_accounts": 9000,
+   "n_eligible_rows": 213175,
+   "base_rate_12m": 0.019571,
+   "auc": 0.8761,
+   "calibration": {
+    "brier_served": 0.011652,
+    "ece_served": 0.006168,
+    "cox_served": {
+     "slope": 1.2081,
+     "slope_ci": [
+      1.1641,
+      1.2522
+     ],
+     "intercept": 0.1917,
+     "intercept_ci": [
+      0.042,
+      0.3414
+     ],
+     "n_clusters": 9000,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "brier_calibrated": 0.011921,
+    "ece_calibrated": 0.010135
+   },
+   "snapshot": {
+    "month_idx": 23,
+    "n_accounts": 8712,
+    "n_bad_8m": 112,
+    "red_n": 99,
+    "red_hits": 74,
+    "red_precision": 0.7475,
+    "red_precision_ci": [
+     0.6538,
+     0.8227
+    ],
+    "missed_npa_share": 0.0982,
+    "flagged_share": 0.0469
+   },
+   "simulated_cost": {
+    "expected_cost_inr": 51795422.33,
+    "per_account_inr": 5945.3,
+    "label": "SIMULATION RESULT at the frozen operating point, on a synthetic book",
+    "caveat": "Not a projected bank saving. Every cost parameter is an ASSUMPTION (src/costs.py PARAM_NOTES); the book is synthetic; and the regime's own parameters are deliberately outside the development setting. Compare regimes to each other, never read the absolute figure as rupees the bank would keep."
+   },
+   "vs_control": {
+    "auc_delta": 0.0104,
+    "red_precision_delta": -0.0783,
+    "missed_npa_delta": -0.0968,
+    "flagged_delta": -0.0138,
+    "ece_delta": 0.0018
+   },
+   "beyond_seed_noise": {
+    "auc": true,
+    "red_precision": true,
+    "missed_npa_share": true,
+    "flagged_share": true,
+    "ece_served": true
+   }
+  },
+  "noisier_borrowers": {
+   "regime": "noisier_borrowers",
+   "generator_seed": 20260934,
+   "mechanism": "risk_noise_sd 1.15 -> 1.60",
+   "why": "weaker signal-to-noise in who eventually defaults \u2014 the irreducible-randomness term the development generator was tuned against.",
+   "n_rows": 309828,
+   "n_accounts": 9000,
+   "n_eligible_rows": 210894,
+   "base_rate_12m": 0.040328,
+   "auc": 0.8707,
+   "calibration": {
+    "brier_served": 0.022535,
+    "ece_served": 0.007223,
+    "cox_served": {
+     "slope": 1.1554,
+     "slope_ci": [
+      1.1197,
+      1.1911
+     ],
+     "intercept": 0.7856,
+     "intercept_ci": [
+      0.6624,
+      0.9088
+     ],
+     "n_clusters": 9000,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "brier_calibrated": 0.021582,
+    "ece_calibrated": 0.001705
+   },
+   "snapshot": {
+    "month_idx": 23,
+    "n_accounts": 8445,
+    "n_bad_8m": 242,
+    "red_n": 186,
+    "red_hits": 157,
+    "red_precision": 0.8441,
+    "red_precision_ci": [
+     0.7851,
+     0.8892
+    ],
+    "missed_npa_share": 0.1488,
+    "flagged_share": 0.0647
+   },
+   "simulated_cost": {
+    "expected_cost_inr": 69634640.41,
+    "per_account_inr": 8245.66,
+    "label": "SIMULATION RESULT at the frozen operating point, on a synthetic book",
+    "caveat": "Not a projected bank saving. Every cost parameter is an ASSUMPTION (src/costs.py PARAM_NOTES); the book is synthetic; and the regime's own parameters are deliberately outside the development setting. Compare regimes to each other, never read the absolute figure as rupees the bank would keep."
+   },
+   "vs_control": {
+    "auc_delta": 0.005,
+    "red_precision_delta": 0.0183,
+    "missed_npa_delta": -0.0462,
+    "flagged_delta": 0.004,
+    "ece_delta": 0.0029
+   },
+   "beyond_seed_noise": {
+    "auc": false,
+    "red_precision": false,
+    "missed_npa_share": true,
+    "flagged_share": true,
+    "ece_served": true
+   }
+  },
+  "heavy_missingness": {
+   "regime": "heavy_missingness",
+   "generator_seed": 20260935,
+   "mechanism": "statement_gap_share 0.080 -> 0.240",
+   "why": "three times the statement-feed gaps. A real extract is patchier than a simulator's, and the model must degrade gracefully rather than cliff.",
+   "n_rows": 311273,
+   "n_accounts": 9000,
+   "n_eligible_rows": 211328,
+   "base_rate_12m": 0.035736,
+   "auc": 0.875,
+   "calibration": {
+    "brier_served": 0.019883,
+    "ece_served": 0.004615,
+    "cox_served": {
+     "slope": 1.1774,
+     "slope_ci": [
+      1.1405,
+      1.2142
+     ],
+     "intercept": 0.7262,
+     "intercept_ci": [
+      0.5994,
+      0.853
+     ],
+     "n_clusters": 9000,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "brier_calibrated": 0.019128,
+    "ece_calibrated": 0.001813
+   },
+   "snapshot": {
+    "month_idx": 23,
+    "n_accounts": 8494,
+    "n_bad_8m": 200,
+    "red_n": 160,
+    "red_hits": 135,
+    "red_precision": 0.8438,
+    "red_precision_ci": [
+     0.7795,
+     0.8919
+    ],
+    "missed_npa_share": 0.145,
+    "flagged_share": 0.056
+   },
+   "simulated_cost": {
+    "expected_cost_inr": 54090141.93,
+    "per_account_inr": 6368.04,
+    "label": "SIMULATION RESULT at the frozen operating point, on a synthetic book",
+    "caveat": "Not a projected bank saving. Every cost parameter is an ASSUMPTION (src/costs.py PARAM_NOTES); the book is synthetic; and the regime's own parameters are deliberately outside the development setting. Compare regimes to each other, never read the absolute figure as rupees the bank would keep."
+   },
+   "vs_control": {
+    "auc_delta": 0.0093,
+    "red_precision_delta": 0.018,
+    "missed_npa_delta": -0.05,
+    "flagged_delta": -0.0047,
+    "ece_delta": 0.0003
+   },
+   "beyond_seed_noise": {
+    "auc": true,
+    "red_precision": false,
+    "missed_npa_share": true,
+    "flagged_share": true,
+    "ece_served": false
+   }
+  },
+  "stale_sources": {
+   "regime": "stale_sources",
+   "generator_seed": 20260936,
+   "mechanism": "bureau lag +3 months, refresh interval doubled",
+   "why": "source latency: the bureau score the bank carries is older and refreshed less often than the development panel assumes.",
+   "n_rows": 310488,
+   "n_accounts": 9000,
+   "n_eligible_rows": 210951,
+   "base_rate_12m": 0.037184,
+   "auc": 0.8659,
+   "calibration": {
+    "brier_served": 0.021092,
+    "ece_served": 0.006605,
+    "cox_served": {
+     "slope": 1.1712,
+     "slope_ci": [
+      1.133,
+      1.2094
+     ],
+     "intercept": 0.7853,
+     "intercept_ci": [
+      0.6553,
+      0.9152
+     ],
+     "n_clusters": 9000,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "brier_calibrated": 0.020116,
+    "ece_calibrated": 0.0011
+   },
+   "snapshot": {
+    "month_idx": 23,
+    "n_accounts": 8483,
+    "n_bad_8m": 225,
+    "red_n": 160,
+    "red_hits": 143,
+    "red_precision": 0.8938,
+    "red_precision_ci": [
+     0.8364,
+     0.9326
+    ],
+    "missed_npa_share": 0.1689,
+    "flagged_share": 0.0582
+   },
+   "simulated_cost": {
+    "expected_cost_inr": 86567755.45,
+    "per_account_inr": 10204.85,
+    "label": "SIMULATION RESULT at the frozen operating point, on a synthetic book",
+    "caveat": "Not a projected bank saving. Every cost parameter is an ASSUMPTION (src/costs.py PARAM_NOTES); the book is synthetic; and the regime's own parameters are deliberately outside the development setting. Compare regimes to each other, never read the absolute figure as rupees the bank would keep."
+   },
+   "vs_control": {
+    "auc_delta": 0.0002,
+    "red_precision_delta": 0.068,
+    "missed_npa_delta": -0.0261,
+    "flagged_delta": -0.0025,
+    "ece_delta": 0.0023
+   },
+   "beyond_seed_noise": {
+    "auc": false,
+    "red_precision": true,
+    "missed_npa_share": true,
+    "flagged_share": false,
+    "ece_served": true
+   }
+  },
+  "more_silent_defaults": {
+   "regime": "more_silent_defaults",
+   "generator_seed": 20260937,
+   "mechanism": "silent_book_share 0.080 -> 0.160",
+   "why": "twice the share of defaults that arrive with no warning chain at all. This is the population an early-warning model is structurally unable to catch, and the honest question is how fast recall falls as it grows.",
+   "n_rows": 310580,
+   "n_accounts": 9000,
+   "n_eligible_rows": 211067,
+   "base_rate_12m": 0.037666,
+   "auc": 0.8785,
+   "calibration": {
+    "brier_served": 0.020263,
+    "ece_served": 0.005584,
+    "cox_served": {
+     "slope": 1.1884,
+     "slope_ci": [
+      1.1526,
+      1.2241
+     ],
+     "intercept": 0.792,
+     "intercept_ci": [
+      0.669,
+      0.9149
+     ],
+     "n_clusters": 9000,
+     "slope_differs_from_1": true,
+     "reading": "under-confident: the score spreads risk narrower than the outcomes do"
+    },
+    "brier_calibrated": 0.019294,
+    "ece_calibrated": 0.001596
+   },
+   "snapshot": {
+    "month_idx": 23,
+    "n_accounts": 8469,
+    "n_bad_8m": 215,
+    "red_n": 173,
+    "red_hits": 149,
+    "red_precision": 0.8613,
+    "red_precision_ci": [
+     0.8019,
+     0.905
+    ],
+    "missed_npa_share": 0.1628,
+    "flagged_share": 0.0575
+   },
+   "simulated_cost": {
+    "expected_cost_inr": 69810967.64,
+    "per_account_inr": 8243.12,
+    "label": "SIMULATION RESULT at the frozen operating point, on a synthetic book",
+    "caveat": "Not a projected bank saving. Every cost parameter is an ASSUMPTION (src/costs.py PARAM_NOTES); the book is synthetic; and the regime's own parameters are deliberately outside the development setting. Compare regimes to each other, never read the absolute figure as rupees the bank would keep."
+   },
+   "vs_control": {
+    "auc_delta": 0.0128,
+    "red_precision_delta": 0.0355,
+    "missed_npa_delta": -0.0322,
+    "flagged_delta": -0.0032,
+    "ece_delta": 0.0012
+   },
+   "beyond_seed_noise": {
+    "auc": true,
+    "red_precision": true,
+    "missed_npa_share": true,
+    "flagged_share": false,
+    "ece_served": false
+   }
+  },
+  "abrupt_onset": {
+   "regime": "abrupt_onset",
+   "generator_seed": 20260938,
+   "mechanism": "onset_mean 13 -> 7, onset_bounds (5,18) -> (3,10)",
+   "why": "stress that develops in half the time. Lead time is the product's whole claim, so a book that deteriorates abruptly is its hardest case.",
+   "n_rows": 311530,
+   "n_accounts": 9000,
+   "n_eligible_rows": 211446,
+   "base_rate_12m": 0.034874,
+   "auc": 0.7709,
+   "calibration": {
+    "brier_served": 0.026795,
+    "ece_served": 0.009888,
+    "cox_served": {
+     "slope": 0.8995,
+     "slope_ci": [
+      0.8675,
+      0.9316
+     ],
+     "intercept": 0.1097,
+     "intercept_ci": [
+      -0.0172,
+      0.2365
+     ],
+     "n_clusters": 9000,
+     "slope_differs_from_1": true,
+     "reading": "over-confident: the score spreads risk wider than the outcomes do"
+    },
+    "brier_calibrated": 0.026716,
+    "ece_calibrated": 0.009567
+   },
+   "snapshot": {
+    "month_idx": 23,
+    "n_accounts": 8512,
+    "n_bad_8m": 210,
+    "red_n": 101,
+    "red_hits": 79,
+    "red_precision": 0.7822,
+    "red_precision_ci": [
+     0.6922,
+     0.8515
+    ],
+    "missed_npa_share": 0.4143,
+    "flagged_share": 0.0512
+   },
+   "simulated_cost": {
+    "expected_cost_inr": 74863018.21,
+    "per_account_inr": 8795.0,
+    "label": "SIMULATION RESULT at the frozen operating point, on a synthetic book",
+    "caveat": "Not a projected bank saving. Every cost parameter is an ASSUMPTION (src/costs.py PARAM_NOTES); the book is synthetic; and the regime's own parameters are deliberately outside the development setting. Compare regimes to each other, never read the absolute figure as rupees the bank would keep."
+   },
+   "vs_control": {
+    "auc_delta": -0.0948,
+    "red_precision_delta": -0.0436,
+    "missed_npa_delta": 0.2193,
+    "flagged_delta": -0.0095,
+    "ece_delta": 0.0056
+   },
+   "beyond_seed_noise": {
+    "auc": true,
+    "red_precision": true,
+    "missed_npa_share": true,
+    "flagged_share": true,
+    "ece_served": true
+   }
+  },
+  "macro_shock": {
+   "regime": "macro_shock",
+   "generator_seed": 20260939,
+   "mechanism": "risk_intercept -1.75 + abrupt onset + 3x statement gaps, together",
+   "why": "a compound downturn: more borrowers go bad, they go bad faster, and the data feed degrades at the same time \u2014 which is what actually happens in a shock.",
+   "n_rows": 303223,
+   "n_accounts": 9000,
+   "n_eligible_rows": 208266,
+   "base_rate_12m": 0.057883,
+   "auc": 0.7548,
+   "calibration": {
+    "brier_served": 0.043737,
+    "ece_served": 0.02964,
+    "cox_served": {
+     "slope": 0.8637,
+     "slope_ci": [
+      0.8365,
+      0.8909
+     ],
+     "intercept": 0.5434,
+     "intercept_ci": [
+      0.4342,
+      0.6527
+     ],
+     "n_clusters": 9000,
+     "slope_differs_from_1": true,
+     "reading": "over-confident: the score spreads risk wider than the outcomes do"
+    },
+    "brier_calibrated": 0.042418,
+    "ece_calibrated": 0.024311
+   },
+   "snapshot": {
+    "month_idx": 23,
+    "n_accounts": 8191,
+    "n_bad_8m": 334,
+    "red_n": 146,
+    "red_hits": 127,
+    "red_precision": 0.8699,
+    "red_precision_ci": [
+     0.8057,
+     0.9151
+    ],
+    "missed_npa_share": 0.3503,
+    "flagged_share": 0.0582
+   },
+   "simulated_cost": {
+    "expected_cost_inr": 108555546.81,
+    "per_account_inr": 13253.03,
+    "label": "SIMULATION RESULT at the frozen operating point, on a synthetic book",
+    "caveat": "Not a projected bank saving. Every cost parameter is an ASSUMPTION (src/costs.py PARAM_NOTES); the book is synthetic; and the regime's own parameters are deliberately outside the development setting. Compare regimes to each other, never read the absolute figure as rupees the bank would keep."
+   },
+   "vs_control": {
+    "auc_delta": -0.1109,
+    "red_precision_delta": 0.0441,
+    "missed_npa_delta": 0.1553,
+    "flagged_delta": -0.0025,
+    "ece_delta": 0.0253
+   },
+   "beyond_seed_noise": {
+    "auc": true,
+    "red_precision": true,
+    "missed_npa_share": true,
+    "flagged_share": false,
+    "ece_served": true
+   }
+  }
+ }
+}

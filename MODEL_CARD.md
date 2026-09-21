@@ -454,6 +454,35 @@ data easier than reality. The ceiling exists for the same reason in reverse.
 
 ## 14. Known limits
 
+**The model cannot warn about stress that arrives faster than its own window** (experiment E5,
+`validation/report/experiments/challenge_regimes/`). The shipped artefact was scored, unretuned,
+on nine generator regimes it was never fitted to, with three same-parameter control seeds to
+establish a noise floor. It is robust to most of what was varied — base rate, borrower noise,
+three times the statement-feed gaps, staler bureau data, twice the silent-default share all
+leave AUC inside or near the controls' own 0.8631–0.8709 band. Two regimes break it, and they
+are the same mechanism:
+
+| regime | AUC | missed-NPA share |
+|---|---|---|
+| control (development parameters, unseen seed) | 0.8657 | 19.5% |
+| `abrupt_onset` — stress develops in half the time | **0.7709** | **41.4%** |
+| `macro_shock` — abrupt onset + higher base rate + 3× feed gaps | **0.7548** | **35.0%** |
+
+Missed NPAs more than double. The decision score is a four-month trailing mean of a
+deterioration trajectory; a borrower who goes from healthy to NPA inside that window has no
+trajectory to read, and no threshold choice repairs it. **Both of those AUCs are below the
+pre-registered DR-01 floor of 0.82.** DR-01 grades the development panel and is unaffected, but
+the plain statement is that this model, unretuned, would not clear its own acceptance band on a
+book whose stress arrives quickly. Shortening the smoothing window would help that case and hurt
+the jitter it exists to remove; that trade has not been measured and is the obvious next round.
+
+**A cleaner book than the simulator's will show LOWER precision at these thresholds.** In E5's
+`base_rate_down` regime the model has the *highest* AUC of any regime (0.8761) and the *lowest*
+Red precision (74.8%): with half the defaults, a fixed threshold flags proportionally more false
+positives. A bank should re-derive its own operating point rather than inherit this one — which
+is why `PUT /drishti/threshold` exists and why the export ships the whole cost derivation.
+
+
 Carried from `DATA_CARD.md`'s "Known unrealisms", the ones that bear directly on what this model
 can and cannot be trusted to say:
 
