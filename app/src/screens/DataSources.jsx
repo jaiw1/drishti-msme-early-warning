@@ -197,6 +197,10 @@ export default function DataSources() {
 
   const rows = sync.data || []
   const meta = sync.meta || {}
+  // `live_apis` is the platform's list of every API that has ever answered a live pull
+  // (`app/routers/meta.py`), and `total` is every API registered against a pull manifest.
+  const liveApis = meta.live_apis?.length ?? 0
+  const registered = meta.total ?? rows.length
   const counts = rows.reduce((acc, r) => {
     const key = syncState(r)
     return { ...acc, [key]: (acc[key] || 0) + 1 }
@@ -253,12 +257,26 @@ export default function DataSources() {
               <Plug size={16} className="text-idbi-green" aria-hidden="true" />
               <h3 className="flex-1 font-bold text-slate-800">Per-API status</h3>
               <ul className="flex flex-wrap gap-2 text-xs font-semibold">
+                {/* The platform's own headline figure, beside the per-row tally rather than
+                    instead of it — SANKET's sources screen leads on this one, and the two
+                    products should not answer "how much of this is real?" with different
+                    arithmetic. */}
+                <li className="flex items-center gap-1 rounded-full border border-idbi-green/30 bg-idbi-green/5 px-2.5 py-1 text-idbi-green">
+                  <Activity size={12} aria-hidden="true" />
+                  APIs called live: {liveApis} of {registered}
+                </li>
                 {Object.entries(counts).map(([key, n]) => (
                   <li key={key} className={`rounded-full border border-slate-200 px-2.5 py-1 ${SYNC_STATE[key].className}`}>
                     {n} {SYNC_STATE[key].label.toLowerCase()}
                   </li>
                 ))}
               </ul>
+              <p className="w-full text-[11px] leading-relaxed text-slate-600">
+                The two counts answer different questions and may legitimately disagree.
+                &ldquo;Called live&rdquo; is cumulative — an API that has ever answered a live pull is counted,
+                even if tonight it errored or was served from the last good pull. The tally beside it is
+                each API&rsquo;s most recent pull only.
+              </p>
             </div>
 
             {rows.length === 0 ? (

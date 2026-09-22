@@ -59,7 +59,7 @@ describe('Thresholds', () => {
   it('lists the change history with each justification', async () => {
     mockApi(apiRoutes(), { vi })
     render()
-    const table = await screen.findByRole('table', { name: /threshold changes/i })
+    const table = await screen.findByRole('table', { name: /threshold change/i })
     expect(within(table).getByText(/Widened the watch tier/)).toBeInTheDocument()
     // the history shows the move, both sides of it
     expect(within(table).getByText(/91\.55%/)).toHaveTextContent('91.55% → 50.00%')
@@ -209,5 +209,54 @@ describe('Thresholds', () => {
     mockApi(apiRoutes({ [`${B}/drishti/threshold`]: fail(500, { code: 'internal_error', message: 'Boom.' }) }), { vi })
     render()
     expect(await screen.findByTestId('state-error')).toHaveTextContent('Could not load the thresholds')
+  })
+
+  // C3 — `GET /drishti/threshold` carries no publication date, so the screen printed the
+  // sentence "the model run was published" where a date belongs. `/meta/sync` has it.
+  it('prints the run’s publication date when no manager has ever moved the lines', async () => {
+    mockApi(apiRoutes({
+      [`${B}/drishti/threshold`]: ok(envelope({ ...threshold().data, changed_at: null, source: 'model_run' })),
+    }), { vi })
+    render()
+    const card = (await screen.findByText('In force since')).parentElement
+    expect(card).toHaveTextContent(new Date('2026-09-16T09:41:03Z').toLocaleString('en-IN'))
+    expect(card).not.toHaveTextContent('the model run was published')
+  })
+
+  it('still prefers the audited change date when there is one', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    const card = (await screen.findByText('In force since')).parentElement
+    expect(card).toHaveTextContent(new Date('2026-09-16T09:42:24.738069+00:00').toLocaleString('en-IN'))
+  })
+
+  it('keeps the old wording when nothing can supply a date at all', async () => {
+    mockApi(apiRoutes({
+      [`${B}/drishti/threshold`]: ok(envelope({ ...threshold().data, changed_at: null })),
+      [`${B}/meta/sync`]: ok(envelope([], { total: 0, runs: {}, real_data: false })),
+    }), { vi })
+    render()
+    expect(await screen.findByText('the model run was published')).toBeInTheDocument()
+  })
+
+  // D4 — "1 threshold changes, newest first"
+  it('counts one change in the singular', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    const table = await screen.findByRole('table', { name: /threshold change/i })
+    expect(table).toHaveAccessibleName('1 threshold change, newest first')
+  })
+
+  it('still pluralises two of them', async () => {
+    const base = threshold().data
+    mockApi(apiRoutes({
+      [`${B}/drishti/threshold`]: ok(envelope({
+        ...base,
+        history: [base.history[0], { ...base.history[0], id: 2 }],
+      })),
+    }), { vi })
+    render()
+    const table = await screen.findByRole('table', { name: /threshold change/i })
+    expect(table).toHaveAccessibleName('2 threshold changes, newest first')
   })
 })

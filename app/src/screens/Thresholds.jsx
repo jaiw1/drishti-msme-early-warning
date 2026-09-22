@@ -26,7 +26,7 @@ import { useToast } from '../components/Toasts'
 import { useAuth } from '../auth/AuthContext'
 import useAsync from '../lib/useAsync'
 import { inr, pct } from '../lib/format'
-import { loadThreshold, saveThreshold } from '../domain/drishti'
+import { loadSync, loadThreshold, saveThreshold } from '../domain/drishti'
 import { badgeForMode } from '../domain/provenance'
 
 const MIN_JUSTIFICATION = 10
@@ -304,6 +304,12 @@ export default function Thresholds() {
   // null, 'change' or 'restore' — the same audited PUT either way, seeded differently.
   const [dialog, setDialog] = useState(null)
   const current = useAsync(({ signal }) => loadThreshold({ live, signal }), [live])
+  // `GET /drishti/threshold` does not carry the run's publication date, so "in force since
+  // the model run was published" had no date to print and said that sentence literally.
+  // `GET /meta/sync` already serves it as `runs.drishti.published_at` — one extra read,
+  // no contract change, and a failed or absent one simply leaves the old wording.
+  const sync = useAsync(({ signal }) => loadSync({ live, signal }), [live])
+  const publishedAt = sync.meta?.runs?.drishti?.published_at || null
   const data = current.data
   const badge = badgeForMode(current.meta?.provenance_mode, current.source)
   const editable = live && (data?.editable_by || ['M', 'A']).includes(roleCode)
@@ -364,7 +370,11 @@ export default function Thresholds() {
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">In force since</div>
               <div className="mt-1 text-lg font-extrabold text-slate-800">
-                {data.changed_at ? new Date(data.changed_at).toLocaleString('en-IN') : 'the model run was published'}
+                {data.changed_at
+                  ? new Date(data.changed_at).toLocaleString('en-IN')
+                  : publishedAt
+                    ? new Date(publishedAt).toLocaleString('en-IN')
+                    : 'the model run was published'}
               </div>
               <p className="mt-1 text-xs text-slate-600">
                 source: {data.source === 'threshold_change' ? 'a manager’s audited change' : 'the published model run'}
@@ -403,7 +413,7 @@ export default function Thresholds() {
               </div>
             ) : (
               <div className="overflow-x-auto scroll-thin">
-                <DataTable caption={`${data.history.length} threshold changes, newest first`}>
+                <DataTable caption={`${data.history.length} threshold change${data.history.length === 1 ? '' : 's'}, newest first`}>
                   <thead className="bg-slate-50 text-xs">
                     <tr>
                       <th scope="col" className="px-3 py-2 text-left font-semibold text-slate-600">When</th>

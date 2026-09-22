@@ -10,6 +10,7 @@ import { useAuth } from '../auth/AuthContext'
 import { roleMatches } from '../auth/roles'
 import useAsync from '../lib/useAsync'
 import { loadMetrics, loadWholeBook } from '../domain/drishti'
+import { policyFoldCost } from '../domain/shapes'
 import { badgeForMode } from '../domain/provenance'
 import { useSearchParams } from 'react-router-dom'
 
@@ -64,6 +65,7 @@ export default function PortfolioRiskScreen() {
             summary={metrics.data?.summary}
             ecosystem={metrics.data?.ecosystem ?? book.meta?.ecosystem}
             rankOrder={metrics.data?.metrics?.rank_order}
+            policyFold={policyFoldCost(metrics.data?.metrics)}
             thresholds={book.meta?.thresholds}
             showWhatIf={showWhatIf}
             onSelect={setSelected}

@@ -36,7 +36,11 @@ export default function RealModel({ data, syntheticAuc }) {
           <b>{meta.n_defaults.toLocaleString('en-IN')} positive company-year rows</b>
           {meta.n_defaulting_companies ? <> across <b>{meta.n_defaulting_companies.toLocaleString('en-IN')} companies that defaulted</b></> : null}
           {' '}— where &ldquo;default&rdquo; is an actual credit-rating downgrade to &lsquo;D&rsquo;. On real data it scores an honest
-          <b> {m.auc}</b> — squarely in the realistic band. So the numbers you can trust are these, and the method behind the cockpit is sound.
+          {/* The range, not its ceiling: two paragraphs below, this same page says {m.auc}
+              is the most permissive of four test designs and that the honest reading is
+              0.72–{m.auc}. Leading on the top of the range contradicted it. */}
+          <b> 0.72–{m.auc}</b> depending on the test design — squarely in the realistic band. So the numbers
+          you can trust are these, and the method behind the cockpit is sound.
         </p>
         {/*
           Three denominators, and the difference matters. The target is "does this company

@@ -132,7 +132,7 @@ describe('Portfolio risk', () => {
     expect(await screen.findByRole('heading', { name: /by lending portfolio/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'By sector' })).toBeInTheDocument()
     expect(screen.getByText('Red-band precision, per portfolio')).toBeInTheDocument()
-    expect(screen.getByText('Flagged exposure')).toBeInTheDocument()
+    expect(screen.getByText('Red exposure at risk')).toBeInTheDocument()
   })
 
   it.each(['manager', 'admin'])('keeps the what-if for a %s', async (role) => {
@@ -165,5 +165,69 @@ describe('Portfolio risk', () => {
     render()
     await screen.findByRole('heading', { name: /by lending portfolio/ })
     expect(screen.queryByRole('heading', { name: /Stress travels through trading networks/ })).not.toBeInTheDocument()
+  })
+
+  // B1 — `summary.exposure_at_risk` is the export's RED-ONLY sanctioned sum
+  // (`export_demo.py`: `sanctioned where bucket == 'red'`), and the card captioned it as
+  // the red+amber watch-list.
+  it('captions the headline exposure as the Red population it actually is', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    const card = (await screen.findByText('Red exposure at risk')).closest('div').parentElement
+    expect(card).toHaveTextContent('16 Red accounts')
+    expect(document.body.textContent).not.toMatch(/watch-list accounts \(red \+ amber\)/)
+  })
+
+  it('falls back to the Red rows, not to every flagged row, when the run publishes no summary', async () => {
+    const m = metrics()
+    delete m.data.summary.exposure_at_risk
+    mockApi(apiRoutes({ [`${B}/drishti/metrics`]: ok(m) }), { vi })
+    render()
+    // ROW_WITH_LIMIT is the only Red row in the fixture: ₹25,00,000 sanctioned. Summing
+    // the Amber row in too was the bug the relabel exists to close.
+    const card = (await screen.findByText('Red exposure at risk')).closest('div').parentElement
+    expect(card).toHaveTextContent('₹25.0 L')
+  })
+
+  // B2 — `expNpa` is PD-weighted over red+amber, so it can never exceed the sanctioned sum
+  // of that same population. Printed beside the Red-only figure it appeared to.
+  it('compares expected NPA against the flagged book it is computed over', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    const line = await screen.findByText(/expected NPA in flagged book/)
+    expect(line).toHaveTextContent(/flagged \(Red \+ Amber\) exposure/)
+    expect(line).toHaveTextContent(/priced on the 2 flagged accounts in this sample/)
+    expect(line).toHaveTextContent(/8,933-account policy fold/)
+  })
+
+  it('drops the policy-fold clause when the run published no cost model', async () => {
+    const m = metrics({ costModel: false })
+    mockApi(apiRoutes({ [`${B}/drishti/metrics`]: ok(m) }), { vi })
+    render()
+    const line = await screen.findByText(/expected NPA in flagged book/)
+    expect(line).toHaveTextContent(/priced on the 2 flagged accounts in this sample/)
+    expect(line).not.toHaveTextContent(/policy fold/)
+  })
+
+  // B16 — the sector list is a server-side `[:6]` slice of 7+ sectors and carried no
+  // caption, so it read as the whole of the contagion book and did not add up to it.
+  it('captions the contagion sector list as the top-N slice it is', async () => {
+    const m = metrics()
+    m.data.ecosystem.by_sector = [
+      { sector: 'Trading', n: 129, exposure: 262428416 },
+      { sector: 'Retail', n: 80, exposure: 230093362 },
+    ]
+    mockApi(apiRoutes({ [`${B}/drishti/metrics`]: ok(envelope(m.data)) }), { vi })
+    render()
+    expect(await screen.findByRole('heading', { name: 'Top 2 sectors by exposure, within one link' }))
+      .toBeInTheDocument()
+  })
+
+  it('shows no sector heading at all when the run published no sector split', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    await screen.findByRole('heading', { name: /Stress travels through trading networks/ })
+    expect(screen.queryByRole('heading', { name: /sectors by exposure, within one link/ }))
+      .not.toBeInTheDocument()
   })
 })

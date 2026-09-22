@@ -42,6 +42,66 @@ const statusOf = (raw) => {
   return 'skipped'
 }
 
+// Fixed decimal places for the Observed and Required columns. `Number(v.toFixed(4))`
+// stripped trailing zeros per value, so one row printed 0.8885 and the next 0.82 in the
+// same column — a precision that changed row to row and made the table read as if the
+// criteria were measured to different accuracies.
+const COLUMN_DP = 3
+
+/**
+ * One number at the column's fixed precision.
+ *
+ * Integers are left alone: a criterion whose band is a count of 5 must not read "5.000".
+ * A non-zero value smaller than the column's resolution is the other exception — rounding
+ * -0.000068 to "-0.000" would print a criterion that passed `< 0` as a tie — so it falls
+ * back to three significant figures rather than to a false zero.
+ */
+function fixedNumber(value) {
+  if (!Number.isFinite(value)) return String(value)
+  if (Number.isInteger(value)) return String(value)
+  const fixed = value.toFixed(COLUMN_DP)
+  return Number(fixed) === 0 ? String(Number(value.toPrecision(3))) : fixed
+}
+
+/** Three significant figures — the precision the report publishes its own cells at. */
+const sig3 = (value) => String(Number(value.toPrecision(3)))
+
+// What a breakdown's cells are, per the criterion's own `scope`, so the summary names the
+// thing that was measured rather than saying "cells" about eight lending portfolios.
+const SCOPE_NOUN = {
+  per_portfolio: 'portfolios',
+  per_segment: 'segments',
+  per_sector: 'sectors',
+  per_cut: 'cells',
+}
+
+// The verb a non-numeric criterion is summarised with. `monotone_increasing` cells carry a
+// [green, amber, red] triple, not one number, so there is no min or max to take.
+const OP_WORD = { monotone_increasing: 'monotone', monotone_decreasing: 'monotone', exists: 'present' }
+
+/**
+ * A per-cell criterion's observed value, summarised.
+ *
+ * DR-06, DR-09 and DR-11 carry `result.value: null` and put every measurement in
+ * `result.breakdown[]`, so the Observed column printed an em dash beside a Pass — the one
+ * shape where the table had a verdict and showed no number at all. The summary is the
+ * cell the criterion is actually gated on: the MINIMUM for a floor (`ge`), the MAXIMUM for
+ * a ceiling (`le`), and a pass count when the cells are not single numbers.
+ */
+export function summariseBreakdown(result, { op, scope } = {}) {
+  const cells = Array.isArray(result?.breakdown) ? result.breakdown : []
+  if (cells.length === 0) return null
+  const noun = SCOPE_NOUN[String(scope || '').toLowerCase()] || 'cells'
+  const key = String(op || '').toLowerCase()
+  const numbers = cells.map((c) => c?.value).filter((v) => typeof v === 'number' && Number.isFinite(v))
+  if (numbers.length === cells.length) {
+    if (key === 'ge' || key === 'gte') return `min ${sig3(Math.min(...numbers))} across ${cells.length} ${noun}`
+    if (key === 'le' || key === 'lte') return `max ${sig3(Math.max(...numbers))} across ${cells.length} ${noun}`
+  }
+  const passed = cells.filter((c) => String(c?.status || '').toLowerCase() === 'pass').length
+  return `${OP_WORD[key] || 'pass'} in ${passed}/${cells.length} ${noun}`
+}
+
 /**
  * One criterion's observed value, printed the way a reviewer reads it.
  *
@@ -52,12 +112,31 @@ const statusOf = (raw) => {
 export function formatObserved(value) {
   if (value === null || value === undefined) return null
   if (Array.isArray(value)) return value.map((v) => formatObserved(v)).join(' – ')
-  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(4)))
+  if (typeof value === 'number') return fixedNumber(value)
   if (typeof value === 'boolean') return value ? 'yes' : 'no'
   if (typeof value === 'object') {
     return Object.entries(value).map(([k, v]) => `${k.replace(/_/g, ' ')} ${formatObserved(v)}`).join(' · ')
   }
   return String(value)
+}
+
+// The three criteria whose figure a reader will otherwise read against the headline on the
+// same screen. They measure the same metrics the run publishes, over a DIFFERENT
+// population: the validation runner's labelable mature subset (every eligible holdout
+// row), not the banded book the run published. Saying so is cheaper than letting a jury
+// find two numbers for "the AUC" and conclude one of them is wrong.
+const POPULATION_ROWS = new Set(['DR-01', 'DR-02', 'DR-26'])
+const POPULATION_NOTE = 'Different population from the headline above: this is the validation runner’s labelable mature subset, not the run’s published book.'
+
+/** The runner's own wording, first sentence only — some details run to a paragraph. */
+export function firstSentence(text, max = 200) {
+  const raw = String(text || '').trim()
+  if (!raw) return ''
+  // Not a lookbehind: Safari only learned those in 16.4, and a regex the parser rejects
+  // takes the whole bundle down rather than one table cell.
+  const stop = raw.indexOf('. ')
+  const cut = stop === -1 ? raw : raw.slice(0, stop + 1)
+  return cut.length > max ? `${cut.slice(0, max - 1).trimEnd()}…` : cut
 }
 
 /**
@@ -93,11 +172,16 @@ export function criteriaRows(report, states) {
         : state === 'pass' ? 'pass'
           : state === 'report' ? 'report'
             : fallback
+    const observed = entry.observed ?? entry.value ?? entry.actual ?? entry.result?.value ?? null
     return {
       id,
       description: entry.description || entry.title || entry.metric || '',
       status,
-      observed: entry.observed ?? entry.value ?? entry.actual ?? entry.result?.value ?? null,
+      observed,
+      // Only when there is no top-level measurement at all: a criterion that publishes
+      // both a value and a breakdown keeps printing its value, exactly as before.
+      observedSummary: observed === null ? summariseBreakdown(entry.result, entry) : null,
+      detail: entry.result?.detail || entry.detail || '',
       expected: entry.expected ?? entry.band ?? entry.threshold ?? null,
       note: entry.note || entry.reason || '',
     }
@@ -197,9 +281,17 @@ function ValidationSummary({ validation }) {
                 return (
                   <tr key={r.id} className={`border-t border-slate-100 ${spec.row}`}>
                     <th scope="row" className="px-3 py-2 text-left font-mono text-xs font-semibold text-slate-800">{r.id}</th>
-                    <td className="px-3 py-2 text-slate-700">{r.description || '—'}</td>
+                    <td className="px-3 py-2 text-slate-700">
+                      {r.description || '—'}
+                      {POPULATION_ROWS.has(r.id) && (
+                        <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-600">
+                          {POPULATION_NOTE}
+                          {r.detail && <> Runner: {firstSentence(r.detail)}</>}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-right font-semibold text-slate-800">
-                      {formatObserved(r.observed) ?? '—'}
+                      {formatObserved(r.observed) ?? r.observedSummary ?? '—'}
                     </td>
                     <td className="px-3 py-2 text-right text-slate-600">{formatObserved(r.expected) ?? '—'}</td>
                     <td className={`px-3 py-2 font-semibold ${spec.className}`}>

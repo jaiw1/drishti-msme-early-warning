@@ -107,7 +107,7 @@ function PrecisionCard({ entry }) {
  * rest of this screen, scoped to their own portfolios; they do not get a slider that
  * extrapolates their sample to the balance sheet.
  */
-export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, onSelect, showWhatIf = true }) {
+export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, policyFold, onSelect, showWhatIf = true }) {
   const [cure, setCure] = useState(0.4)
   const [prov, setProv] = useState(0.15)
   const [book, setBook] = useState(DEFAULT_BOOK_CR)
@@ -135,12 +135,23 @@ export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, onS
       provSaved: expNpa * prov * cure,
       exposureProtected: expNpa * cure,
       flaggedCount: flagged.length,
+      // The sanctioned sum of the SAME rows `expNpa` is PD-weighted over. The headline
+      // card cannot serve this purpose: `summary.exposure_at_risk` is the export's
+      // Red-only figure (`export_demo.py` sums `sanctioned` where `bucket == 'red'`),
+      // so comparing a red+amber expected NPA against it produced the impossible
+      // "expected NPA > flagged exposure" the screen used to print.
+      flaggedExposure: flagged.reduce((s, r) => s + (Number(r.sanctioned) || 0), 0),
     }
   }, [rows, cure, prov, book])
 
   const topSector = bySector[0]
+  // `summary.exposure_at_risk` is RED-ONLY — `export_demo.py` writes it as the sanctioned
+  // sum where `bucket == 'red'`, and its own console line calls it "exposure at risk
+  // (red)". The fallback must sum the same population, or the card silently changes
+  // meaning the moment the summary is absent.
   const exposureAtRisk = summary?.exposure_at_risk
-    ?? rows.filter((r) => r.bucket !== 'green').reduce((s, r) => s + (Number(r.sanctioned) || 0), 0)
+    ?? rows.filter((r) => r.bucket === 'red').reduce((s, r) => s + (Number(r.sanctioned) || 0), 0)
+  const redCount = summary?.red ?? rows.filter((r) => r.bucket === 'red').length
 
   const { bodyRef, rowProps } = useRovingRows(actFirst.length, { onActivate: onSelect })
 
@@ -151,10 +162,10 @@ export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, onS
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-1 flex items-center gap-2 text-rag-redtx">
             <TriangleAlert size={16} aria-hidden="true" />
-            <span className="text-xs font-semibold uppercase tracking-wide">Flagged exposure</span>
+            <span className="text-xs font-semibold uppercase tracking-wide">Red exposure at risk</span>
           </div>
           <div className="text-2xl font-extrabold text-slate-900">{inr(exposureAtRisk)}</div>
-          <div className="text-xs text-slate-600">{econ.flaggedCount} watch-list accounts (red + amber)</div>
+          <div className="text-xs text-slate-600">{redCount} Red accounts — Amber is not in this figure</div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-1 flex items-center gap-2 text-idbi-orangetx">
@@ -348,6 +359,11 @@ export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, onS
               <div className="text-xs text-slate-600">the contagion-watch book</div>
             </div>
           </div>
+          {(ecosystem.by_sector || []).length > 0 && (
+            <h4 className="mb-2 mt-4 text-xs font-extrabold uppercase tracking-wide text-idbi-orangetx">
+              Top {(ecosystem.by_sector || []).length} sectors by exposure, within one link
+            </h4>
+          )}
           <ul className="flex flex-wrap gap-2">
             {(ecosystem.by_sector || []).map((s) => (
               <li key={s.sector} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700">
@@ -399,7 +415,16 @@ export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, onS
               </div>
               <div className="col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
                 On this {Math.round(econ.sampleCr).toLocaleString('en-IN')}-cr sample:
-                {' '}<b>{inr(econ.provSaved)}</b> provisioning saved · expected NPA in flagged book <b>{inr(econ.expNpa)}</b>.
+                {' '}<b>{inr(econ.provSaved)}</b> provisioning saved · expected NPA in flagged book{' '}
+                <b>{inr(econ.expNpa)}</b> of <b>{inr(econ.flaggedExposure)}</b> flagged (Red + Amber) exposure.
+                <span className="mt-1 block text-slate-600">
+                  Both are priced on the {econ.flaggedCount.toLocaleString('en-IN')} flagged accounts in this
+                  sample — not on the book the Red-band precision is measured over
+                  {policyFold?.nAccounts != null && (
+                    <>, and not on the {policyFold.nAccounts.toLocaleString('en-IN')}-account policy fold the
+                    {' '}thresholds were chosen on</>
+                  )}.
+                </span>
               </div>
             </div>
           </div>

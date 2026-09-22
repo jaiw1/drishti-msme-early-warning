@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import Admin from './Admin'
+import Admin, { fieldLabel } from './Admin'
 import { renderScreen, session } from '../test/render'
 import { B, apiRoutes, auditVerify, envelope, fail, mockApi, ok } from '../test/fixtures/api'
 
@@ -206,10 +206,42 @@ describe('Administration — audit log', () => {
 
     const table = await screen.findByRole('table', { name: /audit entries/i })
     const row = within(table).getByRole('rowheader', { name: '416' }).closest('tr')
-    expect(row).toHaveTextContent('red_thr=0.3437 → 0.25')
-    expect(row).toHaveTextContent('amber_thr=0.1875 → 0.15')
-    expect(row).toHaveTextContent('live=true')
+    expect(row).toHaveTextContent('Red threshold: 0.3437 → 0.25')
+    expect(row).toHaveTextContent('Amber threshold: 0.1875 → 0.15')
+    // Not in FIELD_LABEL: still shown, de-underscored and sentence cased, never dropped.
+    expect(row).toHaveTextContent('Live: true')
+    expect(row).not.toHaveTextContent('red_thr=')
     expect(row).not.toHaveTextContent('[object Object]')
     expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument()
+  })
+
+  // C7 — the Detail column was the database's vocabulary: `red_thr=0.3437 → 0.25`.
+  it('labels a payload key rather than printing the column name', async () => {
+    mockApi(apiRoutes({
+      [`${B}/admin/audit`]: ok(envelope([{
+        id: 417, ts: '2026-09-16T09:41:39Z', actor_user_id: 'u1', actor_role: 'admin',
+        action: 'admin.user.role_changed', target_type: 'user', target_id: 'u2', request_id: 'r417',
+        payload: { username: 's.kulkarni', from: 'credit_officer', to: 'manager', sessions_revoked: 2 },
+        prev_hash: 'aa', hash: 'bb',
+      }], { total: 1 })),
+    }), { vi })
+    render()
+    const table = await screen.findByRole('table', { name: /audit entries/i })
+    const row = within(table).getByRole('rowheader', { name: '417' }).closest('tr')
+    expect(row).toHaveTextContent('Username: s.kulkarni')
+    expect(row).toHaveTextContent('Role before: credit_officer · Role after: manager')
+    expect(row).toHaveTextContent('Sessions revoked: 2')
+  })
+})
+
+describe('fieldLabel', () => {
+  it('maps the keys the platform actually writes', () => {
+    expect(fieldLabel('red_thr')).toBe('Red threshold')
+    expect(fieldLabel('justification')).toBe('Justification')
+  })
+
+  it('never drops an unmapped key — it de-underscores and sentence-cases it', () => {
+    expect(fieldLabel('crm_push_id')).toBe('Crm push id')
+    expect(fieldLabel('live')).toBe('Live')
   })
 })

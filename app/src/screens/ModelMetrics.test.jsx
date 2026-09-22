@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { screen, within } from '@testing-library/react'
-import ModelMetrics, { criteriaRows, formatObserved } from './ModelMetrics'
+import ModelMetrics, { criteriaRows, firstSentence, formatObserved, summariseBreakdown } from './ModelMetrics'
 import { renderScreen } from '../test/render'
 import { B, apiRoutes, envelope, fail, metrics, mockApi, ok, validation } from '../test/fixtures/api'
 
@@ -61,25 +61,135 @@ describe('criteriaRows', () => {
     const rows = criteriaRows({ criteria: [{ id: 'DR-02', result: { status: 'report', value: 0.88 } }] })
     expect(rows[0].status).toBe('report')
   })
+
+  // DR-06 / DR-09 / DR-11 publish `result.value: null` and put every measurement in
+  // `result.breakdown[]` — the Observed column showed an em dash beside a Pass.
+  it('summarises a per-cell criterion that has no top-level value', () => {
+    const rows = criteriaRows({ criteria: [{
+      id: 'DR-06',
+      op: 'ge',
+      scope: 'per_portfolio',
+      result: { value: null, status: 'pass', breakdown: [
+        { level: 'Agri', value: 0.8374, status: 'pass' }, { level: 'LAP', value: 0.9069, status: 'pass' },
+      ] },
+    }] })
+    expect(rows[0].observed).toBeNull()
+    expect(rows[0].observedSummary).toBe('min 0.837 across 2 portfolios')
+  })
+
+  it('leaves a criterion that publishes both a value and a breakdown exactly as it was', () => {
+    const rows = criteriaRows({ criteria: [{
+      id: 'DR-07',
+      op: 'report',
+      result: { value: 0.8724, status: 'report', breakdown: [{ level: 'x', value: 0.1, status: 'report' }] },
+    }] })
+    expect(rows[0].observed).toBe(0.8724)
+    expect(rows[0].observedSummary).toBeNull()
+  })
+
+  it('carries the runner’s own detail text through for the population notes', () => {
+    const rows = criteriaRows({ criteria: [{
+      id: 'DR-01',
+      result: { value: 0.8885, status: 'pass', detail: 'pooled ROC-AUC over every eligible holdout row' },
+    }] })
+    expect(rows[0].detail).toBe('pooled ROC-AUC over every eligible holdout row')
+  })
 })
 
 describe('formatObserved', () => {
   it('renders a band as a range rather than a comma-joined array', () => {
-    expect(formatObserved([0.82, 0.92])).toBe('0.82 – 0.92')
+    expect(formatObserved([0.82, 0.92])).toBe('0.820 – 0.920')
   })
 
   it('renders an object-valued criterion as its fields, never [object Object]', () => {
-    expect(formatObserved({ precision_at_5pct: 0.3546 })).toBe('precision at 5pct 0.3546')
+    expect(formatObserved({ precision_at_5pct: 0.3546 })).toBe('precision at 5pct 0.355')
   })
 
   it('leaves integers alone and trims float noise', () => {
     expect(formatObserved(5)).toBe('5')
-    expect(formatObserved(0.900881234)).toBe('0.9009')
+    expect(formatObserved(0.900881234)).toBe('0.901')
   })
 
   it('returns null for an absent value so the caller can print its own dash', () => {
     expect(formatObserved(null)).toBeNull()
     expect(formatObserved(undefined)).toBeNull()
+  })
+
+  // D10/D11: `Number(v.toFixed(4))` stripped trailing zeros per value, so the same column
+  // printed 0.8885 on one row and 0.82 on the next.
+  it('prints every non-integer at the same number of decimal places', () => {
+    expect(formatObserved(0.8885)).toBe('0.888')
+    expect(formatObserved(0.82)).toBe('0.820')
+    expect(formatObserved(0.0331)).toBe('0.033')
+    expect(formatObserved([0.82, 0.92])).toBe('0.820 – 0.920')
+  })
+
+  it('keeps an integer band an integer, never "5.000"', () => {
+    expect(formatObserved(5)).toBe('5')
+    expect(formatObserved(0)).toBe('0')
+  })
+
+  // DR-10 passes `< 0` with -0.000068. At three places that rounds to "-0.000", which
+  // reads as a tie against a required "0" — a pass printed as a failure.
+  it('never rounds a non-zero value into a false zero', () => {
+    expect(formatObserved(-0.000068)).toBe('-0.000068')
+    expect(formatObserved(0.0006)).toBe('0.001')
+  })
+})
+
+describe('summariseBreakdown', () => {
+  const cells = (values, status = 'pass') => values.map((value, i) => ({ level: `L${i}`, value, status }))
+
+  // DR-06: a floor is gated on the WORST cell, so that is the one the column shows.
+  it('summarises a floor by its minimum cell', () => {
+    const result = { value: null, breakdown: cells([0.8724, 0.8605, 0.8374, 0.9069, 0.85, 0.86, 0.87, 0.88]) }
+    expect(summariseBreakdown(result, { op: 'ge', scope: 'per_portfolio' }))
+      .toBe('min 0.837 across 8 portfolios')
+  })
+
+  // DR-09: a ceiling is gated on the worst cell too — which is the maximum.
+  it('summarises a ceiling by its maximum cell', () => {
+    const result = { value: null, breakdown: cells([0.0031, 0.0047, 0.0007]) }
+    expect(summariseBreakdown(result, { op: 'le', scope: 'per_cut' }))
+      .toBe('max 0.0047 across 3 cells')
+  })
+
+  // DR-11's cells are [green, amber, red] triples: there is no min or max to take.
+  it('summarises a non-numeric criterion by its pass count', () => {
+    const result = { value: null, breakdown: cells([[0.004, 0.19, 0.97], [0.005, 0.14, 0.88]]) }
+    expect(summariseBreakdown(result, { op: 'monotone_increasing', scope: 'per_portfolio' }))
+      .toBe('monotone in 2/2 portfolios')
+  })
+
+  it('counts only the cells that actually passed', () => {
+    const result = { value: null, breakdown: [
+      { value: [1], status: 'pass' }, { value: [1], status: 'fail' }, { value: [1], status: 'pass' },
+    ] }
+    expect(summariseBreakdown(result, { op: 'monotone_increasing', scope: 'per_portfolio' }))
+      .toBe('monotone in 2/3 portfolios')
+  })
+
+  it('says nothing at all when there is no breakdown to summarise', () => {
+    expect(summariseBreakdown({ value: 0.9, breakdown: [] }, { op: 'ge' })).toBeNull()
+    expect(summariseBreakdown(null, { op: 'ge' })).toBeNull()
+  })
+})
+
+describe('firstSentence', () => {
+  it('takes the runner’s first sentence and leaves a short one whole', () => {
+    expect(firstSentence('pooled ROC-AUC over every eligible holdout row (n_accounts=13500)'))
+      .toBe('pooled ROC-AUC over every eligible holdout row (n_accounts=13500)')
+    expect(firstSentence('First one. Second one.')).toBe('First one.')
+  })
+
+  it('elides a sentence that runs past the cap', () => {
+    expect(firstSentence('x'.repeat(400))).toHaveLength(200)
+    expect(firstSentence('x'.repeat(400)).endsWith('…')).toBe(true)
+  })
+
+  it('is empty for an absent detail', () => {
+    expect(firstSentence(null)).toBe('')
+    expect(firstSentence('')).toBe('')
   })
 })
 
@@ -350,5 +460,115 @@ describe('an accepted validation failure', () => {
     expect(screen.getByText('1 fail')).toBeInTheDocument()
     expect(screen.queryByText(/accepted in advance/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/fail — accepted/i)).not.toBeInTheDocument()
+  })
+})
+
+// -------------------------------------------------------------- the population disclosures
+describe('Model & Metrics — two populations, one metric', () => {
+  const breakdownRun = () => ok(envelope({
+    published: true,
+    criteria_sha: 'abc123def4567890',
+    verify_result: null,
+    available: true,
+    note: null,
+    criteria_states: {},
+    accepted_failure_ids: [],
+    accepted_failures: null,
+    report: {
+      criteria: [
+        {
+          id: 'DR-01',
+          description: 'Grouped AUC in band',
+          op: 'between',
+          threshold: [0.82, 0.92],
+          result: {
+            value: 0.8885,
+            status: 'pass',
+            detail: 'pooled ROC-AUC over every eligible holdout row (n_accounts=13500)',
+            breakdown: [],
+          },
+        },
+        {
+          id: 'DR-06',
+          description: 'AUC per portfolio',
+          op: 'ge',
+          scope: 'per_portfolio',
+          threshold: 0.78,
+          result: {
+            value: null,
+            status: 'pass',
+            detail: 'AUC per portfolio, grouped-holdout test set',
+            breakdown: [
+              { level: 'MSME-CC', value: 0.8724, status: 'pass' },
+              { level: 'Agri', value: 0.8374, status: 'pass' },
+            ],
+          },
+        },
+        {
+          id: 'DR-11',
+          description: 'Bands monotone in every portfolio',
+          op: 'monotone_increasing',
+          scope: 'per_portfolio',
+          threshold: null,
+          result: {
+            value: null,
+            status: 'pass',
+            detail: 'pooled: monotone',
+            breakdown: [
+              { level: 'MSME-CC', value: [0.004, 0.19, 0.97], status: 'pass' },
+              { level: 'Agri', value: [0.005, 0.14, 0.88], status: 'pass' },
+            ],
+          },
+        },
+      ],
+    },
+  }))
+
+  // B5 — a Pass beside an em dash was the table's worst row: a verdict with no number.
+  it('prints the gating cell of a per-cell criterion instead of an em dash', async () => {
+    mockApi(apiRoutes({ [`${B}/drishti/validation`]: breakdownRun() }), { vi })
+    render()
+    const table = await screen.findByRole('table', { name: /validation criteria/i })
+    expect(within(table).getByRole('rowheader', { name: 'DR-06' }).closest('tr'))
+      .toHaveTextContent('min 0.837 across 2 portfolios')
+    expect(within(table).getByRole('rowheader', { name: 'DR-11' }).closest('tr'))
+      .toHaveTextContent('monotone in 2/2 portfolios')
+  })
+
+  // B3/B4 — the runner measures the same metrics over a different population, and a reader
+  // who meets the two figures cold concludes one of them is wrong.
+  it('names the population difference on the runner’s own row, in the runner’s own words', async () => {
+    mockApi(apiRoutes({ [`${B}/drishti/validation`]: breakdownRun() }), { vi })
+    render()
+    const table = await screen.findByRole('table', { name: /validation criteria/i })
+    const dr01 = within(table).getByRole('rowheader', { name: 'DR-01' }).closest('tr')
+    expect(dr01).toHaveTextContent(/labelable mature subset/)
+    expect(dr01).toHaveTextContent(/pooled ROC-AUC over every eligible holdout row/)
+    // Not on a row whose figure nothing on the screen contradicts.
+    expect(within(table).getByRole('rowheader', { name: 'DR-06' }).closest('tr'))
+      .not.toHaveTextContent(/labelable mature subset/)
+  })
+
+  it('says the same thing beside the headline precision and the ROC-AUC tile', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    expect(await screen.findByText(/DR-02 in the validation table below reports the/))
+      .toBeInTheDocument()
+    expect(screen.getByText(/DR-01 and DR-26 below measure the same metric/)).toBeInTheDocument()
+  })
+
+  // C17 — `badgeForMode` falls through to NOT_COLLECTED on every live screen while the
+  // first read is in flight, and the chip's own tooltip is written about a customer field.
+  it('wears the run’s own source badge, and no badge at all when no run declares one', async () => {
+    mockApi(apiRoutes(), { vi })
+    const { unmount } = render()
+    expect(await screen.findByRole('button', { name: /Fixture/ })).toBeInTheDocument()
+    unmount()
+
+    const m = metrics()
+    mockApi(apiRoutes({ [`${B}/drishti/metrics`]: ok(envelope(m.data, { provenance_mode: null })) }), { vi })
+    render()
+    await screen.findByText('Validation')
+    expect(screen.queryByText(/Not collected/i)).not.toBeInTheDocument()
   })
 })

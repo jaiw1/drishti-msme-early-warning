@@ -24,6 +24,15 @@ describe('RealModel — the honesty wording', () => {
     expect(document.body.textContent).toMatch(/company-year rows/)
   })
 
+  // C12 — the hero sentence led on the ceiling ("it scores an honest 0.811") and was
+  // contradicted two paragraphs down by the page's own "0.72–0.811" reading.
+  it('leads on the range, not on the top of it', () => {
+    draw()
+    const hero = screen.getByText(/depending on the test design/)
+    expect(hero).toHaveTextContent(`0.72–${realModel.metrics.auc}`)
+    expect(document.body.textContent).not.toMatch(/scores an honest\s+0\.\d+\s+—/)
+  })
+
   it('presents the AUC as the ceiling of a range, not a point estimate', () => {
     draw()
     expect(screen.getByText(/is the ceiling of a range, not a point estimate/)).toBeInTheDocument()

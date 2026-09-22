@@ -196,5 +196,29 @@ describe('Data sources & sync — freshness and drift', () => {
     render()
     expect(await screen.findByText(/the previous run carries no scores to compare against/)).toBeInTheDocument()
   })
-})
 
+  // B7 — SANKET's sources screen leads on `live_apis`/`total`; DRISHTi never surfaced the
+  // field at all, so the two products answered "how much of this is real?" differently.
+  it('shows the platform’s own live-API count beside the per-row tally', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    expect(await screen.findByText(/APIs called live: 0 of 3/)).toBeInTheDocument()
+    expect(screen.getByText('1 bank sandbox (mock, static)')).toBeInTheDocument()
+  })
+
+  it('says why the two counts can legitimately disagree', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    expect(await screen.findByText(/answer different questions and may legitimately disagree/))
+      .toBeInTheDocument()
+    expect(screen.getByText(/is cumulative/)).toBeInTheDocument()
+  })
+
+  it('counts the APIs the platform says went live, not the rows it can see', async () => {
+    mockApi(apiRoutes({
+      [`${B}/meta/sync`]: ok(envelope([], { total: 24, live_apis: ['402', '404'], runs: {}, real_data: true })),
+    }), { vi })
+    render()
+    expect(await screen.findByText(/APIs called live: 2 of 24/)).toBeInTheDocument()
+  })
+})

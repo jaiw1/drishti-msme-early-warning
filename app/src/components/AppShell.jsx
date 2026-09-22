@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import ScreenHelp from './ScreenHelp'
 import SessionBar from './SessionBar'
-import SourceBadge from './SourceBadge'
+import SourceBadge, { SOURCE, normaliseSource } from './SourceBadge'
 import { useAuth } from '../auth/AuthContext'
 import { roleMatches } from '../auth/roles'
 
@@ -147,7 +147,17 @@ export default function AppShell({
             {subtitle && <p className="text-xs text-slate-600">{subtitle}</p>}
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            {source && <SourceBadge source={source} sandbox={sandbox} detail={sourceDetail} />}
+            {/* NOT_COLLECTED is a per-field disclosure — its own tooltip says "nothing
+                shown here was inferred from data the bank does not hold about this
+                customer" — and at the top of a whole screen it has no referent to be
+                about. `badgeForMode` falls through to it on EVERY live screen while the
+                first read is in flight, and again whenever no run is published, so the
+                chip announced "NOT COLLECTED" over pages that were merely loading. The
+                screens under it already say the truthful version in their own body
+                (Loading, or "No model run is published"). */}
+            {normaliseSource(source, sandbox) !== SOURCE.NOT_COLLECTED && (
+              <SourceBadge source={source} sandbox={sandbox} detail={sourceDetail} />
+            )}
             {actions}
             {help && <ScreenHelp screen={help} />}
             {onTour && (

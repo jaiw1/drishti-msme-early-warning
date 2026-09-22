@@ -313,12 +313,62 @@ export function auditValue(v) {
   return JSON.stringify(v)
 }
 
-/** The Detail cell: the first few payload keys, each rendered rather than stringified. */
+// The payload keys the platform actually writes (`app/routers/*.py` `payload={…}`), in the
+// words a reviewer uses. Anything not listed is still shown — de-underscored and sentence
+// cased — so a new audit action never loses its detail waiting for this map to catch up.
+const FIELD_LABEL = {
+  red_thr: 'Red threshold',
+  amber_thr: 'Amber threshold',
+  justification: 'Justification',
+  threshold_change_id: 'Change id',
+  action: 'Action',
+  review_outcome: 'Review outcome',
+  model_run_id: 'Model run',
+  policy_version: 'Policy version',
+  has_note: 'Note attached',
+  was_generated: 'Had a generated draft',
+  length_before: 'Length before',
+  length_after: 'Length after',
+  username: 'Username',
+  full_name: 'Full name',
+  role: 'Role',
+  from: 'Role before',
+  to: 'Role after',
+  scope: 'Scope',
+  ein: 'EIN',
+  sessions_revoked: 'Sessions revoked',
+  other_sessions_revoked: 'Other sessions revoked',
+  initial_password: 'Initial password',
+  locked_until: 'Locked until',
+  route: 'Route',
+  status: 'Status',
+  reason: 'Reason',
+  product: 'Product',
+  verdict: 'Verdict',
+  mode: 'Mode',
+  gateway: 'Gateway',
+  dry_run: 'Dry run',
+}
+
+/** `red_thr` -> "Red threshold"; anything unmapped -> "Sessions revoked"-style prose. */
+export function fieldLabel(key) {
+  if (FIELD_LABEL[key]) return FIELD_LABEL[key]
+  const words = String(key).replace(/_/g, ' ').trim()
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : String(key)
+}
+
+/**
+ * The Detail cell: the first few payload keys, each rendered rather than stringified.
+ *
+ * Printed as `key=value` this column was the database's vocabulary, not a reviewer's —
+ * `red_thr=0.3437 → 0.25 · justification=…` in the one table an auditor reads to find out
+ * what a manager did.
+ */
 export function auditDetail(payload) {
   if (!payload || typeof payload !== 'object') return '—'
   const entries = Object.entries(payload)
   if (entries.length === 0) return '—'
-  return entries.slice(0, 4).map(([k, v]) => `${k}=${auditValue(v)}`).join(' · ')
+  return entries.slice(0, 4).map(([k, v]) => `${fieldLabel(k)}: ${auditValue(v)}`).join(' · ')
 }
 
 function AuditPanel() {

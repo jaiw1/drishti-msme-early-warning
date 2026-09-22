@@ -322,6 +322,15 @@ export function PrecisionCard({ metrics }) {
                 95% {p.method || 'Wilson'} interval {pct(p.ci_low, 1)} – {pct(p.ci_high, 1)}
               </div>
             )}
+            {/* Two populations, one metric. The pre-registered runner measures this same
+                precision over every eligible holdout row rather than over the band the run
+                published, so DR-02's figure and its n are both different — and a reader
+                who meets the two numbers cold reads one of them as wrong. */}
+            <div className="text-xs text-slate-600">
+              Measured on this run’s published book. DR-02 in the validation table below reports the
+              same metric over the runner’s labelable mature subset — a different population, not a
+              different result.
+            </div>
           </div>
         </div>
       )}
@@ -367,7 +376,11 @@ export default function Analytics({ metrics, rigor }) {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat value={m.auc} label="ROC-AUC" hint="ranking quality (0.5 = random, 1.0 = perfect)" />
+        <Stat
+          value={m.auc}
+          label="ROC-AUC"
+          hint="ranking quality (0.5 = random, 1.0 = perfect), on this run’s published book — DR-01 and DR-26 below measure the same metric over the validation runner’s labelable mature subset, so their figure and their n differ"
+        />
         <Stat value={m.ks} label="KS statistic" hint="separation of good vs bad" />
         <Stat value={m.median_first_warning_months == null ? null : `${m.median_first_warning_months} mo`}
           label="Median early warning" hint="how far ahead the first flag is raised" />
