@@ -1,22 +1,39 @@
+import { useEffect } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './auth/AuthContext'
 import { session } from './test/render'
-import { apiRoutes, mockApi } from './test/fixtures/api'
+import { apiRoutes, B, envelope, mockApi, ok } from './test/fixtures/api'
 import demoData from './test/fixtures/demo_data.min.json'
 
 const ROUTER_FLAGS = { v7_startTransition: true, v7_relativeSplatPath: true }
 
-function renderApp(path, { mode = 'live', user = null } = {}) {
+/** Reports every location the router settles on, so a test can assert on the URL itself
+ *  (not just what ends up on screen) — the root-redirect bug only showed up in `?next=`. */
+function LocationSpy({ onChange }) {
+  const location = useLocation()
+  useEffect(() => onChange(location), [location, onChange])
+  return null
+}
+
+function renderApp(path, { mode = 'live', user = null, onLocation } = {}) {
   return render(
     <AuthProvider initialMode={mode} initialUser={user}>
       <MemoryRouter initialEntries={[path]} future={ROUTER_FLAGS}>
+        {onLocation && <LocationSpy onChange={onLocation} />}
         <App />
       </MemoryRouter>
     </AuthProvider>,
   )
+}
+
+const signIn = async (user, username = 'demo') => {
+  await user.type(screen.getByLabelText('Username'), username)
+  await user.type(screen.getByLabelText('Password'), 'correct-horse-battery')
+  await user.click(screen.getByRole('button', { name: /sign in/i }))
 }
 
 /** The frozen bundle's only network call is the snapshot itself. */
@@ -40,16 +57,33 @@ describe('App shell', () => {
     expect(screen.getByRole('link', { name: 'Skip to main content' })).toHaveAttribute('href', '#main-content')
   })
 
-  it('sends an anonymous visitor at the root to the sign-in screen', async () => {
+  // Regression for the root-redirect bug: `/` used to run every visitor — signed in or
+  // not — through `homeFor(roleCode, …)`. For a signed-out visitor that has no role, so
+  // it fell to homeFor's own last-resort default and landed them on `/data-sources`,
+  // which then bounced them to `/login?next=%2Fdata-sources` — a deep link nobody asked
+  // for, that a manager who then signed in was sent to instead of the watch-list.
+  it('sends an anonymous visitor at the root straight to sign-in, with no next fabricated', async () => {
     mockApi(apiRoutes(), { vi })
-    renderApp('/')
+    let seen = null
+    renderApp('/', { onLocation: (location) => { seen = location } })
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+    expect(seen).toMatchObject({ pathname: '/login', search: '' })
   })
 
   it('keeps ?view= deep links from the old tab switcher working', async () => {
     mockApi(apiRoutes(), { vi })
     renderApp('/?view=risk', { user: session('manager') })
     expect(await screen.findByRole('heading', { name: /Portfolio Risk/i })).toBeInTheDocument()
+  })
+
+  // An anonymous ?view= is a genuine deep link (an old bookmark), unlike a bare `/` —
+  // it is honoured, and the route guard downstream is what asks the visitor to sign in.
+  it('still honours an anonymous ?view= deep link, via a real login next', async () => {
+    mockApi(apiRoutes(), { vi })
+    let seen = null
+    renderApp('/?view=risk', { onLocation: (location) => { seen = location } })
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+    expect(seen).toMatchObject({ pathname: '/login', search: '?next=%2Frisk' })
   })
 
   // `/` used to send every role to the watch-list, so a relationship manager — who has no
@@ -65,6 +99,36 @@ describe('App shell', () => {
     mockApi(apiRoutes(), { vi })
     renderApp('/', { user: session('credit_officer') })
     expect(await screen.findByRole('heading', { name: /Borrower Watch-list/i })).toBeInTheDocument()
+  })
+
+  it('signs a manager in from an anonymous root visit and lands them on the watch-list', async () => {
+    const user = userEvent.setup()
+    mockApi(apiRoutes({ [`POST ${B}/auth/login`]: ok(envelope(session('manager'))) }), { vi })
+    renderApp('/')
+    await screen.findByRole('heading', { name: 'Sign in' })
+    await signIn(user)
+    expect(await screen.findByRole('heading', { name: /Borrower Watch-list/i })).toBeInTheDocument()
+  })
+
+  it('signs a relationship manager in from an anonymous root visit and lands them on their home', async () => {
+    const user = userEvent.setup()
+    mockApi(apiRoutes({ [`POST ${B}/auth/login`]: ok(envelope(session('relationship_manager'))) }), { vi })
+    renderApp('/')
+    await screen.findByRole('heading', { name: 'Sign in' })
+    await signIn(user)
+    expect(await screen.findByRole('heading', { name: /Real-Data Validation|Data sources/i })).toBeInTheDocument()
+    expect(screen.queryByTestId('state-denied')).not.toBeInTheDocument()
+  })
+
+  // A deep link into a specific account must survive the round trip through sign-in,
+  // same as any other protected route.
+  it('sends an anonymous deep link to an account through login and back to that account', async () => {
+    const user = userEvent.setup()
+    mockApi(apiRoutes({ [`POST ${B}/auth/login`]: ok(envelope(session('credit_officer'))) }), { vi })
+    renderApp('/watchlist?account=MSME00001')
+    await screen.findByRole('heading', { name: 'Sign in' })
+    await signIn(user)
+    expect(await screen.findByRole('dialog', { name: /MSME00001/ })).toBeInTheDocument()
   })
 
   it('renders the watch-list for a signed-in credit officer, with the session bar', async () => {

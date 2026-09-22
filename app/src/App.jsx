@@ -8,7 +8,7 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import RequireAuth from './auth/RequireAuth'
 import RequireRole from './auth/RequireRole'
-import { useAuth } from './auth/AuthContext'
+import { AUTH_STATUS, useAuth } from './auth/AuthContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import RouteAnnouncer from './components/RouteAnnouncer'
 import SkipLink from './components/SkipLink'
@@ -30,11 +30,21 @@ import Watchlist from './screens/Watchlist'
 /** ?view=risk was how the old tab switcher deep-linked. Keep those links alive. */
 function LegacyViewRedirect() {
   const location = useLocation()
-  const { roleCode, isStatic } = useAuth()
+  const { status, roleCode, isStatic } = useAuth()
   const params = new URLSearchParams(location.search)
-  // With no ?view=, land on a screen this role can actually open. An RM sent to the
-  // watch-list met a permission-denied panel on every sign-in.
-  const target = PATH_BY_VIEW[params.get('view')] || homeFor(roleCode, { isStatic })
+  const requestedView = PATH_BY_VIEW[params.get('view')]
+  // `?view=` is an explicit deep link — an old bookmark or shared link asking for a
+  // specific screen — so it is honoured even for a visitor who turns out to be signed
+  // out; the route guard downstream sends them to sign in with that page as `?next=`.
+  // A bare `/` is not a deep link. It used to be treated as one anyway: this fell
+  // through to `homeFor(roleCode, …)`, which for a signed-out visitor (no role at all)
+  // fell all the way to its own last-resort default and sent them at `/data-sources` —
+  // a route that then bounced them to `/login?next=%2Fdata-sources`, so every plain
+  // visit fabricated a deep link nobody asked for. A manager who then signed in landed
+  // on Data Sources instead of the watch-list. Land a signed-in (or static-demo) role on
+  // a screen it can open; land everyone else on a clean `/login`, no `?next=` attached.
+  const target = requestedView
+    || (isStatic || status === AUTH_STATUS.AUTHENTICATED ? homeFor(roleCode, { isStatic }) : '/login')
   params.delete('view')
   const search = params.toString()
   return <Navigate to={{ pathname: target, search: search ? `?${search}` : '' }} replace />
