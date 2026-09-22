@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { screen, within } from '@testing-library/react'
 import PortfolioRiskScreen from './PortfolioRiskScreen'
-import { renderScreen } from '../test/render'
+import { renderScreen, session } from '../test/render'
 import { B, apiRoutes, envelope, fail, metrics, mockApi, ok, portfolio } from '../test/fixtures/api'
 // The real, committed export — array-shaped `by_portfolio`, `red_band_precision_8m`
 // spelled `{n, hits, precision, ci_lo, ci_hi}` — as opposed to the hand-written fixture
@@ -109,6 +109,38 @@ describe('Portfolio risk', () => {
     expect(screen.getByLabelText('Provisioning rate on NPA (IRAC)')).toBeInTheDocument()
     expect(screen.getByLabelText('Assumed IDBI MSME book size')).toBeInTheDocument()
   })
+
+  // The what-if turns an assumed cure rate and an assumed book size into a bank-wide rupee
+  // figure. That is a planning exercise for a manager. A credit officer keeps the whole of
+  // the rest of the screen — including the per-portfolio Red-band precision, which is
+  // exactly the number they need before they trust a Red flag.
+  it('withholds the provisioning what-if from a credit officer', async () => {
+    mockApi(apiRoutes(), { vi })
+    render({ user: session('credit_officer') })
+    await screen.findByRole('heading', { name: /by lending portfolio/ })
+    expect(screen.queryByLabelText('Accounts cured by acting early')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Provisioning rate on NPA (IRAC)')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Assumed IDBI MSME book size')).not.toBeInTheDocument()
+    expect(screen.queryByText(/provisioning what-if/i)).not.toBeInTheDocument()
+    // and the headline card that only makes sense beside those sliders goes with them
+    expect(screen.queryByText('Provisioning saved / yr')).not.toBeInTheDocument()
+  })
+
+  it('leaves the rest of the screen intact for that credit officer', async () => {
+    mockApi(apiRoutes(), { vi })
+    render({ user: session('credit_officer') })
+    expect(await screen.findByRole('heading', { name: /by lending portfolio/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'By sector' })).toBeInTheDocument()
+    expect(screen.getByText('Red-band precision, per portfolio')).toBeInTheDocument()
+    expect(screen.getByText('Flagged exposure')).toBeInTheDocument()
+  })
+
+  it.each(['manager', 'admin'])('keeps the what-if for a %s', async (role) => {
+    mockApi(apiRoutes(), { vi })
+    render({ user: session(role) })
+    expect(await screen.findByLabelText('Accounts cured by acting early')).toBeInTheDocument()
+  })
+
 
   it('pages the whole book rather than showing only the first page in the exhibits', async () => {
     const api = mockApi(apiRoutes({

@@ -86,13 +86,15 @@ describe('App shell', () => {
     expect(seen).toMatchObject({ pathname: '/login', search: '?next=%2Frisk' })
   })
 
-  // `/` used to send every role to the watch-list, so a relationship manager — who has no
-  // drishti/* operation in the contract — met a permission-denied panel on every sign-in.
-  it('lands a relationship manager on a screen their role can open', async () => {
+  // DRISHTi is a credit product and the RM is SANKET's role. Data sources and the
+  // Real-data study used to be open to them; with the first narrowed to A/M and the second
+  // to A, there is no DRISHTi screen left for an RM. They land on the watch-list and are
+  // told so — inside the shell, so there is still a way to sign out.
+  it('tells a relationship manager plainly that DRISHTi has no screen for them', async () => {
     mockApi(apiRoutes(), { vi })
     renderApp('/', { user: session('relationship_manager') })
-    expect(await screen.findByRole('heading', { name: /Real-Data Validation|Data sources/i })).toBeInTheDocument()
-    expect(screen.queryByTestId('state-denied')).not.toBeInTheDocument()
+    expect(await screen.findByTestId('state-denied')).toHaveTextContent('Relationship manager')
+    expect(screen.getByTestId('session-bar')).toBeInTheDocument()
   })
 
   it('still lands a credit officer on the watch-list', async () => {
@@ -110,14 +112,14 @@ describe('App shell', () => {
     expect(await screen.findByRole('heading', { name: /Borrower Watch-list/i })).toBeInTheDocument()
   })
 
-  it('signs a relationship manager in from an anonymous root visit and lands them on their home', async () => {
+  it('signs a relationship manager in from an anonymous root visit and says why there is nothing here', async () => {
     const user = userEvent.setup()
     mockApi(apiRoutes({ [`POST ${B}/auth/login`]: ok(envelope(session('relationship_manager'))) }), { vi })
     renderApp('/')
     await screen.findByRole('heading', { name: 'Sign in' })
     await signIn(user)
-    expect(await screen.findByRole('heading', { name: /Real-Data Validation|Data sources/i })).toBeInTheDocument()
-    expect(screen.queryByTestId('state-denied')).not.toBeInTheDocument()
+    expect(await screen.findByTestId('state-denied')).toHaveTextContent('Relationship manager')
+    expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument()
   })
 
   // A deep link into a specific account must survive the round trip through sign-in,
@@ -158,26 +160,97 @@ describe('App shell', () => {
     expect(await screen.findByRole('heading', { name: 'Risk thresholds' })).toBeInTheDocument()
   })
 
+  /** Every link the signed-in role is offered, in the order the sidebar offers them. */
+  const navLabels = () => {
+    const nav = screen.getAllByRole('navigation', { name: 'Sections' })[0]
+    return [...nav.querySelectorAll('a')].map((a) => a.textContent.trim())
+  }
+
   it('offers a credit officer no doors that will not open', async () => {
     mockApi(apiRoutes(), { vi })
     renderApp('/watchlist', { user: session('credit_officer') })
     await screen.findByRole('heading', { name: /Borrower Watch-list/i })
-    const nav = screen.getAllByRole('navigation', { name: 'Sections' })[0]
-    const labels = [...nav.querySelectorAll('a')].map((a) => a.textContent.trim())
-    expect(labels).toContain('Watch-list')
-    expect(labels).toContain('Data sources')
-    expect(labels).not.toContain('Thresholds')
-    expect(labels).not.toContain('Administration')
+    expect(navLabels()).toEqual(['Watch-list', 'Portfolio risk'])
   })
 
-  it('gives a manager the threshold door and withholds administration', async () => {
+  it('gives a manager the threshold and data-source doors and withholds administration', async () => {
     mockApi(apiRoutes(), { vi })
     renderApp('/watchlist', { user: session('manager') })
     await screen.findByRole('heading', { name: /Borrower Watch-list/i })
-    const nav = screen.getAllByRole('navigation', { name: 'Sections' })[0]
-    const labels = [...nav.querySelectorAll('a')].map((a) => a.textContent.trim())
-    expect(labels).toContain('Thresholds')
+    const labels = navLabels()
+    expect(labels).toEqual(['Watch-list', 'Portfolio risk', 'Model & Metrics', 'Thresholds', 'Data sources'])
     expect(labels).not.toContain('Administration')
+    expect(labels).not.toContain('Real-data model')
+  })
+
+  it('gives an administrator every door, the two admin-only ones included', async () => {
+    mockApi(apiRoutes(), { vi })
+    renderApp('/watchlist', { user: session('admin') })
+    await screen.findByRole('heading', { name: /Borrower Watch-list/i })
+    expect(navLabels()).toEqual([
+      'Watch-list', 'Real-data modelREAL', 'Portfolio risk', 'Model & Metrics',
+      'Thresholds', 'Data sources', 'Administration',
+    ])
+  })
+
+  it('offers a relationship manager no doors at all, and says so', async () => {
+    mockApi(apiRoutes(), { vi })
+    renderApp('/watchlist', { user: session('relationship_manager') })
+    await screen.findByTestId('state-denied')
+    expect(navLabels()).toEqual([])
+  })
+
+  // The three screens whose audience narrowed. A typed URL must land on the refusal, not
+  // on a blank page and not on the screen — and the backend refuses the data independently,
+  // which tests/test_rbac.py in rrsquad-platform asserts from the other end.
+  describe.each([
+    ['/data-sources', 'credit_officer', 'Credit officer'],
+    ['/data-sources', 'relationship_manager', 'Relationship manager'],
+    ['/model', 'credit_officer', 'Credit officer'],
+    ['/model', 'relationship_manager', 'Relationship manager'],
+    ['/real-data', 'credit_officer', 'Credit officer'],
+    ['/real-data', 'manager', 'Manager'],
+    ['/real-data', 'relationship_manager', 'Relationship manager'],
+  ])('a direct visit to %s as a %s', (path, role, label) => {
+    it('is refused, by name, inside the shell', async () => {
+      mockApi(apiRoutes(), { vi })
+      renderApp(path, { user: session(role) })
+      expect(await screen.findByTestId('state-denied')).toHaveTextContent(label)
+      expect(screen.getByTestId('session-bar')).toBeInTheDocument()
+    })
+  })
+
+  describe.each([
+    ['/data-sources', 'manager', /Data sources & sync/i],
+    ['/data-sources', 'admin', /Data sources & sync/i],
+    ['/model', 'manager', /Model|Metrics/i],
+    ['/real-data', 'admin', /Real-Data Validation/i],
+  ])('a direct visit to %s as a %s', (path, role, heading) => {
+    it('opens the screen', async () => {
+      mockApi(apiRoutes(), { vi })
+      renderApp(path, { user: session(role) })
+      expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument()
+      expect(screen.queryByTestId('state-denied')).not.toBeInTheDocument()
+    })
+  })
+
+  // Static mode has no session and therefore no role. It shows what a manager sees, minus
+  // the screens that are an administrator's alone — the navigation and a typed URL agree.
+  it('shows the static demo a manager’s navigation, minus the admin-only screens', async () => {
+    mockSnapshotOnly()
+    renderApp('/watchlist', { mode: 'static' })
+    await screen.findByRole('heading', { name: /Borrower Watch-list/i })
+    const labels = navLabels()
+    expect(labels).toContain('Data sources')
+    expect(labels).not.toContain('Real-data model')
+    expect(labels).not.toContain('Administration')
+    expect(labels).not.toContain('Thresholds')
+  })
+
+  it('refuses the admin-only screens in static mode too, rather than rendering them', async () => {
+    mockSnapshotOnly()
+    renderApp('/real-data', { mode: 'static' })
+    expect(await screen.findByTestId('state-empty')).toHaveTextContent('not in the static demo')
   })
 
   it('runs without a backend, and says on screen that it is doing so', async () => {

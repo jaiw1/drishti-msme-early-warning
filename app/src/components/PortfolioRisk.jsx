@@ -100,7 +100,14 @@ function PrecisionCard({ entry }) {
   )
 }
 
-export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, onSelect }) {
+/**
+ * `showWhatIf` — the provisioning what-if is a planning exhibit, not a working tool: it
+ * turns an assumed cure rate and an assumed book size into a bank-wide rupee figure. That
+ * is a manager's and an administrator's exercise. A credit officer keeps the whole of the
+ * rest of this screen, scoped to their own portfolios; they do not get a slider that
+ * extrapolates their sample to the balance sheet.
+ */
+export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, onSelect, showWhatIf = true }) {
   const [cure, setCure] = useState(0.4)
   const [prov, setProv] = useState(0.15)
   const [book, setBook] = useState(DEFAULT_BOOK_CR)
@@ -140,7 +147,7 @@ export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, onS
   return (
     <div className="space-y-5">
       {/* headline impact cards */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className={`grid grid-cols-1 gap-3 ${showWhatIf ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-1 flex items-center gap-2 text-rag-redtx">
             <TriangleAlert size={16} aria-hidden="true" />
@@ -159,14 +166,18 @@ export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, onS
             {inr((topSector?.red + topSector?.amber) || 0)} flagged ({Math.round((topSector?.pctFlagged || 0) * 100)}% of its book)
           </div>
         </div>
-        <div className="rounded-xl border border-idbi-green/30 bg-idbi-green/5 p-4">
-          <div className="mb-1 flex items-center gap-2 text-idbi-green">
-            <ShieldCheck size={16} aria-hidden="true" />
-            <span className="text-xs font-semibold uppercase tracking-wide">Provisioning saved / yr</span>
+        {/* The projection is only honest beside the sliders it is computed from — the card
+            says "adjustable below", and without them there is nothing below to adjust. */}
+        {showWhatIf && (
+          <div className="rounded-xl border border-idbi-green/30 bg-idbi-green/5 p-4">
+            <div className="mb-1 flex items-center gap-2 text-idbi-green">
+              <ShieldCheck size={16} aria-hidden="true" />
+              <span className="text-xs font-semibold uppercase tracking-wide">Provisioning saved / yr</span>
+            </div>
+            <div className="text-2xl font-extrabold text-idbi-green">{inr(econ.provSaved * econ.scale)}</div>
+            <div className="text-xs text-slate-600">assumes a ~₹{(book / 1000).toFixed(0)}k cr MSME book (adjustable below)</div>
           </div>
-          <div className="text-2xl font-extrabold text-idbi-green">{inr(econ.provSaved * econ.scale)}</div>
-          <div className="text-xs text-slate-600">assumes a ~₹{(book / 1000).toFixed(0)}k cr MSME book (adjustable below)</div>
-        </div>
+        )}
       </div>
 
       {/* concentration: portfolio, sector, segment */}
@@ -352,46 +363,48 @@ export default function PortfolioRisk({ rows, summary, ecosystem, rankOrder, onS
       )}
 
       {/* what-if */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <div className="mb-1 flex items-center gap-2">
-          <IndianRupee size={18} className="text-idbi-green" aria-hidden="true" />
-          <h3 className="font-bold text-slate-800">What early action is worth — provisioning what-if</h3>
-        </div>
-        <p className="mb-5 max-w-3xl text-xs leading-relaxed text-slate-600">
-          When a loan slips to NPA the bank must set aside provisions (RBI IRAC). If officers act on DRISHTi’s early
-          flags and rescue a share of them, that provisioning is avoided. Move the sliders to see the impact.
-        </p>
-        <div className="grid gap-8 md:grid-cols-2">
-          <div className="space-y-5">
-            <Slider id="wi-cure" label="Accounts cured by acting early" value={cure} set={setCure} min={0.1} max={0.7} step={0.05} fmt={(v) => `${Math.round(v * 100)}%`} />
-            <Slider id="wi-prov" label="Provisioning rate on NPA (IRAC)" value={prov} set={setProv} min={0.1} max={0.4} step={0.05} fmt={(v) => `${Math.round(v * 100)}%`} />
-            <Slider id="wi-book" label="Assumed IDBI MSME book size" value={book} set={setBook} min={25000} max={35000} step={1000} fmt={(v) => `₹${(v / 1000).toFixed(0)}k cr`} />
-            <p className="text-[11px] leading-relaxed text-slate-600">
-              <b>Assumptions (all adjustable):</b> Expected NPA = Σ (model PD × exposure) over the flagged accounts;
-              provisioning saved = Expected NPA × provisioning rate × cure rate — computed on this
-              ₹{Math.round(econ.sampleCr).toLocaleString('en-IN')} cr sample, then scaled to the full book. The book
-              size is an assumption (public disclosures put IDBI’s MSME/priority book broadly at ₹25–35k cr); the
-              ₹-sample figures below don’t depend on it.
-            </p>
+      {showWhatIf && (
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="mb-1 flex items-center gap-2">
+            <IndianRupee size={18} className="text-idbi-green" aria-hidden="true" />
+            <h3 className="font-bold text-slate-800">What early action is worth — provisioning what-if</h3>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col justify-center rounded-xl border border-idbi-green/30 bg-idbi-green/5 p-4">
-              <div className="text-3xl font-extrabold text-idbi-green">{inr(econ.provSaved * econ.scale)}</div>
-              <div className="mt-1 text-sm font-semibold text-slate-700">Provisioning saved / yr</div>
-              <div className="text-xs text-slate-600">on full MSME book</div>
+          <p className="mb-5 max-w-3xl text-xs leading-relaxed text-slate-600">
+            When a loan slips to NPA the bank must set aside provisions (RBI IRAC). If officers act on DRISHTi’s early
+            flags and rescue a share of them, that provisioning is avoided. Move the sliders to see the impact.
+          </p>
+          <div className="grid gap-8 md:grid-cols-2">
+            <div className="space-y-5">
+              <Slider id="wi-cure" label="Accounts cured by acting early" value={cure} set={setCure} min={0.1} max={0.7} step={0.05} fmt={(v) => `${Math.round(v * 100)}%`} />
+              <Slider id="wi-prov" label="Provisioning rate on NPA (IRAC)" value={prov} set={setProv} min={0.1} max={0.4} step={0.05} fmt={(v) => `${Math.round(v * 100)}%`} />
+              <Slider id="wi-book" label="Assumed IDBI MSME book size" value={book} set={setBook} min={25000} max={35000} step={1000} fmt={(v) => `₹${(v / 1000).toFixed(0)}k cr`} />
+              <p className="text-[11px] leading-relaxed text-slate-600">
+                <b>Assumptions (all adjustable):</b> Expected NPA = Σ (model PD × exposure) over the flagged accounts;
+                provisioning saved = Expected NPA × provisioning rate × cure rate — computed on this
+                ₹{Math.round(econ.sampleCr).toLocaleString('en-IN')} cr sample, then scaled to the full book. The book
+                size is an assumption (public disclosures put IDBI’s MSME/priority book broadly at ₹25–35k cr); the
+                ₹-sample figures below don’t depend on it.
+              </p>
             </div>
-            <div className="flex flex-col justify-center rounded-xl border border-slate-200 p-4">
-              <div className="text-3xl font-extrabold text-slate-900">{inr(econ.exposureProtected * econ.scale)}</div>
-              <div className="mt-1 text-sm font-semibold text-slate-700">Exposure kept performing</div>
-              <div className="text-xs text-slate-600">loans rescued before NPA</div>
-            </div>
-            <div className="col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-              On this {Math.round(econ.sampleCr).toLocaleString('en-IN')}-cr sample:
-              {' '}<b>{inr(econ.provSaved)}</b> provisioning saved · expected NPA in flagged book <b>{inr(econ.expNpa)}</b>.
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col justify-center rounded-xl border border-idbi-green/30 bg-idbi-green/5 p-4">
+                <div className="text-3xl font-extrabold text-idbi-green">{inr(econ.provSaved * econ.scale)}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-700">Provisioning saved / yr</div>
+                <div className="text-xs text-slate-600">on full MSME book</div>
+              </div>
+              <div className="flex flex-col justify-center rounded-xl border border-slate-200 p-4">
+                <div className="text-3xl font-extrabold text-slate-900">{inr(econ.exposureProtected * econ.scale)}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-700">Exposure kept performing</div>
+                <div className="text-xs text-slate-600">loans rescued before NPA</div>
+              </div>
+              <div className="col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                On this {Math.round(econ.sampleCr).toLocaleString('en-IN')}-cr sample:
+                {' '}<b>{inr(econ.provSaved)}</b> provisioning saved · expected NPA in flagged book <b>{inr(econ.expNpa)}</b>.
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   )
 }

@@ -72,14 +72,20 @@ export default function App() {
             {/* x-roles: A, M, CO */}
             <Route path="/watchlist" element={<RequireRole allow={['A', 'M', 'CO']}><Watchlist /></RequireRole>} />
             <Route path="/risk" element={<RequireRole allow={['A', 'M', 'CO']}><PortfolioRiskScreen /></RequireRole>} />
-            <Route path="/model" element={<RequireRole allow={['A', 'M', 'CO']}><ModelMetrics /></RequireRole>} />
+
+            {/* x-roles: A, M — drishtiValidation. `drishtiMetrics` is still A/M/CO, because
+                the watch-list KPIs and Portfolio risk's Red-band precision cards read it;
+                what narrows here is the screen, not the officer's numbers. */}
+            <Route path="/model" element={<RequireRole allow={['A', 'M']}><ModelMetrics /></RequireRole>} />
 
             {/* x-roles: M, A — drishtiThresholdSet */}
             <Route path="/threshold" element={<RequireRole allow={['M', 'A']}><Thresholds /></RequireRole>} />
 
-            {/* x-roles: A, M, CO, RM — meta/sync and meta/provenance */}
-            <Route path="/data-sources" element={<RequireAuth><DataSources /></RequireAuth>} />
-            <Route path="/real-data" element={<RequireAuth><RealData /></RequireAuth>} />
+            {/* x-roles: A, M — meta/sync and meta/provenance */}
+            <Route path="/data-sources" element={<RequireRole allow={['A', 'M']}><DataSources /></RequireRole>} />
+
+            {/* A bundled offline study, not a platform route. Administrators only. */}
+            <Route path="/real-data" element={<RequireRole allow={['A']}><RealData /></RequireRole>} />
 
             {/* x-roles: A */}
             <Route path="/admin" element={<RequireRole allow={['A']}><Admin /></RequireRole>} />

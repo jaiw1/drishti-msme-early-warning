@@ -16,38 +16,65 @@ import SourceBadge from './SourceBadge'
 import { useAuth } from '../auth/AuthContext'
 import { roleMatches } from '../auth/roles'
 
-/** Route table. `roles` is copied verbatim from `contracts/openapi.json` `x-roles`. */
+/**
+ * Route table. `roles` is copied verbatim from `contracts/openapi.json` `x-roles` where the
+ * screen has a platform route behind it, and states the decision where it does not.
+ *
+ * Three screens are narrower than the data they read:
+ *
+ *  - **Data sources** reads `metaSync`/`metaProvenance`, which are now A and M. It is a
+ *    disclosure surface about the platform's own plumbing, not a lending screen.
+ *  - **Model & Metrics** reads `drishtiValidation` (A, M). `drishtiMetrics` stays readable
+ *    by a credit officer because the watch-list KPIs and the per-portfolio Red-band
+ *    precision cards on Portfolio risk are built from it — the screen is hidden, the
+ *    number an officer needs is not.
+ *  - **Real-data model** is a bundled offline study with no platform route at all, so its
+ *    audience is a decision rather than an x-roles list: administrators.
+ */
 export const NAV = [
   { key: 'portfolio', path: '/watchlist', label: 'Watch-list', short: 'Watch-list', icon: LayoutGrid, help: 'watchlist', roles: ['A', 'M', 'CO'] },
-  { key: 'real', path: '/real-data', label: 'Real-data model', short: 'Real data', icon: BadgeCheck, badge: 'REAL', help: 'real', roles: [] },
+  { key: 'real', path: '/real-data', label: 'Real-data model', short: 'Real data', icon: BadgeCheck, badge: 'REAL', help: 'real', roles: ['A'] },
   { key: 'risk', path: '/risk', label: 'Portfolio risk', short: 'Risk', icon: PieChart, help: 'risk', roles: ['A', 'M', 'CO'] },
-  { key: 'analytics', path: '/model', label: 'Model & Metrics', short: 'Model', icon: LineChart, help: 'model', roles: ['A', 'M', 'CO'] },
+  { key: 'analytics', path: '/model', label: 'Model & Metrics', short: 'Model', icon: LineChart, help: 'model', roles: ['A', 'M'] },
   { key: 'threshold', path: '/threshold', label: 'Thresholds', short: 'Thresholds', icon: SlidersHorizontal, help: 'threshold', roles: ['M', 'A'] },
-  { key: 'sources', path: '/data-sources', label: 'Data sources', short: 'Sources', icon: Plug, help: 'sources', roles: [] },
+  { key: 'sources', path: '/data-sources', label: 'Data sources', short: 'Sources', icon: Plug, help: 'sources', roles: ['A', 'M'] },
   { key: 'admin', path: '/admin', label: 'Administration', short: 'Admin', icon: Users, help: 'admin', roles: ['A'] },
 ]
+
+/**
+ * What the frozen bundle does not show.
+ *
+ * Static mode has no session and therefore no role, so it needs a rule of its own: it
+ * shows **what a manager sees, minus the screens that are an administrator's alone**.
+ * Thresholds stays out on top of that for the older reason — a threshold change is a write
+ * against a backend the frozen bundle does not have, so the screen could only lie.
+ *
+ * `RequireRole` reads the same set, so a typed URL and the menu agree.
+ */
+export const STATIC_HIDDEN = new Set(['/admin', '/threshold', '/real-data'])
 
 export const PATH_BY_VIEW = Object.fromEntries(NAV.map((n) => [n.key, n.path]))
 const VIEW_BY_PATH = Object.fromEntries(NAV.map((n) => [n.path, n.key]))
 export const viewForPath = (pathname) => VIEW_BY_PATH[pathname] || 'portfolio'
 
 /**
- * Where a signed-in role should land.
+ * Where a signed-in role should land: the first screen their role can actually open.
  *
- * `/` used to send everyone to the watch-list, including a relationship manager — who has
- * no `drishti/*` operation at all, so signing in put a permission-denied panel in front of
- * a legitimate user. An RM's two screens are the ones the contract gives them:
- * `meta/sync` and `meta/provenance`.
+ * A relationship manager now has none. DRISHTi is a credit product and the RM is SANKET's
+ * role; with Data sources narrowed to A and M there is no `drishti/*` operation and no
+ * bundled exhibit left for them. They land on the watch-list and are told plainly that the
+ * screen is not theirs, which is the truth — better than a menu of one door that opens on
+ * somebody else's plumbing.
  */
 export function homeFor(role, { isStatic = false } = {}) {
   const allowed = navFor(role, { isStatic })
   if (allowed.some((n) => n.key === 'portfolio')) return '/watchlist'
-  return allowed[0]?.path || '/data-sources'
+  return allowed[0]?.path || '/watchlist'
 }
 
 export function navFor(role, { isStatic = false } = {}) {
   // The frozen bundle has no session, so it shows what it can actually render.
-  if (isStatic) return NAV.filter((n) => !['admin', 'threshold'].includes(n.key))
+  if (isStatic) return NAV.filter((n) => !STATIC_HIDDEN.has(n.path))
   return NAV.filter((n) => roleMatches(role, n.roles))
 }
 
@@ -98,6 +125,11 @@ export default function AppShell({
         </div>
         <nav className="space-y-1 p-3" aria-label="Sections">
           <NavLinks mobile={false} />
+          {items.length === 0 && (
+            <p className="px-3 py-2 text-[11px] leading-relaxed text-white/70">
+              No DRISHTi screen is open to your role. Sign out to switch accounts.
+            </p>
+          )}
         </nav>
         <div className="mt-auto border-t border-white/20 p-4 text-[11px] leading-relaxed text-white/80">
           <div className="mb-1 flex items-center gap-1.5 text-white"><ShieldCheck size={13} aria-hidden="true" /> Human-in-the-loop</div>
@@ -138,12 +170,14 @@ export default function AppShell({
 
       {/* An administrator sees seven sections. Squashing seven labels into 375 px makes
           every one of them unreadable, so the bar scrolls instead of shrinking. */}
-      <nav
-        className="scroll-thin fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-white/20 bg-idbi-green pb-[env(safe-area-inset-bottom)] text-white md:hidden"
-        aria-label="Sections"
-      >
-        <NavLinks mobile />
-      </nav>
+      {items.length > 0 && (
+        <nav
+          className="scroll-thin fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-white/20 bg-idbi-green pb-[env(safe-area-inset-bottom)] text-white md:hidden"
+          aria-label="Sections"
+        >
+          <NavLinks mobile />
+        </nav>
+      )}
     </div>
   )
 }

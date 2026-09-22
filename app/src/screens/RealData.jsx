@@ -18,9 +18,10 @@ export default function RealData() {
   const { isStatic, roleCode } = useAuth()
   const live = !isStatic
   const real = useAsync(({ signal }) => loadRealDataModel({ live, signal }), [live])
-  // This screen is open to every signed-in role, but `drishti/metrics` is not (x-roles:
-  // A, M, CO). Asking for it as a relationship manager put an unexplained 403 in the
-  // network tab, and the cockpit's own AUC is only used for the comparison sentence.
+  // The route is administrators-only now, so every live reader of this screen can read
+  // `drishti/metrics` (x-roles A, M, CO). The guard stays because the static bundle has no
+  // session at all, and the cockpit's own AUC is only used for the comparison sentence —
+  // an unreadable one must not take the rest of the screen down with it.
   const canReadMetrics = isStatic || roleMatches(roleCode, ['A', 'M', 'CO'])
   const metrics = useAsync(
     ({ signal }) => loadMetrics({ live, signal }),

@@ -144,10 +144,7 @@ export default function Watchlist() {
       {Array.isArray(scopeNote) && scopeNote.length > 0 && (
         <div className="flex items-start gap-2 rounded-xl border border-idbi-green/30 bg-idbi-green/5 px-4 py-3 text-sm text-slate-700">
           <Info size={16} className="mt-0.5 shrink-0 text-idbi-green" aria-hidden="true" />
-          <p>
-            You are scoped to <b>{scopeNote.join(', ')}</b>. Accounts in other portfolios are not
-            withheld from this screen — the server never sent them, and never will for your role.
-          </p>
+          <p>Showing only your portfolios: <b>{scopeNote.join(', ')}</b>.</p>
         </div>
       )}
 

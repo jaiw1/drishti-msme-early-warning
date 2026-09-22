@@ -42,12 +42,33 @@ describe('Watch-list', () => {
     expect(await screen.findByTestId('state-empty')).toHaveTextContent('No accounts match these filters')
   })
 
-  it('tells a scoped officer that the server, not the screen, shortened the list', async () => {
+  // The note used to be three lines explaining that the server had never sent the other
+  // portfolios. True, and nobody read it. One line, built from the scope the server
+  // actually returned, says the part an officer needs before they start reading rows.
+  it('names the portfolios a scoped officer is seeing, in one line', async () => {
     mockApi(apiRoutes({
       [`${B}/drishti/portfolio`]: ok(portfolio(undefined, { scope: ['MSME-CC', 'MSME-TL', 'LAP'] })),
     }), { vi })
     render({ user: session('credit_officer') })
-    expect(await screen.findByText(/You are scoped to/)).toHaveTextContent('MSME-CC, MSME-TL, LAP')
+    const note = await screen.findByText(/Showing only your portfolios/)
+    expect(note).toHaveTextContent('Showing only your portfolios: MSME-CC, MSME-TL, LAP.')
+    expect(note.textContent).not.toMatch(/never sent them/)
+  })
+
+  it('names whatever scope the server returned, not a fixed list', async () => {
+    mockApi(apiRoutes({
+      [`${B}/drishti/portfolio`]: ok(portfolio(undefined, { scope: ['Agri'] })),
+    }), { vi })
+    render({ user: session('credit_officer') })
+    expect(await screen.findByText(/Showing only your portfolios/))
+      .toHaveTextContent('Showing only your portfolios: Agri.')
+  })
+
+  it('shows no scope line at all to a manager, who is scoped to nothing', async () => {
+    mockApi(apiRoutes(), { vi })
+    render({ user: session('manager') })
+    await screen.findByRole('heading', { name: /Borrower Watch-list/i })
+    expect(screen.queryByText(/Showing only your portfolios/)).not.toBeInTheDocument()
   })
 
   it('shows both bands when the recomputed one differs from the published one', async () => {

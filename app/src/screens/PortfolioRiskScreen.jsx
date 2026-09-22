@@ -7,14 +7,20 @@ import ErrorState from '../components/states/ErrorState'
 import Loading from '../components/states/Loading'
 import Empty from '../components/states/Empty'
 import { useAuth } from '../auth/AuthContext'
+import { roleMatches } from '../auth/roles'
 import useAsync from '../lib/useAsync'
 import { loadMetrics, loadWholeBook } from '../domain/drishti'
 import { badgeForMode } from '../domain/provenance'
 import { useSearchParams } from 'react-router-dom'
 
 export default function PortfolioRiskScreen() {
-  const { isStatic } = useAuth()
+  const { isStatic, roleCode } = useAuth()
   const live = !isStatic
+  // The provisioning what-if extrapolates this sample to the whole MSME book under an
+  // assumed cure rate. That is a planning exhibit for a manager, not part of a credit
+  // officer's working screen — the rest of the screen, scoped to their own portfolios,
+  // stays exactly as it was. The frozen bundle shows what a manager sees.
+  const showWhatIf = isStatic || roleMatches(roleCode, ['A', 'M'])
   const [params, setParams] = useSearchParams()
   const selected = params.get('account')
 
@@ -54,12 +60,13 @@ export default function PortfolioRiskScreen() {
             </p>
           )}
           <PortfolioRisk
-          rows={book.data}
-          summary={metrics.data?.summary}
-          ecosystem={metrics.data?.ecosystem ?? book.meta?.ecosystem}
-          rankOrder={metrics.data?.metrics?.rank_order}
-          thresholds={book.meta?.thresholds}
-          onSelect={setSelected}
+            rows={book.data}
+            summary={metrics.data?.summary}
+            ecosystem={metrics.data?.ecosystem ?? book.meta?.ecosystem}
+            rankOrder={metrics.data?.metrics?.rank_order}
+            thresholds={book.meta?.thresholds}
+            showWhatIf={showWhatIf}
+            onSelect={setSelected}
           />
         </>
       )}

@@ -82,4 +82,28 @@ describe('RequireRole', () => {
     renderAt('/admin')
     expect(screen.getByText('Sign-in screen')).toBeInTheDocument()
   })
+
+  // A role with no DRISHTi screen of its own — a relationship manager, now that Data
+  // sources is A/M and the Real-data study is A — lands on a refusal. A bare panel on an
+  // empty page would strand them there with no way to sign out, so the refusal is rendered
+  // inside the shell.
+  it('renders the refusal inside the app shell, so there is still a way out', () => {
+    renderAt('/threshold', { user: SESSION('credit_officer') })
+    expect(screen.getByTestId('state-denied')).toBeInTheDocument()
+    expect(screen.getByTestId('session-bar')).toBeInTheDocument()
+    expect(screen.getAllByRole('navigation', { name: 'Sections' }).length).toBeGreaterThan(0)
+  })
+
+  // Static mode has no session and therefore no role, so it cannot be gated by one. It is
+  // gated by the same STATIC_HIDDEN set the static navigation is built from.
+  it('refuses a static-hidden screen in static mode rather than rendering it', () => {
+    renderAt('/threshold', { mode: 'static' })
+    expect(screen.queryByText('Threshold editor')).not.toBeInTheDocument()
+    expect(screen.getByTestId('state-empty')).toHaveTextContent('not in the static demo')
+  })
+
+  it('still passes a screen the static demo does carry straight through', () => {
+    renderAt('/any', { mode: 'static' })
+    expect(screen.getByText('Any signed-in user')).toBeInTheDocument()
+  })
 })
