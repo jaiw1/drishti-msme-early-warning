@@ -183,4 +183,33 @@ describe('Administration — audit log', () => {
     render()
     expect(await screen.findByText('No entries match those filters')).toBeInTheDocument()
   })
+
+  it('renders a threshold change as before → after, not as [object Object]', async () => {
+    // The row a reviewer most wants to read: the cut-off that decides which accounts turn
+    // red. The platform records it as `{before, after}`, and a template string turned the
+    // whole change into the word "[object Object]" — the change was audited and then shown
+    // to nobody.
+    mockApi(apiRoutes({
+      [`${B}/admin/audit`]: ok(envelope([{
+        id: 416, ts: '2026-09-16T09:41:39Z', actor_user_id: '7ef6fa0f-b64c-4f3f-80ca-01dd662549c5',
+        actor_role: 'admin', action: 'drishti.thresholds.changed', target_type: 'model_run',
+        target_id: 'MR-2026-09-16', request_id: 'r416',
+        payload: {
+          red_thr: { before: 0.3437, after: 0.25 },
+          amber_thr: { before: 0.1875, after: 0.15 },
+          live: true,
+        },
+        prev_hash: 'aa', hash: 'bb',
+      }], { total: 1 })),
+    }), { vi })
+    render()
+
+    const table = await screen.findByRole('table', { name: /audit entries/i })
+    const row = within(table).getByRole('rowheader', { name: '416' }).closest('tr')
+    expect(row).toHaveTextContent('red_thr=0.3437 → 0.25')
+    expect(row).toHaveTextContent('amber_thr=0.1875 → 0.15')
+    expect(row).toHaveTextContent('live=true')
+    expect(row).not.toHaveTextContent('[object Object]')
+    expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument()
+  })
 })

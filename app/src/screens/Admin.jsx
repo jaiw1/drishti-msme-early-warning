@@ -290,6 +290,37 @@ function UsersPanel() {
   )
 }
 
+/** A number in as few digits as it honestly needs: 0.3437 stays 0.3437, 0.2500 reads 0.25. */
+function auditNumber(n) {
+  return String(Number(n.toFixed(4)))
+}
+
+/**
+ * One payload value, in something a reviewer can read.
+ *
+ * A threshold change arrives as `{before, after}`, and template-stringing that gave
+ * `red_thr=[object Object]` — a row that recorded the single most consequential change in
+ * the product and showed none of it. A `{before, after}` pair now reads as an arrow, and
+ * anything else object-shaped falls back to JSON rather than to a JavaScript noise word.
+ */
+export function auditValue(v) {
+  if (v === null || v === undefined) return '—'
+  if (typeof v === 'number') return Number.isFinite(v) ? auditNumber(v) : String(v)
+  if (typeof v !== 'object') return String(v)
+  if (!Array.isArray(v) && ('before' in v || 'after' in v)) {
+    return `${auditValue(v.before ?? null)} → ${auditValue(v.after ?? null)}`
+  }
+  return JSON.stringify(v)
+}
+
+/** The Detail cell: the first few payload keys, each rendered rather than stringified. */
+export function auditDetail(payload) {
+  if (!payload || typeof payload !== 'object') return '—'
+  const entries = Object.entries(payload)
+  if (entries.length === 0) return '—'
+  return entries.slice(0, 4).map(([k, v]) => `${k}=${auditValue(v)}`).join(' · ')
+}
+
 function AuditPanel() {
   const [filters, setFilters] = useState({ actor: '', action: '', since: '' })
   const [applied, setApplied] = useState({ limit: 50 })
@@ -437,9 +468,7 @@ function AuditPanel() {
                     {r.target_type ? `${r.target_type} ${String(r.target_id ?? '').slice(0, 12)}` : '—'}
                   </td>
                   <td className="px-3 py-2 text-xs text-slate-600">
-                    {r.payload
-                      ? Object.entries(r.payload).slice(0, 4).map(([k, v]) => `${k}=${v}`).join(' · ')
-                      : '—'}
+                    {auditDetail(r.payload)}
                   </td>
                 </tr>
               ))}
