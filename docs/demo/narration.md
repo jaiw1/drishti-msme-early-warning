@@ -12,14 +12,13 @@ generated; every number the export carries is unchanged by the reshape). This is
 signed-in session end to end: real cookies, real CSRF, a real password change out of
 band before recording, real role checks, and one real write to the append-only,
 hash-chained audit log. Recorded 2026-09-21. Every number below is read directly off the
-screen at the timestamp given; none is asserted from memory. **Bold** marks the words the
-on-screen karaoke caption highlights.
+screen at the timestamp given; none is asserted from memory.
 
-The recorded file has no spoken audio — the on-screen caption bar carries this exact
-text, word-synced, burned into the video. A presenter can read this transcript aloud
-over the video, live, during the demo slot.
+The recorded file carries a spoken voiceover — Microsoft neural text-to-speech
+(`en-IN-NeerjaNeural`) reading this exact transcript, timed to the on-screen action. No
+caption bar, no karaoke highlighting.
 
-Total run time: **≈2:33** (well inside the 3-minute cap the deck template requires).
+Total run time: **≈2:50** (well inside the 3-minute cap the deck template requires).
 
 ## Why this replaces the 21 Sep static-demo take
 
@@ -53,42 +52,44 @@ wasted.
 ---
 
 **0:00–0:10 — Sign in, live**
-> This is DRISHTi signed in for real — a live rrsquad-platform session, not a frozen
-> bundle.
+> This is DRISHTi, signed in for real on a live backend — not a frozen demo bundle.
 
 **0:10–0:24 — Watch-list: role-scoped**
-> Sneha Kulkarni, credit officer, scoped to **three** portfolios by the server itself.
-> Her watch-list: **245** Red, **458** Amber, of **12,760** scored accounts.
+> Sneha Kulkarni, credit officer, scoped to three portfolios by the server itself. Her
+> watch-list: two hundred forty-five Red, four hundred fifty-eight Amber, of twelve
+> thousand seven hundred sixty scored accounts.
 
 **0:24–0:46 — Hero account: why this one**
-> Why this account — MSME16350: a **54%** default probability, **80 days** past due,
-> flagged **5 months** early. Credit-limit use reads **not applicable** — this product
-> has no drawable limit, not a hidden zero.
+> Why this account — MSME16350: a ninety-seven percent default probability, eighty days
+> past due, flagged five months early. The channel strip is honest about what the bank
+> can't see — four signals observed, ten read not collected, never a hidden zero.
 
-**0:46–1:04 — Memo + a real recorded action**
-> The auto-drafted memo recommends **credit review**, human review required. Recording
-> what she did is a real, audited write — one click, hash-chained, and it cannot be
-> edited or deleted afterward.
+**0:46–1:14 — Memo + a real recorded action**
+> The auto-drafted memo recommends credit review, human review required. Recording what
+> she did is a real, audited write — one click, hash-chained, and it cannot be edited or
+> deleted afterward.
 
-**1:04–1:20 — Portfolio risk**
+**1:14–1:34 — Portfolio risk**
 > Portfolio risk, all eight products: Red-band precision from retail-unsecured's low
-> seventies up to **100%** on the thinnest bands — each one carries its own interval.
+> seventies up to one hundred percent on the thinnest bands — each one carries its own
+> interval.
 
-**1:20–1:44 — Honesty headline**
-> The honesty headline: **88.6%** of Red-flagged accounts went NPA within eight months, n
-> equals **245**, beside the **16.1%** this operating point still missed. That rise from
-> **84.5%** is the Red threshold moving up on a held-out policy fold — not the model
-> improving.
+**1:34–1:58 — Honesty headline**
+> Switching to the admin view for the model's own report card: the honesty headline —
+> eighty-eight point six percent of Red-flagged accounts went N-P-A within eight months,
+> n equals two hundred forty-five, beside the sixteen point one percent this operating
+> point still missed. That rise from eighty-four point five percent is the Red threshold
+> moving up on a held-out policy fold — not the model improving.
 
-**1:44–2:00 — Validation: fail — accepted**
-> The validation table is honest about its own limits too: of **26** pre-registered
-> criteria, four **fail — and are accepted**, named in advance, never hidden.
+**1:58–2:14 — Validation: fail — accepted**
+> The validation table is honest about its own limits too: of twenty-six pre-registered
+> criteria, four fail — and are accepted — named in advance, never hidden.
 
-**2:00–2:22 — Audit trail (as admin)**
-> And the evidence trail behind that one click: signed in now as the admin, the
-> append-only, hash-chained audit log — her action, on MSME16350, exactly as recorded.
+**2:14–2:36 — Audit trail (as admin)**
+> And the evidence trail behind that one click: the append-only, hash-chained audit log,
+> filtered to her — her action, on MSME16350, exactly as recorded.
 
-**2:22–2:32 — Sign-off**
+**2:36–2:46 — Sign-off**
 > What this supports: a rank-ordered, interval-bound signal on a published run — never a
 > certified default. DRISHTi advises. The credit officer decides.
 
