@@ -166,7 +166,20 @@ export default function Watchlist() {
             </p>
           )}
 
-          {overview.data?.summary && <Kpis summary={overview.data.summary} metrics={overview.data.metrics} />}
+          {overview.data?.summary && (
+            <div className="flex flex-col gap-2">
+              <Kpis summary={overview.data.summary} metrics={overview.data.metrics} />
+              {/* The tiles and the table under them are two endpoints. Once a manager has
+                  moved a line both re-band, and the strip has to say that the counts on it
+                  belong to the moved book and not to the one the run published. */}
+              {overview.meta?.bucket_source === 'live' && (
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-rag-ambertx">
+                  <Info size={13} className="shrink-0" aria-hidden="true" />
+                  re-banded live — threshold change in force
+                </p>
+              )}
+            </div>
+          )}
 
           <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-wrap items-end gap-3 border-b border-slate-200 p-3">

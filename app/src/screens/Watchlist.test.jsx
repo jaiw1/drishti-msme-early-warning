@@ -3,7 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Watchlist from './Watchlist'
 import { renderScreen, session } from '../test/render'
-import { B, apiRoutes, fail, mockApi, ok, portfolio } from '../test/fixtures/api'
+import { B, apiRoutes, envelope, fail, metrics, mockApi, ok, portfolio } from '../test/fixtures/api'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -166,6 +166,32 @@ describe('Watch-list — live re-band', () => {
     mockApi(apiRoutes({ [`${B}/drishti/portfolio`]: ok(portfolio(undefined, { bucket_source: 'live' })) }), { vi })
     render()
     expect(await screen.findByText(/Live re-band · threshold change in force/)).toBeInTheDocument()
+  })
+
+  // The tiles come from /drishti/metrics and the rows from /drishti/portfolio. The tiles
+  // used to go on reporting the published counts while the table re-banded under them, so
+  // the strip now carries its own statement of which book it is counting.
+  it('counts the re-banded book on the KPI strip, and captions it as such', async () => {
+    mockApi(apiRoutes({
+      [`${B}/drishti/portfolio`]: ok(portfolio(undefined, { bucket_source: 'live' })),
+      [`${B}/drishti/metrics`]: ok(envelope({
+        ...metrics().data,
+        // No exposure_at_risk: the published figure was priced on the published bands.
+        summary: { red: 311, amber: 646, green: 11803, total_accounts: 12760 },
+      }, { bucket_source: 'live' })),
+    }), { vi })
+    render()
+    expect(await screen.findByText(/re-banded live — threshold change in force/)).toBeInTheDocument()
+    expect(screen.getByText('311')).toBeInTheDocument()
+    expect(screen.getByText('646')).toBeInTheDocument()
+    expect(screen.queryByText(/exposure at risk/)).not.toBeInTheDocument()
+  })
+
+  it('says nothing on the KPI strip while the run’s own published counts are on it', async () => {
+    mockApi(apiRoutes(), { vi })
+    render()
+    await settled()
+    expect(screen.queryByText(/re-banded live/)).not.toBeInTheDocument()
   })
 })
 

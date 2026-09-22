@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
-import { History, SlidersHorizontal, TriangleAlert } from 'lucide-react'
+import { History, RotateCcw, SlidersHorizontal, TriangleAlert } from 'lucide-react'
 import AppShell from '../components/AppShell'
 import Dialog from '../components/Dialog'
 import DataTable from '../components/DataTable'
@@ -30,6 +30,10 @@ import { loadThreshold, saveThreshold } from '../domain/drishti'
 import { badgeForMode } from '../domain/provenance'
 
 const MIN_JUSTIFICATION = 10
+
+// Pre-filled, not forced: a restore still goes through the same audited PUT as any other
+// change, and the manager can say something truer about why before confirming.
+const DEFAULT_RESTORE_JUSTIFICATION = 'Restoring the Red and Amber lines the published model run shipped with.'
 
 /**
  * The rationale behind the current lines.
@@ -126,7 +130,14 @@ function CostRationale({ cost }) {
   )
 }
 
-function ChangeDialog({ open, onClose, current, onSaved }) {
+// A threshold as the input field spells it. The change dialog shows two decimals of a
+// percent, which is all a manager needs to read; a restore has to put back the line the
+// run actually published, which can carry more (0.343723 -> "34.3723"). Rounding it to the
+// display precision would submit 0.3437 — a different number, even if the platform is now
+// careful enough to recognise it as the same line.
+const asPercentField = (value, dp) => (value == null ? '' : String(Number((value * 100).toFixed(dp))))
+
+function ChangeDialog({ open, restore = false, onClose, current, onSaved }) {
   const toast = useToast()
   const [red, setRed] = useState('')
   const [amber, setAmber] = useState('')
@@ -137,11 +148,11 @@ function ChangeDialog({ open, onClose, current, onSaved }) {
 
   useEffect(() => {
     if (!open) return
-    setRed(current?.red_thr != null ? String((current.red_thr * 100).toFixed(2)) : '')
-    setAmber(current?.amber_thr != null ? String((current.amber_thr * 100).toFixed(2)) : '')
-    setJustification('')
+    setRed(restore ? asPercentField(current?.published_red_thr, 6) : asPercentField(current?.red_thr, 2))
+    setAmber(restore ? asPercentField(current?.published_amber_thr, 6) : asPercentField(current?.amber_thr, 2))
+    setJustification(restore ? DEFAULT_RESTORE_JUSTIFICATION : '')
     setError(null)
-  }, [open, current])
+  }, [open, restore, current])
 
   const redValue = Number(red) / 100
   const amberValue = Number(amber) / 100
@@ -164,7 +175,9 @@ function ChangeDialog({ open, onClose, current, onSaved }) {
       })
       const moved = result?.rebucketed
       toast.audited(
-        `Thresholds changed to Red ≥ ${pct(result.red_thr, 2)}, Amber ≥ ${pct(result.amber_thr, 2)}.`,
+        restore
+          ? `Published thresholds restored: Red ≥ ${pct(result.red_thr, 2)}, Amber ≥ ${pct(result.amber_thr, 2)}.`
+          : `Thresholds changed to Red ≥ ${pct(result.red_thr, 2)}, Amber ≥ ${pct(result.amber_thr, 2)}.`,
         moved
           ? `Bands now: ${moved.red} red, ${moved.amber} amber, ${moved.green} green. No score row was modified.`
           : 'No score row was modified.',
@@ -183,8 +196,10 @@ function ChangeDialog({ open, onClose, current, onSaved }) {
     <Dialog
       open={open}
       onClose={onClose}
-      title="Change the Red and Amber thresholds"
-      description="This changes what every officer is asked to work tomorrow morning. It does not re-score anything."
+      title={restore ? 'Restore the published thresholds' : 'Change the Red and Amber thresholds'}
+      description={restore
+        ? 'Puts the Red and Amber lines back to what the published model run shipped with. It is an ordinary audited change, recorded on the history like any other.'
+        : 'This changes what every officer is asked to work tomorrow morning. It does not re-score anything.'}
       initialFocusRef={firstRef}
       testId="threshold-dialog"
       footer={
@@ -202,7 +217,7 @@ function ChangeDialog({ open, onClose, current, onSaved }) {
             disabled={busy || problems.length > 0}
             className="rounded-lg bg-idbi-green px-4 py-2 text-sm font-semibold text-white transition hover:bg-idbi-greendk focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green focus-visible:ring-offset-2 disabled:opacity-50"
           >
-            {busy ? 'Applying…' : 'Confirm and apply'}
+            {busy ? 'Applying…' : restore ? 'Confirm and restore' : 'Confirm and apply'}
           </button>
         </>
       }
@@ -286,7 +301,8 @@ function ChangeDialog({ open, onClose, current, onSaved }) {
 export default function Thresholds() {
   const { isStatic, roleCode } = useAuth()
   const live = !isStatic
-  const [dialog, setDialog] = useState(false)
+  // null, 'change' or 'restore' — the same audited PUT either way, seeded differently.
+  const [dialog, setDialog] = useState(null)
   const current = useAsync(({ signal }) => loadThreshold({ live, signal }), [live])
   const data = current.data
   const badge = badgeForMode(current.meta?.provenance_mode, current.source)
@@ -306,13 +322,26 @@ export default function Thresholds() {
       sandbox={badge.sandbox}
       sourceDetail={badge.detail}
       actions={editable ? (
-        <button
-          type="button"
-          onClick={() => setDialog(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-idbi-green px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-idbi-greendk focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green focus-visible:ring-offset-2"
-        >
-          <SlidersHorizontal size={14} aria-hidden="true" /> Change thresholds
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Only offered when the lines in force are not the published ones. Putting them
+              back by hand means retyping a six-decimal figure the screen rounds to two. */}
+          {drifted && (
+            <button
+              type="button"
+              onClick={() => setDialog('restore')}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green focus-visible:ring-offset-2"
+            >
+              <RotateCcw size={14} aria-hidden="true" /> Restore published thresholds
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setDialog('change')}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-idbi-green px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-idbi-greendk focus:outline-none focus-visible:ring-2 focus-visible:ring-idbi-green focus-visible:ring-offset-2"
+          >
+            <SlidersHorizontal size={14} aria-hidden="true" /> Change thresholds
+          </button>
+        </div>
       ) : null}
     >
       {current.error ? (
@@ -409,8 +438,9 @@ export default function Thresholds() {
           </section>
 
           <ChangeDialog
-            open={dialog}
-            onClose={() => setDialog(false)}
+            open={dialog !== null}
+            restore={dialog === 'restore'}
+            onClose={() => setDialog(null)}
             current={data}
             onSaved={current.reload}
           />

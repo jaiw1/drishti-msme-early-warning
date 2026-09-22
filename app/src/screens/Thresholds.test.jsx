@@ -159,6 +159,52 @@ describe('Thresholds', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument() // the dialog stays open on failure
   })
 
+  // Putting the published lines back by hand means retyping a figure the screen rounds
+  // for display — 0.343723 shown as 34.37% — so the restore submits the published numbers
+  // themselves, through the ordinary audited PUT.
+  it('offers a restore only while the lines in force are not the published ones', async () => {
+    mockApi(apiRoutes({
+      [`${B}/drishti/threshold`]: ok(envelope({
+        ...threshold().data, published_red_thr: 0.5, published_amber_thr: 0.2,
+      })),
+    }), { vi })
+    render({ user: session('manager') })
+    await screen.findByRole('button', { name: /Change thresholds/ })
+    expect(screen.queryByRole('button', { name: /Restore published thresholds/ })).not.toBeInTheDocument()
+  })
+
+  it('restores the published thresholds through the same audited change', async () => {
+    const api = mockApi(apiRoutes({
+      [`PUT ${B}/drishti/threshold`]: ok(envelope({
+        red_thr: 0.9155, amber_thr: 0.01, source: 'model_run', threshold_change_id: 2,
+        justification: 'Restoring the Red and Amber lines the published model run shipped with.',
+        rebucketed: { red: 4, amber: 9, green: 147 },
+        rescored: false,
+        note: 'Bands are recomputed on read. No score row was modified.',
+      })),
+    }), { vi })
+    render({ user: session('manager') })
+
+    await userEvent.click(await screen.findByRole('button', { name: /Restore published thresholds/ }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveAccessibleName('Restore the published thresholds')
+    expect(screen.getByLabelText(/Red — act now/)).toHaveValue(91.55)
+    expect(screen.getByLabelText(/Amber — watch/)).toHaveValue(1)
+
+    // Pre-filled justification, so the confirm is live without the manager typing one.
+    const confirm = screen.getByRole('button', { name: 'Confirm and restore' })
+    await waitFor(() => expect(confirm).toBeEnabled())
+    await userEvent.click(confirm)
+
+    expect(await screen.findByText(/Published thresholds restored: Red ≥ 91\.55%, Amber ≥ 1\.00%/)).toBeInTheDocument()
+    const put = api.calls.find((c) => c.method === 'PUT')
+    expect(put.body).toEqual({
+      red_thr: 0.9155,
+      amber_thr: 0.01,
+      justification: 'Restoring the Red and Amber lines the published model run shipped with.',
+    })
+  })
+
   it('shows the error state when the thresholds cannot be read', async () => {
     mockApi(apiRoutes({ [`${B}/drishti/threshold`]: fail(500, { code: 'internal_error', message: 'Boom.' }) }), { vi })
     render()
