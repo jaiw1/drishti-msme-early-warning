@@ -101,7 +101,7 @@ The following was checked against the actual on-screen text for every relevant s
 not just eyeballed:
 
 - Watch-list: `Credit officer`, `3 portfolios`, `245`, `458`, `12,760`
-- Hero account: `54%`, `80` (days past due), `5 mo before trouble`, `not applicable`
+- Hero account: `97%`, `80` (days past due), `5 mo before trouble`, `not applicable`
 - Memo: `credit review`, `human review required`
 - Portfolio risk: `100%` (thinnest bands)
 - Model & Metrics: `88.6%`, `245`, `97.3%`, `16.1%`, `0.885` (AUC)
